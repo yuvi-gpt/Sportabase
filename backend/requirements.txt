@@ -1,8 +1,10 @@
 fastapi
 uvicorn[standard]
 pydantic
-python-multipart
-newspaper3k
 requests
-lxml
+feedparser
+python-dateutil
+python-dotenv
+google-genai
 beautifulsoup4
+lxml
