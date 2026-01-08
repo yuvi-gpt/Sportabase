@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Sportabase — Rumor Scanner</title>
+    <style>
+      body { font-family: system-ui, Arial; margin: 24px; max-width: 900px; }
+      input, button { padding: 10px; font-size: 16px; }
+      .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-top: 16px; }
+      .badge { padding: 4px 8px; border-radius: 8px; background: #eee; font-size: 12px; margin-left: 8px;}
+      .muted { opacity:.75; font-size: 14px;}
+    </style>
+  </head>
+  <body>
+    <h1>Sportabase — Rumor Scanner</h1>
+    <p class="muted">Paste a sports article URL and get a Merit Score with a quick summary.</p>
+    <input id="url" style="width: 100%;" placeholder="https://www.bbc.com/sport/football/..." />
+    <div style="margin-top: 8px;">
+      <button id="btn">Scan</button>
+    </div>
+
+    <div id="out"></div>
+
+    <script>
+      const API = "http://127.0.0.1:8000";
+      const out = document.getElementById('out');
+      document.getElementById('btn').onclick = async () => {
+        const url = document.getElementById('url').value.trim();
+        if(!url) return;
+        out.innerHTML = "Scanning…";
+        try {
+          const res = await fetch(`${API}/scanner/scan?url=${encodeURIComponent(url)}`);
+          const data = await res.json();
+          out.innerHTML = `
+            <div class="card">
+              <h3 style="margin:0">${data.title}
+                <span class="badge">${data.badge}</span>
+              </h3>
+              <div class="muted">Merit Score: ${data.merit_score}/100</div>
+              <ul>${(data.summary||[]).slice(0,3).map(s=>`<li>${s}</li>`).join('')}</ul>
+              <a href="${data.url}" target="_blank">Read Source →</a>
+            </div>
+          `;
+        } catch (e) {
+          out.textContent = "Scan failed. Check the URL and try again.";
+        }
+      };
+    </script>
+  </body>
+</html>
