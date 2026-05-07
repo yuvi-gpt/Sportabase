@@ -1,19 +1,22 @@
-# python
+# Python
 __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Environment / secrets
 .env
+*.env
 
-# db + local data
+# Database / local data
 backend/data/*.db
-backend/data/*.sqlite*
-backend/data/*.sqlite3
+backend/data/*.db-wal
+backend/data/*.db-shm
 
-# node
-node_modules/
-dist/
-build/
-
-# misc
+# OS / editor
 .DS_Store
+.vscode/
+.idea/
+
+# Node / extension junk if added later
+node_modules/

@@ -1,0 +1,6 @@
+match_id,season,competition,match_date,venue,team1,team2,toss_winner,toss_decision,first_innings_team,second_innings_team,first_innings_runs,first_innings_wickets,first_innings_overs,second_innings_runs,second_innings_wickets,second_innings_overs,winner,margin_type,margin_value,match_completed
+m1,2026,IPL,2026-03-28,Wankhede,MI,RCB,MI,bowl,RCB,MI,182,6,20.0,176,8,20.0,RCB,runs,6,1
+m2,2026,IPL,2026-03-29,Chennai,CSK,GT,GT,bowl,CSK,GT,174,7,20.0,168,9,20.0,CSK,runs,6,1
+m3,2026,IPL,2026-03-30,Ahmedabad,GT,RR,RR,bowl,GT,RR,196,5,20.0,188,8,20.0,GT,runs,8,1
+m4,2026,IPL,2026-03-31,Delhi,DC,PBKS,DC,bowl,PBKS,DC,165,8,20.0,166,4,19.1,DC,wickets,6,1
+m5,2026,IPL,2026-04-01,Hyderabad,SRH,LSG,SRH,bowl,LSG,SRH,171,9,20.0,160,9,20.0,LSG,runs,11,1
