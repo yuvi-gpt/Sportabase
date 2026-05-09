@@ -97,6 +97,12 @@ class AnalyzeResponse(BaseModel):
     tldr: List[str]
     merit_score: int
     badge: str
+
+    article_type: str = "generic_news"
+    article_subtype: str = "general"
+    type_confidence: float = 0.0
+    type_signals: List[str] = Field(default_factory=list)
+
     reasons: List[str] = Field(default_factory=list)
 
 
@@ -252,6 +258,513 @@ def signal_hits(patterns: List[str], body: str) -> List[str]:
 
     return hits
 
+# -----------------------------
+# article type detection
+# -----------------------------
+
+ARTICLE_TYPE_LABELS = {
+    "match_report": "Match Report / Result",
+    "live_commentary": "Live Commentary",
+    "official_announcement": "Official Announcement",
+    "transfer_official": "Official Transfer",
+    "transfer_report": "Transfer Report",
+    "transfer_rumor": "Transfer Rumor",
+    "injury_confirmed": "Confirmed Injury Update",
+    "injury_rumor": "Injury Rumor / Fitness Doubt",
+    "lineup_confirmed": "Confirmed Lineup",
+    "lineup_predicted": "Predicted Lineup",
+    "squad_news": "Squad News",
+    "manager_interview": "Manager Interview",
+    "player_interview": "Player Interview",
+    "agent_interview": "Agent Interview",
+    "press_conference": "Press Conference",
+    "discipline_legal": "Discipline / Legal",
+    "managerial_news": "Managerial News",
+    "contract_news": "Contract News",
+    "fixture_schedule": "Fixture / Schedule / Draw",
+    "tactical_analysis": "Tactical Analysis",
+    "stats_data_report": "Stats / Data Report",
+    "opinion_analysis": "Opinion / Column",
+    "ownership_finance": "Ownership / Finance",
+    "generic_news": "Generic Sports News",
+}
+
+
+def _has_scoreline(text: str) -> bool:
+    patterns = [
+        r"\b\d+\s*[-–]\s*\d+\b",          # 2-1, 1–0
+        r"\b\d+\s+to\s+\d+\b",           # 2 to 1
+        r"\bwon\s+\d+\s*[-–]\s*\d+\b",
+        r"\blost\s+\d+\s*[-–]\s*\d+\b",
+        r"\bdrew\s+\d+\s*[-–]\s*\d+\b",
+    ]
+    return any(re.search(p, text, re.IGNORECASE) for p in patterns)
+
+
+def _add_score(
+    scores: Dict[str, float],
+    signals: List[str],
+    article_type: str,
+    points: float,
+    signal: str,
+):
+    scores[article_type] = scores.get(article_type, 0) + points
+    if signal:
+        signals.append(signal)
+
+
+def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
+    """
+    Detects the sports article category and subtype.
+
+    This does NOT score credibility.
+    It only determines what kind of article this is:
+    match report, transfer rumor, injury update, lineup news, interview, etc.
+    """
+
+    full_original = clean_html(f"{title}\n{text}".strip())
+    full = full_original.lower()
+    title_l = title.lower()
+    domain = _domain_from_url(url)
+
+    scores: Dict[str, float] = {k: 0.0 for k in ARTICLE_TYPE_LABELS}
+    scores["generic_news"] = 1.0
+
+    signals: List[str] = []
+
+    # -----------------------------
+    # common signal groups
+    # -----------------------------
+    scoreline_detected = _has_scoreline(full_original)
+
+    match_result_terms = signal_hits([
+        "beat", "defeated", "won", "lost", "drew", "draw",
+        "full-time", "full time", "ft", "final score",
+        "aggregate", "on aggregate", "sent", "sends",
+        "advanced", "progressed", "reached the final",
+        "knocked out", "eliminated", "came from behind",
+        "late winner", "equaliser", "equalizer",
+    ], full)
+
+    competition_terms = signal_hits([
+        "premier league", "champions league", "europa league",
+        "conference league", "world cup", "euros", "fa cup",
+        "carabao cup", "mls", "nba", "nfl", "mlb", "nhl",
+        "ipl", "test match", "odi", "t20", "grand prix",
+        "formula 1", "semifinal", "semi-final",
+        "quarterfinal", "quarter-final", "final",
+        "group stage", "league phase", "playoff", "playoffs",
+    ], full)
+
+    transfer_terms = signal_hits([
+        "transfer", "signing", "signed", "bid", "offer",
+        "contract", "release clause", "buyout clause", "loan",
+        "permanent move", "medical", "personal terms", "fee",
+        "move", "join", "joined", "agreement", "deal",
+        "free agent", "free transfer",
+    ], full)
+
+    injury_terms = signal_hits([
+        "injury", "injured", "hamstring", "ankle", "knee",
+        "calf", "groin", "concussion", "fitness", "ruled out",
+        "doubt", "scan", "medical assessment", "return to training",
+        "setback", "unavailable", "misses", "miss out",
+        "recovery", "rehab", "surgery", "operation",
+    ], full)
+
+    lineup_terms = signal_hits([
+        "lineup", "line-up", "starting xi", "xi",
+        "team news", "predicted lineup", "predicted xi",
+        "confirmed lineup", "confirmed xi", "starts",
+        "bench", "substitutes", "squad", "rotation",
+        "rested", "available", "starting eleven",
+    ], full)
+
+    interview_terms = signal_hits([
+        "interview", "said", "told", "speaking to",
+        "speaking after", "speaking before", "quote", "quotes",
+        "admitted", "insisted", "explained", "added",
+        "revealed", "claimed", "responded",
+    ], full)
+
+    press_terms = signal_hits([
+        "press conference", "news conference", "media briefing",
+        "pre-match press conference", "post-match press conference",
+        "manager said", "head coach said", "coach said",
+        "speaking at his press conference",
+    ], full)
+
+    discipline_terms = signal_hits([
+        "charged", "charge", "suspended", "suspension",
+        "ban", "banned", "investigation", "investigating",
+        "appeal", "sanction", "fine", "misconduct",
+        "breach", "court", "legal", "lawsuit",
+        "cleared", "disciplinary", "rules breach",
+    ], full)
+
+    managerial_terms = signal_hits([
+        "sacked", "fired", "dismissed", "appointed",
+        "resigned", "stepped down", "manager", "head coach",
+        "new manager", "new head coach", "sporting director",
+        "under pressure", "shortlist", "replacement",
+    ], full)
+
+    contract_terms = signal_hits([
+        "contract", "new contract", "extension", "contract extension",
+        "wage", "salary", "release clause", "buyout clause",
+        "expires", "expiry", "renewal", "talks over a new deal",
+        "long-term deal", "agreed terms",
+    ], full)
+
+    fixture_terms = signal_hits([
+        "fixture", "fixtures", "schedule", "draw", "group",
+        "venue", "kick-off", "kickoff", "date confirmed",
+        "match date", "tournament draw", "world cup draw",
+        "fixtures released", "rescheduled", "postponed",
+        "delayed", "calendar",
+    ], full)
+
+    tactical_terms = signal_hits([
+        "analysis", "tactical", "tactics", "breakdown",
+        "explained", "deep dive", "shape", "formation",
+        "pressing", "low block", "high line", "transition",
+        "counterattack", "build-up", "build up", "positional",
+    ], full)
+
+    stats_terms = signal_hits([
+        "stats", "statistics", "data", "numbers", "metrics",
+        "xg", "expected goals", "possession", "shots",
+        "shots on target", "chances created", "pass completion",
+        "ranking", "record", "table", "model", "percent",
+        "percentage", "per 90",
+    ], full)
+
+    opinion_terms = signal_hits(OPINION_WORDS, full)
+    hedge_terms = signal_hits(HEDGE_WORDS, full)
+    official_terms = signal_hits(OFFICIAL_WORDS, full)
+    severe_rumor_terms = signal_hits(SEVERE_RUMOR_PATTERNS, full)
+    negated_official_terms = signal_hits(NEGATED_OFFICIAL_PATTERNS, full)
+
+    ownership_terms = signal_hits([
+        "ownership", "owner", "takeover", "sale", "sold",
+        "investment", "investor", "valuation", "revenue",
+        "profit", "loss", "financial", "psr", "ffp",
+        "accounts", "debt", "minority stake", "majority stake",
+        "sponsorship", "broadcast deal",
+    ], full)
+
+    official_domain = domain and any(d in domain for d in [
+        "fifa.com", "uefa.com", "premierleague.com",
+        "mlssoccer.com", "arsenal.com", "mancity.com",
+        "manutd.com", "chelseafc.com", "liverpoolfc.com",
+        "tottenhamhotspur.com", "realmadrid.com",
+        "fcbarcelona.com", "nba.com", "nfl.com",
+        "mlb.com", "nhl.com", "formula1.com", "fia.com",
+    ])
+
+    # -----------------------------
+    # match report / live commentary
+    # -----------------------------
+    if scoreline_detected:
+        _add_score(scores, signals, "match_report", 6, "scoreline detected")
+
+    if match_result_terms:
+        _add_score(scores, signals, "match_report", min(7, len(match_result_terms) * 1.6), "match-result language detected")
+
+    if competition_terms:
+        _add_score(scores, signals, "match_report", min(4, len(competition_terms)), "competition/stage language detected")
+
+    if "live" in title_l or "latest updates" in title_l or "commentary" in title_l or "as it happened" in title_l:
+        _add_score(scores, signals, "live_commentary", 8, "live commentary framing detected")
+
+    if scoreline_detected and ("live" in title_l or "commentary" in title_l):
+        _add_score(scores, signals, "live_commentary", 4, "live article includes scoreline/result context")
+
+    # -----------------------------
+    # official announcement
+    # -----------------------------
+    if official_terms:
+        _add_score(scores, signals, "official_announcement", min(9, len(official_terms) * 2.2), "official/confirmed language detected")
+
+    if official_domain:
+        _add_score(scores, signals, "official_announcement", 6, "official/primary source domain detected")
+
+    # -----------------------------
+    # transfers
+    # -----------------------------
+    if transfer_terms:
+        _add_score(scores, signals, "transfer_report", min(7, len(transfer_terms) * 1.2), "transfer/contract language detected")
+
+    if transfer_terms and official_terms and not negated_official_terms:
+        _add_score(scores, signals, "transfer_official", 10, "official transfer confirmation detected")
+
+    if transfer_terms and hedge_terms:
+        _add_score(scores, signals, "transfer_rumor", min(9, len(hedge_terms) * 1.25), "transfer rumor/hedging language detected")
+
+    if severe_rumor_terms:
+        _add_score(scores, signals, "transfer_rumor", min(8, len(severe_rumor_terms) * 2.2), "severe rumor language detected")
+
+    if negated_official_terms and transfer_terms:
+        _add_score(scores, signals, "transfer_rumor", 5, "lack-of-confirmation phrase detected")
+
+    # -----------------------------
+    # injury
+    # -----------------------------
+    if injury_terms:
+        if official_terms or press_terms:
+            _add_score(scores, signals, "injury_confirmed", min(10, len(injury_terms) * 1.6 + 3), "injury update tied to official/manager source")
+        else:
+            _add_score(scores, signals, "injury_rumor", min(8, len(injury_terms) * 1.4), "injury/availability language detected")
+
+    if injury_terms and hedge_terms and not official_terms:
+        _add_score(scores, signals, "injury_rumor", 5, "injury uncertainty language detected")
+
+    # -----------------------------
+    # lineup / squad
+    # -----------------------------
+    if "confirmed lineup" in full or "confirmed xi" in full or "starting lineup announced" in full:
+        _add_score(scores, signals, "lineup_confirmed", 11, "confirmed lineup framing detected")
+
+    if "predicted lineup" in full or "predicted xi" in full or "expected xi" in full:
+        _add_score(scores, signals, "lineup_predicted", 10, "predicted lineup framing detected")
+
+    if lineup_terms:
+        _add_score(scores, signals, "squad_news", min(7, len(lineup_terms) * 1.2), "lineup/squad language detected")
+
+    # -----------------------------
+    # interviews / press conference
+    # -----------------------------
+    if press_terms:
+        _add_score(scores, signals, "press_conference", min(10, len(press_terms) * 2.0), "press conference language detected")
+
+    if interview_terms:
+        _add_score(scores, signals, "manager_interview", min(5, len(interview_terms) * 0.8), "quote/interview language detected")
+
+    if any(x in full for x in ["manager said", "head coach said", "coach said", "arteta said", "guardiola said", "slot said"]):
+        _add_score(scores, signals, "manager_interview", 5, "manager/head coach quote detected")
+
+    if any(x in full for x in ["player said", "captain said", "forward said", "midfielder said", "defender said", "goalkeeper said"]):
+        _add_score(scores, signals, "player_interview", 6, "player quote detected")
+
+    if any(x in full for x in ["agent said", "representative said", "his agent", "her agent"]):
+        _add_score(scores, signals, "agent_interview", 6, "agent/representative quote detected")
+
+    # -----------------------------
+    # discipline / legal
+    # -----------------------------
+    if discipline_terms:
+        _add_score(scores, signals, "discipline_legal", min(12, len(discipline_terms) * 1.9), "discipline/legal language detected")
+
+    # -----------------------------
+    # managerial news
+    # -----------------------------
+    if managerial_terms:
+        _add_score(scores, signals, "managerial_news", min(10, len(managerial_terms) * 1.5), "managerial/coach news language detected")
+
+    # -----------------------------
+    # contract news
+    # -----------------------------
+    if contract_terms:
+        _add_score(scores, signals, "contract_news", min(9, len(contract_terms) * 1.4), "contract/extension language detected")
+
+    # -----------------------------
+    # fixtures / schedule / draw
+    # -----------------------------
+    if fixture_terms:
+        _add_score(scores, signals, "fixture_schedule", min(11, len(fixture_terms) * 1.7), "fixture/schedule/draw language detected")
+
+    # -----------------------------
+    # tactical / stats / opinion
+    # -----------------------------
+    if tactical_terms:
+        _add_score(scores, signals, "tactical_analysis", min(10, len(tactical_terms) * 1.5), "tactical/analysis language detected")
+
+    if stats_terms:
+        _add_score(scores, signals, "stats_data_report", min(10, len(stats_terms) * 1.5), "stats/data language detected")
+
+    if opinion_terms:
+        _add_score(scores, signals, "opinion_analysis", min(12, len(opinion_terms) * 1.8), "opinion/analysis framing detected")
+
+    if any(x in title_l for x in ["opinion", "column", "ratings", "ranked", "why", "what we learned"]):
+        _add_score(scores, signals, "opinion_analysis", 5, "opinion-style title framing detected")
+
+    # -----------------------------
+    # ownership / finance
+    # -----------------------------
+    if ownership_terms:
+        _add_score(scores, signals, "ownership_finance", min(11, len(ownership_terms) * 1.6), "ownership/finance language detected")
+
+    # -----------------------------
+    # tie-break nudges
+    # -----------------------------
+    # If match result is obvious, prevent generic interview words like "said" from stealing the type.
+    if scoreline_detected and match_result_terms:
+        scores["match_report"] += 3
+
+    # If transfer terms + rumor terms exist, make rumor more likely than generic transfer report.
+    if transfer_terms and hedge_terms and not official_terms:
+        scores["transfer_rumor"] += 3
+
+    # If official transfer is clear, suppress rumor interpretation.
+    if scores["transfer_official"] >= 10:
+        scores["transfer_rumor"] = max(0, scores["transfer_rumor"] - 6)
+
+    # Confirmed lineup should outrank generic squad news.
+    if scores["lineup_confirmed"] >= 8:
+        scores["squad_news"] = max(0, scores["squad_news"] - 4)
+
+    # Predicted lineup should outrank generic squad news.
+    if scores["lineup_predicted"] >= 8:
+        scores["squad_news"] = max(0, scores["squad_news"] - 3)
+
+    # -----------------------------
+    # choose primary type
+    # -----------------------------
+    primary_type = max(scores, key=scores.get)
+    top_score = scores[primary_type]
+
+    if top_score <= 2:
+        primary_type = "generic_news"
+        top_score = scores["generic_news"]
+
+    # -----------------------------
+    # subtype
+    # -----------------------------
+    subtype = "general"
+
+    if primary_type == "match_report":
+        if "aggregate" in full or "on aggregate" in full:
+            subtype = "aggregate_result"
+        elif "final" in full or "semi-final" in full or "semifinal" in full:
+            subtype = "knockout_result"
+        elif "preview" in full or "prediction" in full:
+            subtype = "match_preview"
+        else:
+            subtype = "final_score"
+
+    elif primary_type == "live_commentary":
+        subtype = "live_updates"
+
+    elif primary_type == "official_announcement":
+        subtype = "primary_source_statement"
+
+    elif primary_type == "transfer_official":
+        subtype = "confirmed_transfer"
+
+    elif primary_type == "transfer_report":
+        if "fee" in full or "personal terms" in full or "medical" in full:
+            subtype = "advanced_transfer_report"
+        else:
+            subtype = "reported_interest"
+
+    elif primary_type == "transfer_rumor":
+        subtype = "unconfirmed_transfer_claim"
+
+    elif primary_type == "injury_confirmed":
+        if any(x in full for x in ["ruled out", "will miss", "out injured"]):
+            subtype = "confirmed_absence"
+        elif "return to training" in full:
+            subtype = "return_to_training"
+        else:
+            subtype = "medical_update"
+
+    elif primary_type == "injury_rumor":
+        subtype = "fitness_doubt"
+
+    elif primary_type == "lineup_confirmed":
+        subtype = "confirmed_lineup"
+
+    elif primary_type == "lineup_predicted":
+        subtype = "predicted_lineup"
+
+    elif primary_type == "squad_news":
+        subtype = "availability_update"
+
+    elif primary_type == "manager_interview":
+        subtype = "manager_quotes"
+
+    elif primary_type == "player_interview":
+        subtype = "player_quotes"
+
+    elif primary_type == "agent_interview":
+        subtype = "agent_quotes"
+
+    elif primary_type == "press_conference":
+        subtype = "manager_media_comments"
+
+    elif primary_type == "discipline_legal":
+        if "investigation" in full or "investigating" in full:
+            subtype = "investigation"
+        elif "suspended" in full or "ban" in full or "banned" in full:
+            subtype = "suspension_ban"
+        elif "court" in full or "legal" in full or "lawsuit" in full:
+            subtype = "legal_case"
+        else:
+            subtype = "disciplinary_case"
+
+    elif primary_type == "managerial_news":
+        if "sacked" in full or "fired" in full or "dismissed" in full:
+            subtype = "manager_sacking"
+        elif "appointed" in full or "new manager" in full or "new head coach" in full:
+            subtype = "manager_appointment"
+        else:
+            subtype = "manager_pressure"
+
+    elif primary_type == "contract_news":
+        if "extension" in full or "new contract" in full:
+            subtype = "contract_extension"
+        elif "release clause" in full or "buyout clause" in full:
+            subtype = "release_clause"
+        else:
+            subtype = "contract_talks"
+
+    elif primary_type == "fixture_schedule":
+        if "draw" in full:
+            subtype = "tournament_draw"
+        elif "postponed" in full or "rescheduled" in full:
+            subtype = "fixture_change"
+        else:
+            subtype = "schedule_update"
+
+    elif primary_type == "tactical_analysis":
+        subtype = "tactical_breakdown"
+
+    elif primary_type == "stats_data_report":
+        subtype = "data_report"
+
+    elif primary_type == "opinion_analysis":
+        if "ratings" in full or "player ratings" in full:
+            subtype = "player_ratings"
+        elif "ranked" in full or "ranking" in full:
+            subtype = "ranking"
+        else:
+            subtype = "opinion_or_column"
+
+    elif primary_type == "ownership_finance":
+        if "takeover" in full or "ownership" in full:
+            subtype = "ownership_update"
+        elif "revenue" in full or "profit" in full or "loss" in full:
+            subtype = "financial_report"
+        else:
+            subtype = "business_update"
+
+    confidence = min(0.98, max(0.15, top_score / 14))
+
+    cleaned_signals = []
+    seen = set()
+    for s in signals:
+        if s not in seen:
+            seen.add(s)
+            cleaned_signals.append(s)
+
+    return {
+        "primary_type": primary_type,
+        "label": ARTICLE_TYPE_LABELS.get(primary_type, "Generic Sports News"),
+        "subtype": subtype,
+        "confidence": round(confidence, 2),
+        "signals": cleaned_signals[:12],
+        "raw_type_scores": scores,
+    }
 
 # -----------------------------
 # scoring v3: nuanced component score
@@ -668,7 +1181,12 @@ def badge(score: int) -> str:
     return "High Credibility"
 
 
-def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
+def merit_score(
+    title: str,
+    text: str,
+    url: str = "",
+    type_info: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Nuanced credibility-style score.
 
@@ -710,27 +1228,84 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
     opinion_hits = signal_hits(OPINION_WORDS, body)
     clickbait_hits = signal_hits(CLICKBAIT_WORDS, body)
 
+    if type_info is None:
+        type_info = detect_article_type(title, text, url)
+
+    detected_type = str(type_info.get("primary_type", "generic_news"))
+    detected_subtype = str(type_info.get("subtype", "general"))
+    type_signals = type_info.get("signals", [])
+
+    type_signal_text = " ".join(type_signals).lower()
+
     has_official = len(official_hits) > 0
     has_evidence = len(evidence_hits) > 0
     is_opinion = len(opinion_hits) > 0
 
+    is_match_result_type = detected_type in ["match_report", "live_commentary"]
+    is_transfer_type = detected_type in ["transfer_report", "transfer_rumor", "transfer_official"]
+    is_injury_type = detected_type in ["injury_confirmed", "injury_rumor"]
+    is_lineup_type = detected_type in ["lineup_confirmed", "lineup_predicted", "squad_news"]
+    is_interview_type = detected_type in ["manager_interview", "player_interview", "agent_interview", "press_conference"]
+    is_official_type = detected_type in ["official_announcement", "transfer_official", "lineup_confirmed"]
+
+    event_evidence = 0
+
+    if is_match_result_type:
+        if "scoreline detected" in type_signal_text:
+            event_evidence += 8
+        if "match-result language detected" in type_signal_text:
+            event_evidence += 6
+        if "competition/stage language detected" in type_signal_text:
+            event_evidence += 4
+        if detected_subtype in ["aggregate_result", "knockout_result", "final_score"]:
+            event_evidence += 3
+
+    if is_injury_type:
+        if detected_type == "injury_confirmed":
+            event_evidence += 8
+        elif detected_type == "injury_rumor":
+            event_evidence += 3
+
+    if is_lineup_type:
+        if detected_type == "lineup_confirmed":
+            event_evidence += 10
+        elif detected_type == "lineup_predicted":
+            event_evidence += 3
+        else:
+            event_evidence += 5
+
+    if is_interview_type:
+        event_evidence += 6
+    if is_official_type:
+        event_evidence += 10
+
+    event_evidence = min(18, event_evidence)
+
     # -----------------------------
     # 1. Source reputation: /18
     # -----------------------------
+
     source_score, source_label = _source_reputation(url)
 
     # -----------------------------
     # 2. Evidence quality: /22
     # -----------------------------
+
     evidence_quality = 0.0
 
     if has_official:
         evidence_quality += 10
 
+    # Traditional article evidence: quotes, attribution, statements.
     evidence_quality += min(8, len(evidence_hits) * 2)
     evidence_quality += min(4, quotes * 2)
 
-    if unnamed_source_hits and not has_official:
+    # Sports-specific event evidence.
+    # A match scoreline/result is evidence even if the article does not say "according to".
+    if event_evidence:
+        evidence_quality += min(12, event_evidence)
+
+    if unnamed_source_hits and not has_official and not is_match_result_type:
         evidence_quality -= min(6, len(unnamed_source_hits) * 3)
 
     evidence_quality = _clamp(evidence_quality, 0, 22)
@@ -790,7 +1365,15 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
     corroboration += min(2, quotes)
     corroboration += min(2, nums // 2)
 
-    if unnamed_source_hits and not has_official:
+    # Match reports get corroboration from structured event facts:
+    # scoreline, competition, final/aggregate language, named teams.
+    if is_match_result_type:
+        corroboration += min(6, event_evidence / 3)
+
+    if is_official_type:
+        corroboration += 4
+
+    if unnamed_source_hits and not has_official and not is_match_result_type:
         corroboration -= 3
 
     corroboration = _clamp(corroboration, 0, 12)
@@ -800,6 +1383,44 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
     # -----------------------------
     impact = _clamp(min(6, len(impact_hits) * 1.4), 0, 6)
 
+    # Article-type fit rewards articles that strongly match a recognizable sports-news category.
+    type_fit = 0
+
+    if is_match_result_type:
+        type_fit = min(12, 5 + event_evidence / 2)
+    elif detected_type == "official_announcement":
+        type_fit = 12
+    elif detected_type == "transfer_official":
+        type_fit = 12
+    elif detected_type == "transfer_report":
+        type_fit = 7
+    elif detected_type == "transfer_rumor":
+        type_fit = 3
+    elif detected_type == "injury_confirmed":
+        type_fit = 10
+    elif detected_type == "injury_rumor":
+        type_fit = 4
+    elif detected_type == "lineup_confirmed":
+        type_fit = 10
+    elif detected_type == "lineup_predicted":
+        type_fit = 4
+    elif is_interview_type:
+        type_fit = 8
+    elif detected_type == "discipline_legal":
+        type_fit = 9
+    elif detected_type == "fixture_schedule":
+        type_fit = 9
+    elif detected_type == "stats_data_report":
+        type_fit = 8
+    elif detected_type == "tactical_analysis":
+        type_fit = 6
+    elif detected_type == "opinion_analysis":
+        type_fit = 3
+    else:
+        type_fit = 2
+
+    type_fit = _clamp(type_fit, 0, 12)
+
     raw_total = (
         source_score
         + evidence_quality
@@ -808,6 +1429,7 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
         + article_type
         + corroboration
         + impact
+        + type_fit
     )
 
     # -----------------------------
@@ -818,7 +1440,7 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
     if word_count < 60:
         penalty += 8
 
-    if not has_evidence and not has_official:
+    if not has_evidence and not has_official and not is_match_result_type:
         penalty += 6
 
     if severe_rumor_hits and not has_official:
@@ -848,7 +1470,7 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
     if is_opinion and not has_official:
         total = min(total, 64)
 
-    if not has_evidence and not has_official:
+    if not has_evidence and not has_official and not is_match_result_type:
         total = min(total, 52)
 
     # 90+ should be rare and earned.
@@ -859,12 +1481,14 @@ def merit_score(title: str, text: str, url: str = "") -> Dict[str, Any]:
     total = _clamp(total, 0, 100)
 
     reasons: List[str] = [
+        f"Article type: {type_info.get('label', detected_type)} / {detected_subtype}.",
         f"Source reputation: {source_score}/18 ({source_label}).",
         f"Evidence quality: {evidence_quality}/22.",
+        f"Event/type fit: {type_fit}/12.",
         f"Specificity/detail: {specificity}/16.",
         f"Language reliability: {language_reliability}/18.",
         f"Corroboration: {corroboration}/12.",
-    ]
+]
 
     if hedge_hits:
         reasons.append(f"Hedge signals: {len(hedge_hits)} detected ({', '.join(hedge_hits[:4])}).")
@@ -1131,6 +1755,7 @@ def ingest():
                 published = parse_published(e)
 
                 tldr = gemini_tldr(str(title), str(summary), max_bullets=3)
+                type_info = detect_article_type(str(title), str(summary), str(link))
                 score = merit_score(str(title), str(summary), str(link))
 
                 conn.execute(
@@ -1228,8 +1853,10 @@ def stories(
 def analyze(req: AnalyzeRequest):
     cleaned_text = clean_html(req.text)
 
+    type_info = detect_article_type(req.title, cleaned_text, req.url)
+
     tldr = gemini_tldr(req.title, cleaned_text, max_bullets=req.max_bullets)
-    score = merit_score(req.title, cleaned_text, req.url)
+    score = merit_score(req.title, cleaned_text, req.url, type_info)
 
     return AnalyzeResponse(
         url=req.url,
@@ -1237,5 +1864,12 @@ def analyze(req: AnalyzeRequest):
         tldr=tldr,
         merit_score=int(score["total"]),
         badge=str(score["badge"]),
+
+        article_type=str(type_info.get("primary_type", "generic_news")),
+        article_type_label=str(type_info.get("label", "Generic Sports News")),
+        article_subtype=str(type_info.get("subtype", "general")),
+        type_confidence=float(type_info.get("confidence", 0.0)),
+        type_signals=type_info.get("signals", []),
+
         reasons=score.get("reasons", []),
     )

@@ -554,47 +554,38 @@ async function injectAndRun(tabId) {
         const style = document.createElement("style");
         style.id = "sportabase-dynamic-styles";
         style.textContent = `
-          @keyframes sportabase-ripple {
+          @keyframes sportabase-aurora-drift {
             0% {
-              transform: translateX(18px) translateY(-8px) scale(1);
-              opacity: 0.72;
-              filter: blur(0px);
+              transform: translate3d(0px, 0px, 0) scale(1);
+              opacity: 0.55;
             }
             50% {
-              transform: translateX(-10px) translateY(12px) scale(1.08);
-              opacity: 0.92;
-              filter: blur(1px);
+              transform: translate3d(-18px, 14px, 0) scale(1.08);
+              opacity: 0.82;
             }
             100% {
-              transform: translateX(18px) translateY(-8px) scale(1);
-              opacity: 0.72;
-              filter: blur(0px);
+              transform: translate3d(16px, -10px, 0) scale(0.98);
+              opacity: 0.6;
             }
           }
 
-          @keyframes sportabase-sheen {
-            0% {
-              transform: translateX(-80%) rotate(8deg);
-              opacity: 0;
+          @keyframes sportabase-orb-float {
+            0%, 100% {
+              transform: translateY(0px) translateX(0px) scale(1);
+              opacity: 0.42;
             }
-            35% {
-              opacity: 0.18;
-            }
-            70% {
-              opacity: 0.08;
-            }
-            100% {
-              transform: translateX(115%) rotate(8deg);
-              opacity: 0;
+            50% {
+              transform: translateY(-10px) translateX(8px) scale(1.06);
+              opacity: 0.66;
             }
           }
 
-          @keyframes sportabase-float {
+          @keyframes sportabase-panel-float {
             0%, 100% {
               transform: translateY(0px);
             }
             50% {
-              transform: translateY(-4px);
+              transform: translateY(-3px);
             }
           }
 
@@ -603,15 +594,16 @@ async function injectAndRun(tabId) {
           }
 
           #sportabase-overlay {
-            animation: sportabase-float 4.5s ease-in-out infinite;
+            animation: sportabase-panel-float 5.5s ease-in-out infinite;
           }
 
-          #sportabase-overlay .sportabase-ripple {
-            animation: sportabase-ripple 6s ease-in-out infinite;
+          #sportabase-overlay .sportabase-aurora {
+            animation: sportabase-aurora-drift 13s ease-in-out infinite alternate;
+            mix-blend-mode: screen;
           }
 
-          #sportabase-overlay .sportabase-sheen {
-            animation: sportabase-sheen 5.8s ease-in-out infinite;
+          #sportabase-overlay .sportabase-orb {
+            animation: sportabase-orb-float 9s ease-in-out infinite;
           }
 
           #sportabase-overlay::-webkit-scrollbar,
@@ -825,32 +817,55 @@ async function injectAndRun(tabId) {
           "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
         overlay.style.color = "#fff";
         overlay.style.background = `
-          radial-gradient(circle at 88% 28%, ${theme.glow} 0%, transparent 34%),
-          radial-gradient(circle at 105% 85%, ${theme.softGlow} 0%, transparent 38%),
-          linear-gradient(270deg, ${theme.softGlow} 0%, rgba(10,10,12,0.98) 48%, rgba(5,5,6,0.99) 100%)
+          linear-gradient(135deg, rgba(4,6,12,0.98) 0%, rgba(6,9,18,0.97) 42%, rgba(8,12,24,0.96) 100%)
         `;
 
         overlay.innerHTML = `
-          <div class="sportabase-ripple"
+          <div class="sportabase-aurora"
             style="
               position:absolute;
-              inset:-80px -90px -80px 38%;
+              top:-40px;
+              right:-20px;
+              width:62%;
+              height:52%;
               background:
-                radial-gradient(circle at 50% 35%, ${theme.glow} 0%, transparent 28%),
-                radial-gradient(circle at 70% 70%, ${theme.softGlow} 0%, transparent 36%);
+                radial-gradient(circle at 18% 32%, ${theme.softGlow} 0%, transparent 34%),
+                radial-gradient(circle at 62% 24%, ${theme.glow} 0%, transparent 28%),
+                radial-gradient(circle at 78% 72%, ${theme.softGlow} 0%, transparent 40%);
+              filter: blur(34px);
+              opacity:0.72;
               pointer-events:none;
             ">
           </div>
 
-          <div class="sportabase-sheen"
+          <div class="sportabase-orb"
             style="
               position:absolute;
-              top:-60px;
-              bottom:-60px;
-              width:120px;
-              left:0;
-              background:linear-gradient(90deg, transparent, rgba(255,255,255,0.24), transparent);
+              top:10px;
+              right:26px;
+              width:150px;
+              height:150px;
+              border-radius:50%;
+              background:radial-gradient(circle, ${theme.softGlow} 0%, transparent 68%);
+              filter: blur(20px);
+              opacity:0.46;
               pointer-events:none;
+            ">
+          </div>
+
+          <div class="sportabase-orb"
+            style="
+              position:absolute;
+              bottom:36px;
+              right:50px;
+              width:220px;
+              height:220px;
+              border-radius:50%;
+              background:radial-gradient(circle, ${theme.softGlow} 0%, transparent 72%);
+              filter: blur(28px);
+              opacity:0.22;
+              pointer-events:none;
+              animation-delay:-4s;
             ">
           </div>
 
@@ -860,8 +875,8 @@ async function injectAndRun(tabId) {
               z-index:2;
               padding:16px;
               background:
-                linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.46) 52%, rgba(0,0,0,0.18) 100%);
-              backdrop-filter: blur(11px);
+                linear-gradient(90deg, rgba(2,4,8,0.84) 0%, rgba(4,6,12,0.70) 50%, rgba(6,10,18,0.34) 100%);
+              backdrop-filter: blur(14px) saturate(120%);
               height:100%;
               max-height:100%;
               overflow:auto;
