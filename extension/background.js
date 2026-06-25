@@ -990,7 +990,7 @@ async function injectAndRun(tabId) {
                       display:inline-block;
                     ">
                   </span>
-                  Sportabase Scan
+                  Sportabase Readout
                 </div>
 
                 <div
@@ -1193,7 +1193,7 @@ async function injectAndRun(tabId) {
                         color:${theme.textAccent};
                       "
                     >
-                      Signals
+                      Why this score?
                     </div>
 
                     <ul
@@ -1223,7 +1223,7 @@ async function injectAndRun(tabId) {
                         font-size:12.5px;
                         font-weight:800;
                       ">
-                      Open source →
+                      Read original →
                     </a>
                   </div>
                 `
@@ -1254,7 +1254,7 @@ async function injectAndRun(tabId) {
         return `sportabase_scan_cache_v3:${url}`;
       }
 
-      function showLoadingOverlay(message = "Starting Sportabase scan...") {
+      function showLoadingOverlay(message = "Reading this story...") {
         const existingResult = document.getElementById("sportabase-overlay");
         if (existingResult) existingResult.remove();
 
@@ -1280,7 +1280,7 @@ async function injectAndRun(tabId) {
 
         overlay.innerHTML = `
           <div style="font-weight:900;font-size:15px;">
-            Sportabase Scan
+            Sportabase is reading
           </div>
 
           <div
@@ -1358,12 +1358,12 @@ async function injectAndRun(tabId) {
 
       function startLoadingTicker() {
         const steps = [
-          { message: "Reading the full article...", progress: 35 },
-          { message: "Identifying key facts and evidence...", progress: 48 },
-          { message: "Checking sourcing and credibility signals...", progress: 60 },
-          { message: "Generating the TL;DR summary...", progress: 72 },
-          { message: "Calculating the merit score...", progress: 84 },
-          { message: "Preparing your Sportabase result...", progress: 92 },
+          { message: "Reading the story...", progress: 35 },
+          { message: "Pulling out the key details...", progress: 48 },
+          { message: "Checking how solid this report looks...", progress: 60 },
+          { message: "Writing the short version...", progress: 72 },
+          { message: "Weighing the evidence...", progress: 84 },
+          { message: "Getting your readout ready...", progress: 92 },
         ];
 
         let index = 0;
@@ -1441,12 +1441,12 @@ async function injectAndRun(tabId) {
 
       const startedAt = performance.now();
 
-      showLoadingOverlay("Extracting article text...", 15);
+      showLoadingOverlay("Reading the page...", 15);
 
       const rawText = getReadableText();
       log("extracted text length:", rawText.length);
 
-      updateLoadingOverlay("Preparing article for analysis...", 25);
+      updateLoadingOverlay("Finding the actual story...", 25);
 
       const trimmedText = rawText.slice(0, MAX_ARTICLE_CHARS);
       log("text sent to backend:", trimmedText.length);
@@ -1467,7 +1467,7 @@ async function injectAndRun(tabId) {
       let loadingTicker = null;
 
       try {
-        showLoadingOverlay("Checking local cache...");
+        updateLoadingOverlay("Sending article to Sportabase...");
 
         const cached = await getCachedScan(payload.url);
 
@@ -1508,7 +1508,7 @@ async function injectAndRun(tabId) {
           return;
         }
 
-        updateLoadingOverlay("Rendering result...");
+        updateLoadingOverlay("Building your readout...");
 
         const data = await resp.json();
 
