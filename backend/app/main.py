@@ -493,7 +493,11 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
                 "completed signing", "complete signing",
                 "completed transfer", "complete transfer",
                 "announced signing", "announce signing",
-                "has signed", "have signed", "signs for", "joins from",
+                "has signed", "have signed", "signs for", "joins from",                "sign",
+                "signs",
+                "signed",
+                "signing",
+                "big-money transfer",
             ],
             16,
             "headline suggests a completed transfer",
@@ -855,6 +859,49 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
         "have signed",
         "joins from",
     ])
+
+    transfer_headline_title = any(x in title_l for x in [
+        "transfer",
+        "sign",
+        "signs",
+        "signed",
+        "signing",
+        "joins",
+        "joined",
+        "loan",
+        "move",
+    ])
+
+    explicit_match_title = any(x in title_l for x in [
+        "match report",
+        "final score",
+        "full-time",
+        "full time",
+        "highlights",
+        "match recap",
+        "game recap",
+        "live updates",
+        "live commentary",
+    ])
+
+    # If the headline is clearly about a transfer/signing, do not let old match-result
+    # context inside the article body steal the category.
+    if transfer_headline_title and not explicit_match_title:
+        strongest_transfer_score = max(
+            scores.get("transfer_official", 0),
+            scores.get("transfer_report", 0),
+            scores.get("transfer_rumor", 0),
+        )
+
+        if strongest_transfer_score >= 8:
+            scores["match_report"] = min(
+                scores.get("match_report", 0),
+                max(0, strongest_transfer_score - 2),
+            )
+            scores["live_commentary"] = min(
+                scores.get("live_commentary", 0),
+                max(0, strongest_transfer_score - 3),
+            )
 
     # Transfer roundup pages should not become Official Transfer unless the headline is clearly completed/official.
     if transfer_roundup_title and not completed_transfer_title and not official_domain:
