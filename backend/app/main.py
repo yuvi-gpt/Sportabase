@@ -467,6 +467,189 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
         "mlb.com", "nhl.com", "formula1.com", "fia.com",
     ])
 
+        # -----------------------------
+    # headline-first intent layer
+    # -----------------------------
+    # Headlines are usually the clearest clue for article type.
+    # This keeps obvious transfer, injury, lineup, match, and opinion pages
+    # from falling back to Generic Sports News.
+
+    headline_rules = [
+        (
+            "transfer_rumor",
+            [
+                "transfer rumor", "transfer rumours", "transfer rumors",
+                "transfer news", "transfer latest", "transfer updates",
+                "transfer live", "summer transfer", "winter transfer",
+                "linked with", "linked to", "eyeing", "interested in",
+                "monitoring", "targeting", "set sights on",
+            ],
+            18,
+            "headline frames this as transfer coverage",
+        ),
+        (
+            "transfer_official",
+            [
+                "completed signing", "complete signing",
+                "completed transfer", "complete transfer",
+                "announced signing", "announce signing",
+                "has signed", "have signed", "signs for", "joins from",
+            ],
+            16,
+            "headline suggests a completed transfer",
+        ),
+        (
+            "injury_confirmed",
+            [
+                "injury update", "injury news", "ruled out",
+                "will miss", "set to miss", "out injured",
+                "return to training", "fitness update", "medical update",
+            ],
+            16,
+            "headline frames this as an injury update",
+        ),
+        (
+            "injury_rumor",
+            [
+                "injury doubt", "fitness doubt", "doubtful for",
+                "could miss", "may miss", "race to be fit",
+            ],
+            14,
+            "headline frames this as an injury or fitness doubt",
+        ),
+        (
+            "lineup_confirmed",
+            [
+                "confirmed lineup", "confirmed line-up", "confirmed xi",
+                "lineups confirmed", "starting lineup announced",
+            ],
+            18,
+            "headline frames this as confirmed lineup news",
+        ),
+        (
+            "lineup_predicted",
+            [
+                "predicted lineup", "predicted line-up", "predicted xi",
+                "expected xi", "possible lineup", "possible line-up",
+                "predicted team",
+            ],
+            16,
+            "headline frames this as predicted lineup news",
+        ),
+        (
+            "match_report",
+            [
+                "match report", "final score", "full-time", "full time",
+                "highlights", "match recap", "game recap",
+                "report and highlights",
+            ],
+            14,
+            "headline frames this as match coverage",
+        ),
+        (
+            "live_commentary",
+            [
+                "live updates", "live blog", "live commentary",
+                "latest updates", "live score", "as it happened",
+            ],
+            18,
+            "headline frames this as live coverage",
+        ),
+        (
+            "fixture_schedule",
+            [
+                "fixtures", "schedule", "draw", "kick-off time",
+                "kickoff time", "date confirmed", "match date",
+                "rescheduled", "postponed",
+            ],
+            14,
+            "headline frames this as fixture or schedule news",
+        ),
+        (
+            "managerial_news",
+            [
+                "sacked", "fired", "dismissed", "appointed",
+                "resigned", "stepped down", "new manager",
+                "new head coach", "under pressure", "replacement",
+            ],
+            15,
+            "headline frames this as manager or coach news",
+        ),
+        (
+            "contract_news",
+            [
+                "contract extension", "new contract", "contract talks",
+                "release clause", "buyout clause", "agrees deal",
+                "new deal", "set to extend",
+            ],
+            14,
+            "headline frames this as contract news",
+        ),
+        (
+            "discipline_legal",
+            [
+                "suspended", "suspension", "ban", "banned", "charged",
+                "investigation", "appeal", "sanction", "fine",
+                "misconduct", "lawsuit", "disciplinary",
+            ],
+            15,
+            "headline frames this as discipline or legal news",
+        ),
+        (
+            "stats_data_report",
+            [
+                "stats", "statistics", "data", "numbers behind",
+                "ranking", "ranked", "record", "xg",
+                "expected goals", "analytics",
+            ],
+            13,
+            "headline frames this as stats or data coverage",
+        ),
+        (
+            "tactical_analysis",
+            [
+                "tactical analysis", "tactics", "tactical breakdown",
+                "deep dive",
+            ],
+            13,
+            "headline frames this as tactical coverage",
+        ),
+        (
+            "opinion_analysis",
+            [
+                "opinion", "column", "verdict", "what we learned",
+                "winners and losers", "talking points", "player ratings",
+                "ratings", "takeaways",
+            ],
+            15,
+            "headline frames this as opinion or column coverage",
+        ),
+        (
+            "ownership_finance",
+            [
+                "takeover", "ownership", "owner", "investment",
+                "valuation", "revenue", "profit", "loss",
+                "financial", "accounts", "sponsorship",
+            ],
+            15,
+            "headline frames this as ownership or finance news",
+        ),
+        (
+            "official_announcement",
+            [
+                "official statement", "club statement", "press release",
+                "club confirms", "league confirms", "announced by the club",
+                "statement released",
+            ],
+            18,
+            "headline frames this as an official announcement",
+        ),
+    ]
+
+    for article_type_name, phrases, points, signal in headline_rules:
+        if signal_hits(phrases, title_l):
+            _add_score(scores, signals, article_type_name, points, signal)
+
     # -----------------------------
     # match report / live commentary
     # -----------------------------
@@ -621,6 +804,127 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
     # Predicted lineup should outrank generic squad news.
     if scores["lineup_predicted"] >= 8:
         scores["squad_news"] = max(0, scores["squad_news"] - 3)
+
+        # -----------------------------
+    # classifier guardrails
+    # -----------------------------
+    # These stop broad words like "analysis", "reaction", or "confirmed"
+    # from overpowering clearer article-type signals.
+
+    hard_news_types = [
+        "transfer_official",
+        "transfer_report",
+        "transfer_rumor",
+        "injury_confirmed",
+        "injury_rumor",
+        "lineup_confirmed",
+        "lineup_predicted",
+        "squad_news",
+        "match_report",
+        "live_commentary",
+        "fixture_schedule",
+        "discipline_legal",
+        "managerial_news",
+        "contract_news",
+        "ownership_finance",
+    ]
+
+    hard_news_top = max(scores.get(t, 0) for t in hard_news_types)
+
+    transfer_roundup_title = any(x in title_l for x in [
+        "transfer rumor",
+        "transfer rumours",
+        "transfer rumors",
+        "transfer news",
+        "transfer latest",
+        "transfer updates",
+        "transfer live",
+        "summer transfer",
+        "winter transfer",
+    ])
+
+    completed_transfer_title = any(x in title_l for x in [
+        "complete signing",
+        "completed signing",
+        "complete transfer",
+        "completed transfer",
+        "announce signing",
+        "announced signing",
+        "signs for",
+        "has signed",
+        "have signed",
+        "joins from",
+    ])
+
+    # Transfer roundup pages should not become Official Transfer unless the headline is clearly completed/official.
+    if transfer_roundup_title and not completed_transfer_title and not official_domain:
+        scores["transfer_official"] = min(
+            scores.get("transfer_official", 0),
+            max(0, scores.get("transfer_rumor", 0) - 3),
+        )
+
+    explicit_tactical_title = any(x in title_l for x in [
+        "tactical analysis",
+        "tactical breakdown",
+        "tactics",
+        "deep dive",
+    ])
+
+    explicit_opinion_title = any(x in title_l for x in [
+        "opinion",
+        "column",
+        "verdict",
+        "what we learned",
+        "winners and losers",
+        "talking points",
+        "player ratings",
+        "ratings",
+        "takeaways",
+    ])
+
+    explicit_stats_title = any(x in title_l for x in [
+        "stats",
+        "statistics",
+        "data",
+        "numbers behind",
+        "ranking",
+        "ranked",
+        "record",
+        "xg",
+        "expected goals",
+        "analytics",
+    ])
+
+    # Analysis/opinion/stats should not steal obvious hard-news pages unless the headline clearly says so.
+    if hard_news_top >= 12:
+        if not explicit_tactical_title:
+            scores["tactical_analysis"] = min(scores.get("tactical_analysis", 0), 8)
+
+        if not explicit_opinion_title:
+            scores["opinion_analysis"] = min(scores.get("opinion_analysis", 0), 8)
+
+        if not explicit_stats_title:
+            scores["stats_data_report"] = min(scores.get("stats_data_report", 0), 9)
+
+    # Live pages should stay live pages instead of becoming normal match reports.
+    if scores.get("live_commentary", 0) >= 14:
+        scores["match_report"] = min(
+            scores.get("match_report", 0),
+            max(0, scores.get("live_commentary", 0) - 2),
+        )
+
+    # Confirmed lineup should beat predicted lineup when both are detected.
+    if scores.get("lineup_confirmed", 0) >= 12:
+        scores["lineup_predicted"] = max(0, scores.get("lineup_predicted", 0) - 6)
+
+    # Generic Sports News should only win when nothing meaningful is detected.
+    best_non_generic_score = max(
+        score for article_type, score in scores.items()
+        if article_type != "generic_news"
+    )
+
+    if best_non_generic_score >= 7:
+        scores["generic_news"] = 0
 
     # -----------------------------
     # choose primary type
