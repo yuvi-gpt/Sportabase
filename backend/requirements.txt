@@ -8,3 +8,4 @@ python-dotenv
 google-genai
 beautifulsoup4
 lxml
+pandas

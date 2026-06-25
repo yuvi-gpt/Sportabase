@@ -1251,7 +1251,7 @@ async function injectAndRun(tabId) {
         }
       }
       function cacheKeyForUrl(url) {
-        return `sportabase_scan_cache_v3:${url}`;
+        return `sportabase_scan_cache_v4:${url}`;
       }
 
       function showLoadingOverlay(message = "Reading this story...") {
