@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
 from google import genai
-from app.routes.insights import router as insights_router
+# from app.routes.insights import router as insights_router
 
 
 # -----------------------------
@@ -55,7 +55,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(insights_router, prefix="/insights", tags=["insights"])
+# app.include_router(insights_router, prefix="/insights", tags=["insights"])
 
 
 @app.get("/health")
