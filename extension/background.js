@@ -1251,7 +1251,7 @@ async function injectAndRun(tabId) {
         }
       }
       function cacheKeyForUrl(url) {
-        return `sportabase_scan_cache_v2:${url}`;
+        return `sportabase_scan_cache_v3:${url}`;
       }
 
       function showLoadingOverlay(message = "Starting Sportabase scan...") {
