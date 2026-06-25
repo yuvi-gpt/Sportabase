@@ -38,6 +38,9 @@ load_dotenv(DOTENV_PATH)
 DB_PATH = DATA_DIR / "sportabase.db"
 SOURCES_PATH = DATA_DIR / "sources.json"
 
+# Keep extension scans fast. Most sports articles can be summarized/scored well
+# without sending the full extracted page body to Gemini.
+MAX_ANALYZE_CHARS = int(os.getenv("SPORTABASE_MAX_ANALYZE_CHARS", "6000"))
 
 # -----------------------------
 # app
@@ -99,11 +102,13 @@ class AnalyzeResponse(BaseModel):
     badge: str
 
     article_type: str = "generic_news"
+    article_type_label: str = "Generic Sports News"
     article_subtype: str = "general"
     type_confidence: float = 0.0
     type_signals: List[str] = Field(default_factory=list)
 
     reasons: List[str] = Field(default_factory=list)
+    debug: Dict[str, Any] = Field(default_factory=dict)
 
 
 # -----------------------------
@@ -1627,7 +1632,7 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
     if client is None:
         return extractive_fallback(text, max_bullets=max_bullets)
 
-    clipped = text[:8000]
+    clipped = text[:MAX_ANALYZE_CHARS]
 
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n"
@@ -1851,12 +1856,33 @@ def stories(
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
+    started = time.perf_counter()
+    last_mark = started
+    timings_ms: Dict[str, float] = {}
+
+    def mark(name: str) -> None:
+        nonlocal last_mark
+
+        now = time.perf_counter()
+        timings_ms[name] = round((now - last_mark) * 1000, 2)
+        last_mark = now
+
     cleaned_text = clean_html(req.text)
+    original_chars = len(cleaned_text)
+
+    cleaned_text = cleaned_text[:MAX_ANALYZE_CHARS]
+    mark("clean_and_cap_ms")
 
     type_info = detect_article_type(req.title, cleaned_text, req.url)
+    mark("article_type_ms")
 
     tldr = gemini_tldr(req.title, cleaned_text, max_bullets=req.max_bullets)
+    mark("tldr_ms")
+
     score = merit_score(req.title, cleaned_text, req.url, type_info)
+    mark("merit_score_ms")
+
+    total_ms = round((time.perf_counter() - started) * 1000, 2)
 
     return AnalyzeResponse(
         url=req.url,
@@ -1872,4 +1898,11 @@ def analyze(req: AnalyzeRequest):
         type_signals=type_info.get("signals", []),
 
         reasons=score.get("reasons", []),
+        debug={
+            "total_ms": total_ms,
+            "timings_ms": timings_ms,
+            "original_text_chars": original_chars,
+            "analyzed_text_chars": len(cleaned_text),
+            "max_analyze_chars": MAX_ANALYZE_CHARS,
+        },
     )

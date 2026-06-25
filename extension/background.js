@@ -1,5 +1,10 @@
-const API = "http://127.0.0.1:8000";
-// const API = "https://sportabase-api.onrender.com"; // switch back after Render deploy
+// const API = "http://127.0.0.1:8000";
+const API = "https://sportabase-api.onrender.com"; // switch back after Render deploy
+
+// Performance controls
+const MAX_ARTICLE_CHARS = 6000;
+const CACHE_TTL_MS = 1000 * 60 * 60 * 6; // 6 hours
+const FETCH_TIMEOUT_MS = 22000; // 22 seconds
 
 async function injectAndRun(tabId) {
   const prefs = await chrome.storage.local.get({
@@ -12,8 +17,11 @@ async function injectAndRun(tabId) {
 
   await chrome.scripting.executeScript({
     target: { tabId },
-    func: async (API, prefs) => {
+    func: async (API, prefs, config) => {
       const log = (...args) => console.log("[sportabase]", ...args);
+      const MAX_ARTICLE_CHARS = config?.MAX_ARTICLE_CHARS ?? 6000;
+      const CACHE_TTL_MS = config?.CACHE_TTL_MS ?? 1000 * 60 * 60 * 6;
+      const FETCH_TIMEOUT_MS = config?.FETCH_TIMEOUT_MS ?? 22000;
 
       function getReadableText() {
         const candidates = [
@@ -239,6 +247,56 @@ async function injectAndRun(tabId) {
         return Math.max(min, Math.min(max, n));
       }
 
+      function installSportabaseGradientIntensityControls(overlay) {
+        const scrollBox = overlay.querySelector(".sportabase-content-scroll");
+
+        function updateGradientIntensity() {
+          const rect = overlay.getBoundingClientRect();
+
+          const scrollMax = scrollBox
+            ? Math.max(1, scrollBox.scrollHeight - scrollBox.clientHeight)
+            : 1;
+
+          const scrollRatio = scrollBox
+            ? clampNum(scrollBox.scrollTop / scrollMax, 0, 1)
+            : 0;
+
+          const widthRatio = clampNum((rect.width - 360) / (760 - 360), 0, 1);
+          const heightRatio = clampNum(
+            (rect.height - 430) / (Math.floor(window.innerHeight * 0.85) - 430),
+            0,
+            1
+          );
+
+          const sizeRatio = (widthRatio + heightRatio) / 2;
+
+          // Calm when compact/top. Stronger when expanded or scrolled deeper.
+          const strength = clampNum(0.55 + scrollRatio * 0.45 + sizeRatio * 0.50, 0.55, 1.55);
+
+          overlay.style.setProperty("--sb-field-opacity", String(0.28 + strength * 0.30));
+          overlay.style.setProperty("--sb-ripple-opacity", String(0.06 + strength * 0.15));
+          overlay.style.setProperty("--sb-depth-opacity", String(0.12 + strength * 0.22));
+          overlay.style.setProperty("--sb-saturate", `${Math.round(115 + strength * 55)}%`);
+          overlay.style.setProperty("--sb-blur", `${Math.round(18 + strength * 7)}px`);
+        }
+
+        updateGradientIntensity();
+
+        if (scrollBox) {
+          scrollBox.addEventListener("scroll", updateGradientIntensity, { passive: true });
+        }
+
+        const observer = new ResizeObserver(updateGradientIntensity);
+        observer.observe(overlay);
+
+        return () => {
+          observer.disconnect();
+          if (scrollBox) {
+            scrollBox.removeEventListener("scroll", updateGradientIntensity);
+          }
+        };
+      }
+
       function installSportabaseWindowControls(overlay, SIZE_PRESETS) {
         const MIN_W = 320;
         const MIN_H = 260;
@@ -462,8 +520,8 @@ async function injectAndRun(tabId) {
             label: "Unverified Rumor",
             shortLabel: "Rumor",
             color: "#dc2626",
-            glow: "rgba(220, 38, 38, 0.68)",
-            softGlow: "rgba(220, 38, 38, 0.25)",
+            glow: "rgba(220, 38, 38, 0.62)",
+            softGlow: "rgba(220, 38, 38, 0.26)",
             border: "rgba(220, 38, 38, 0.64)",
             textAccent: "#fecaca",
             description: "Very weak sourcing or heavy rumor signals.",
@@ -475,7 +533,7 @@ async function injectAndRun(tabId) {
             label: "Speculative",
             shortLabel: "Speculative",
             color: "#f97316",
-            glow: "rgba(249, 115, 22, 0.62)",
+            glow: "rgba(249, 115, 22, 0.58)",
             softGlow: "rgba(249, 115, 22, 0.24)",
             border: "rgba(249, 115, 22, 0.60)",
             textAccent: "#fed7aa",
@@ -488,9 +546,9 @@ async function injectAndRun(tabId) {
             label: "Low Evidence",
             shortLabel: "Low Evidence",
             color: "#facc15",
-            glow: "rgba(250, 204, 21, 0.58)",
-            softGlow: "rgba(250, 204, 21, 0.22)",
-            border: "rgba(250, 204, 21, 0.58)",
+            glow: "rgba(250, 204, 21, 0.42)",
+            softGlow: "rgba(250, 204, 21, 0.20)",
+            border: "rgba(250, 204, 21, 0.54)",
             textAccent: "#fef3c7",
             description: "Some signal, but evidence is still thin.",
           };
@@ -501,8 +559,8 @@ async function injectAndRun(tabId) {
             label: "Developing",
             shortLabel: "Developing",
             color: "#2563eb",
-            glow: "rgba(37, 99, 235, 0.60)",
-            softGlow: "rgba(37, 99, 235, 0.24)",
+            glow: "rgba(37, 99, 235, 0.62)",
+            softGlow: "rgba(37, 99, 235, 0.25)",
             border: "rgba(96, 165, 250, 0.54)",
             textAccent: "#bfdbfe",
             description: "Credible direction, still missing stronger proof.",
@@ -515,7 +573,7 @@ async function injectAndRun(tabId) {
             shortLabel: "Substantial",
             color: "#a855f7",
             glow: "rgba(168, 85, 247, 0.60)",
-            softGlow: "rgba(168, 85, 247, 0.23)",
+            softGlow: "rgba(168, 85, 247, 0.24)",
             border: "rgba(168, 85, 247, 0.58)",
             textAccent: "#e9d5ff",
             description: "Good evidence signals, but not fully locked.",
@@ -527,8 +585,8 @@ async function injectAndRun(tabId) {
             label: "Strong Evidence",
             shortLabel: "Strong",
             color: "#14b8a6",
-            glow: "rgba(20, 184, 166, 0.60)",
-            softGlow: "rgba(20, 184, 166, 0.23)",
+            glow: "rgba(20, 184, 166, 0.64)",
+            softGlow: "rgba(20, 184, 166, 0.25)",
             border: "rgba(20, 184, 166, 0.58)",
             textAccent: "#ccfbf1",
             description: "Strong sourcing and detail, just below elite confidence.",
@@ -539,8 +597,8 @@ async function injectAndRun(tabId) {
           label: "High Credibility",
           shortLabel: "High Cred",
           color: "#16a34a",
-          glow: "rgba(22, 163, 74, 0.66)",
-          softGlow: "rgba(22, 163, 74, 0.26)",
+          glow: "rgba(22, 163, 74, 0.62)",
+          softGlow: "rgba(22, 163, 74, 0.25)",
           border: "rgba(22, 163, 74, 0.65)",
           textAccent: "#dcfce7",
           description: "Rare tier: strong official/evidence signals.",
@@ -554,38 +612,48 @@ async function injectAndRun(tabId) {
         const style = document.createElement("style");
         style.id = "sportabase-dynamic-styles";
         style.textContent = `
-          @keyframes sportabase-aurora-drift {
-            0% {
-              transform: translate3d(0px, 0px, 0) scale(1);
-              opacity: 0.55;
-            }
-            50% {
-              transform: translate3d(-18px, 14px, 0) scale(1.08);
-              opacity: 0.82;
-            }
-            100% {
-              transform: translate3d(16px, -10px, 0) scale(0.98);
-              opacity: 0.6;
-            }
-          }
-
-          @keyframes sportabase-orb-float {
-            0%, 100% {
-              transform: translateY(0px) translateX(0px) scale(1);
-              opacity: 0.42;
-            }
-            50% {
-              transform: translateY(-10px) translateX(8px) scale(1.06);
-              opacity: 0.66;
-            }
-          }
-
           @keyframes sportabase-panel-float {
             0%, 100% {
               transform: translateY(0px);
             }
             50% {
-              transform: translateY(-3px);
+              transform: translateY(-2px);
+            }
+          }
+
+          @keyframes sportabase-horizontal-flow {
+            0% {
+              transform: translate3d(22%, -2%, 0) skewX(-11deg) scale(1.08);
+              background-position: 0% 50%;
+            }
+            45% {
+              transform: translate3d(-6%, 2%, 0) skewX(-7deg) scale(1.16);
+              background-position: 72% 50%;
+            }
+            100% {
+              transform: translate3d(-24%, -1%, 0) skewX(-12deg) scale(1.1);
+              background-position: 140% 50%;
+            }
+          }
+
+          @keyframes sportabase-ripple-lines {
+            0% {
+              transform: translate3d(18%, 0, 0) rotate(-2deg);
+            }
+            50% {
+              transform: translate3d(-8%, 3%, 0) rotate(-2deg);
+            }
+            100% {
+              transform: translate3d(-26%, -2%, 0) rotate(-2deg);
+            }
+          }
+
+          @keyframes sportabase-depth-pulse {
+            0%, 100% {
+              transform: translate3d(8%, 0, 0) scale(1);
+            }
+            50% {
+              transform: translate3d(-7%, -2%, 0) scale(1.06);
             }
           }
 
@@ -597,13 +665,63 @@ async function injectAndRun(tabId) {
             animation: sportabase-panel-float 5.5s ease-in-out infinite;
           }
 
-          #sportabase-overlay .sportabase-aurora {
-            animation: sportabase-aurora-drift 13s ease-in-out infinite alternate;
-            mix-blend-mode: screen;
+          #sportabase-overlay .sportabase-gradient-field {
+            position: absolute;
+            inset: -18% -34% -18% -24%;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            background:
+              linear-gradient(
+                100deg,
+                rgba(0,0,0,0) 0%,
+                rgba(0,0,0,0) 20%,
+                var(--sb-soft-glow) 45%,
+                var(--sb-glow) 66%,
+                rgba(0,0,0,0) 92%
+              );
+            background-size: 230% 100%;
+            opacity: var(--sb-field-opacity, 0.48);
+            filter: blur(var(--sb-blur, 24px)) saturate(var(--sb-saturate, 145%));
+            animation: sportabase-horizontal-flow 8.5s ease-in-out infinite alternate;
           }
 
-          #sportabase-overlay .sportabase-orb {
-            animation: sportabase-orb-float 9s ease-in-out infinite;
+          #sportabase-overlay .sportabase-gradient-ripple {
+            position: absolute;
+            inset: -10% -34% -10% -16%;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            background:
+              repeating-linear-gradient(
+                100deg,
+                rgba(0,0,0,0) 0px,
+                rgba(0,0,0,0) 46px,
+                var(--sb-soft-glow) 70px,
+                rgba(0,0,0,0) 108px
+              );
+            opacity: var(--sb-ripple-opacity, 0.16);
+            filter: blur(16px) saturate(var(--sb-saturate, 135%));
+            animation: sportabase-ripple-lines 6.8s ease-in-out infinite alternate;
+          }
+
+          #sportabase-overlay .sportabase-gradient-depth {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            border-radius: inherit;
+            background:
+              radial-gradient(circle at 90% 18%, var(--sb-glow) 0%, transparent 28%),
+              linear-gradient(
+                90deg,
+                rgba(0,0,0,0.32) 0%,
+                rgba(0,0,0,0.08) 45%,
+                var(--sb-soft-glow) 100%
+              );
+            opacity: var(--sb-depth-opacity, 0.24);
+            filter: blur(10px) saturate(var(--sb-saturate, 135%));
+            animation: sportabase-depth-pulse 10s ease-in-out infinite;
           }
 
           #sportabase-overlay::-webkit-scrollbar,
@@ -777,6 +895,11 @@ async function injectAndRun(tabId) {
         const overlay = document.createElement("div");
         overlay.id = "sportabase-overlay";
 
+        overlay.style.setProperty("--sb-color", theme.color);
+        overlay.style.setProperty("--sb-glow", theme.glow);
+        overlay.style.setProperty("--sb-soft-glow", theme.softGlow);
+        overlay.style.setProperty("--sb-border", theme.border);
+
         overlay.style.position = "fixed";
         overlay.style.top = "18px";
         overlay.style.right = "18px";
@@ -817,66 +940,29 @@ async function injectAndRun(tabId) {
           "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
         overlay.style.color = "#fff";
         overlay.style.background = `
-          linear-gradient(135deg, rgba(4,6,12,0.98) 0%, rgba(6,9,18,0.97) 42%, rgba(8,12,24,0.96) 100%)
+          linear-gradient(
+            105deg,
+            rgba(2, 4, 10, 0.98) 0%,
+            rgba(3, 6, 14, 0.96) 38%,
+            rgba(6, 10, 22, 0.92) 62%,
+            rgba(8, 13, 28, 0.96) 100%
+          )
         `;
 
         overlay.innerHTML = `
-          <div class="sportabase-aurora"
-            style="
-              position:absolute;
-              top:-40px;
-              right:-20px;
-              width:62%;
-              height:52%;
-              background:
-                radial-gradient(circle at 18% 32%, ${theme.softGlow} 0%, transparent 34%),
-                radial-gradient(circle at 62% 24%, ${theme.glow} 0%, transparent 28%),
-                radial-gradient(circle at 78% 72%, ${theme.softGlow} 0%, transparent 40%);
-              filter: blur(34px);
-              opacity:0.72;
-              pointer-events:none;
-            ">
-          </div>
-
-          <div class="sportabase-orb"
-            style="
-              position:absolute;
-              top:10px;
-              right:26px;
-              width:150px;
-              height:150px;
-              border-radius:50%;
-              background:radial-gradient(circle, ${theme.softGlow} 0%, transparent 68%);
-              filter: blur(20px);
-              opacity:0.46;
-              pointer-events:none;
-            ">
-          </div>
-
-          <div class="sportabase-orb"
-            style="
-              position:absolute;
-              bottom:36px;
-              right:50px;
-              width:220px;
-              height:220px;
-              border-radius:50%;
-              background:radial-gradient(circle, ${theme.softGlow} 0%, transparent 72%);
-              filter: blur(28px);
-              opacity:0.22;
-              pointer-events:none;
-              animation-delay:-4s;
-            ">
-          </div>
+          <div class="sportabase-gradient-field"></div>
+          <div class="sportabase-gradient-ripple"></div>
+          <div class="sportabase-gradient-depth"></div>
 
           <div
+            class="sportabase-content-scroll"
             style="
               position:relative;
               z-index:2;
               padding:16px;
               background:
-                linear-gradient(90deg, rgba(2,4,8,0.84) 0%, rgba(4,6,12,0.70) 50%, rgba(6,10,18,0.34) 100%);
-              backdrop-filter: blur(14px) saturate(120%);
+                linear-gradient(90deg, rgba(2,4,8,0.68) 0%, rgba(4,6,12,0.48) 48%, rgba(6,10,18,0.16) 100%);
+              backdrop-filter: blur(12px) saturate(125%);
               height:100%;
               max-height:100%;
               overflow:auto;
@@ -1147,6 +1233,8 @@ async function injectAndRun(tabId) {
         `;
 
         document.body.appendChild(overlay);
+        
+        const cleanupGradientIntensity = installSportabaseGradientIntensityControls(overlay);
 
         const cleanupWindowControls = installSportabaseWindowControls(
           overlay,
@@ -1156,66 +1244,345 @@ async function injectAndRun(tabId) {
         const btn = document.getElementById("sportabase-close");
         if (btn) {
           btn.onclick = () => {
+            cleanupGradientIntensity();
             cleanupWindowControls();
             overlay.remove();
           };
         }
       }
+      function cacheKeyForUrl(url) {
+        return `sportabase_scan_cache_v2:${url}`;
+      }
 
-      const text = getReadableText();
-      log("extracted text length:", text.length);
+      function showLoadingOverlay(message = "Starting Sportabase scan...") {
+        const existingResult = document.getElementById("sportabase-overlay");
+        if (existingResult) existingResult.remove();
+
+        const existingLoading = document.getElementById("sportabase-loading-overlay");
+        if (existingLoading) existingLoading.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "sportabase-loading-overlay";
+
+        overlay.style.position = "fixed";
+        overlay.style.top = "18px";
+        overlay.style.right = "18px";
+        overlay.style.width = "340px";
+        overlay.style.zIndex = "2147483647";
+        overlay.style.borderRadius = "22px";
+        overlay.style.padding = "16px";
+        overlay.style.background = "rgba(2, 4, 10, 0.96)";
+        overlay.style.color = "#fff";
+        overlay.style.border = "1px solid rgba(255,255,255,0.14)";
+        overlay.style.boxShadow = "0 24px 70px rgba(0,0,0,0.58)";
+        overlay.style.fontFamily =
+          "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+
+        overlay.innerHTML = `
+          <div style="font-weight:900;font-size:15px;">
+            Sportabase Scan
+          </div>
+
+          <div
+            id="sportabase-loading-message"
+            style="
+              margin-top:8px;
+              font-size:12.5px;
+              color:rgba(255,255,255,0.74);
+              line-height:1.4;
+            "
+          >
+            ${escapeHtml(message)}
+          </div>
+
+          <div
+            style="
+              margin-top:14px;
+              height:8px;
+              border-radius:999px;
+              background:rgba(255,255,255,0.10);
+              overflow:hidden;
+            "
+          >
+            <div
+              id="sportabase-loading-bar"
+              style="
+                height:100%;
+                width:20%;
+                border-radius:999px;
+                background:linear-gradient(
+                  90deg,
+                  #2563eb,
+                  #a855f7,
+                  #14b8a6,
+                  #2563eb
+                );
+                background-size:300% 100%;
+                animation:sportabase-loading-shimmer 2s linear infinite;
+                transition:width 0.5s ease;
+              "
+            ></div>
+          </div>
+
+          <style>
+            @keyframes sportabase-loading-shimmer {
+              0% {
+                background-position: 0% 50%;
+              }
+
+              100% {
+                background-position: 300% 50%;
+              }
+            }
+          </style>
+        `;
+
+        document.body.appendChild(overlay);
+      }
+
+      function updateLoadingOverlay(message, progress = null) {
+        const messageEl = document.getElementById("sportabase-loading-message");
+        if (messageEl) messageEl.textContent = message;
+
+        const barEl = document.getElementById("sportabase-loading-bar");
+        if (barEl && progress !== null) {
+          const safeProgress = Math.max(5, Math.min(95, Number(progress)));
+          barEl.style.width = `${safeProgress}%`;
+        }
+      }
+
+      function removeLoadingOverlay() {
+        const overlay = document.getElementById("sportabase-loading-overlay");
+        if (overlay) overlay.remove();
+      }
+
+      function startLoadingTicker() {
+        const steps = [
+          { message: "Reading the full article...", progress: 35 },
+          { message: "Identifying key facts and evidence...", progress: 48 },
+          { message: "Checking sourcing and credibility signals...", progress: 60 },
+          { message: "Generating the TL;DR summary...", progress: 72 },
+          { message: "Calculating the merit score...", progress: 84 },
+          { message: "Preparing your Sportabase result...", progress: 92 },
+        ];
+
+        let index = 0;
+
+        updateLoadingOverlay(steps[0].message, steps[0].progress);
+
+        return setInterval(() => {
+          index = Math.min(index + 1, steps.length - 1);
+
+          updateLoadingOverlay(
+            steps[index].message,
+            steps[index].progress
+          );
+        }, 2500);
+      }
+
+      async function getCachedScan(url) {
+        try {
+          if (!chrome?.storage?.local) return null;
+
+          const key = cacheKeyForUrl(url);
+          const result = await chrome.storage.local.get(key);
+          const cached = result[key];
+
+          if (!cached?.data || !cached?.savedAt) return null;
+
+          const ageMs = Date.now() - Number(cached.savedAt);
+
+          if (!Number.isFinite(ageMs) || ageMs > CACHE_TTL_MS) {
+            await chrome.storage.local.remove(key);
+            return null;
+          }
+
+          return cached.data;
+        } catch (e) {
+          log("cache read failed:", e);
+          return null;
+        }
+      }
+
+      async function setCachedScan(url, data) {
+        try {
+          if (!chrome?.storage?.local) return;
+
+          const key = cacheKeyForUrl(url);
+
+          await chrome.storage.local.set({
+            [key]: {
+              savedAt: Date.now(),
+              data,
+            },
+          });
+        } catch (e) {
+          log("cache write failed:", e);
+        }
+      }
+
+      async function fetchJsonWithTimeout(url, options = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          });
+
+          return response;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      }
+
+    
+
+      const startedAt = performance.now();
+
+      showLoadingOverlay("Extracting article text...", 15);
+
+      const rawText = getReadableText();
+      log("extracted text length:", rawText.length);
+
+      updateLoadingOverlay("Preparing article for analysis...", 25);
+
+      const trimmedText = rawText.slice(0, MAX_ARTICLE_CHARS);
+      log("text sent to backend:", trimmedText.length);
 
       const payload = {
         title: document.title || "Untitled",
         url: location.href,
-        text,
+        text: trimmedText,
         max_bullets: 3,
       };
 
       if (!payload.text || payload.text.length < 200) {
+        removeLoadingOverlay();
         alert("Couldn’t extract enough article text on this page.");
         return;
       }
 
+      let loadingTicker = null;
+
       try {
-        const resp = await fetch(`${API}/analyze`, {
+        showLoadingOverlay("Checking local cache...");
+
+        const cached = await getCachedScan(payload.url);
+
+        if (cached) {
+          log("cache hit");
+
+          removeLoadingOverlay();
+
+          showOverlay({
+            ...cached,
+            reasons: [
+              "Loaded instantly from local cache.",
+              ...(Array.isArray(cached.reasons) ? cached.reasons : []),
+            ],
+          });
+
+          return;
+        }
+
+        updateLoadingOverlay("Sending article to Sportabase...");
+        loadingTicker = startLoadingTicker();
+
+        const resp = await fetchJsonWithTimeout(`${API}/analyze`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
 
+        clearInterval(loadingTicker);
+        loadingTicker = null;
+
         log("backend status:", resp.status);
 
         if (!resp.ok) {
           const t = await resp.text();
+          removeLoadingOverlay();
           alert("Sportabase backend error:\n\n" + t);
           return;
         }
 
+        updateLoadingOverlay("Rendering result...");
+
         const data = await resp.json();
+
+        const totalMs = Math.round(performance.now() - startedAt);
         log("response:", data);
+        log("total client time ms:", totalMs);
+
+        await setCachedScan(payload.url, data);
 
         try {
+          removeLoadingOverlay();
           showOverlay(data);
         } catch (e) {
+          removeLoadingOverlay();
+
           alert(
             "Overlay failed, but summary worked:\n\n" +
               JSON.stringify(data, null, 2)
           );
+
           log("overlay error:", e);
         }
       } catch (e) {
-        alert(`Failed to reach Sportabase backend at ${API}.\n\n${e}`);
+        if (loadingTicker) {
+          clearInterval(loadingTicker);
+          loadingTicker = null;
+        }
+        removeLoadingOverlay();
+
+        if (e?.name === "AbortError") {
+          alert(
+            `Sportabase took longer than ${Math.round(FETCH_TIMEOUT_MS / 1000)} seconds.\n\n` +
+              "Try again once. If the second try is faster, the backend was probably waking up."
+          );
+        } else {
+          alert(`Failed to reach Sportabase backend at ${API}.\n\n${e}`);
+        }
+
         log("fetch error:", e);
       }
     },
-    args: [API, prefs],
+    args: [
+      API,
+      prefs,
+      {
+        MAX_ARTICLE_CHARS,
+        CACHE_TTL_MS,
+        FETCH_TIMEOUT_MS,
+      },
+    ],
   });
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab?.id) return;
-  await injectAndRun(tab.id);
+
+  try {
+    await injectAndRun(tab.id);
+  } catch (error) {
+    const message = String(error?.message || error || "");
+
+    // This can happen if the page reloads/navigates while the extension is injecting.
+    // It is not a real Sportabase analysis failure.
+    if (
+      message.includes("Frame with ID 0 was removed") ||
+      message.includes("Extension context invalidated") ||
+      message.includes("Cannot access contents of url")
+    ) {
+      console.warn("[sportabase] injection skipped:", message);
+      return;
+    }
+
+    console.error("[sportabase] injection failed:", error);
+  }
 });
 
 chrome.runtime.onMessage.addListener((message) => {
