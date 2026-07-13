@@ -110,6 +110,22 @@ class AnalyzeResponse(BaseModel):
     reasons: List[str] = Field(default_factory=list)
     debug: Dict[str, Any] = Field(default_factory=dict)
 
+class VideoAnalyzeRequest(BaseModel):
+    title: str = ""
+    transcript: str
+    url: str = ""
+
+
+class VideoAnalyzeResponse(BaseModel):
+    claim: str
+    evidence_used: List[str]
+    logic_check: str
+    hype_check: str
+    evidence_score: int
+    logic_score: int
+    verdict: str
+    debug: Dict[str, Any] = {}
+
 
 # -----------------------------
 # db
@@ -274,6 +290,7 @@ ARTICLE_TYPE_LABELS = {
     "transfer_official": "Official Transfer",
     "transfer_report": "Transfer Report",
     "transfer_rumor": "Transfer Rumor",
+    "transfer_roundup": "Transfer Roundup",
     "injury_confirmed": "Confirmed Injury Update",
     "injury_rumor": "Injury Rumor / Fitness Doubt",
     "lineup_confirmed": "Confirmed Lineup",
@@ -487,6 +504,26 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
             18,
             "headline frames this as transfer coverage",
         ),
+
+        (
+            "transfer_roundup",
+            [
+                "transfer window",
+                "summer transfer window",
+                "winter transfer window",
+                "transfer grades",
+                "transfer window grades",
+                "grading big signings",
+                "big signings",
+                "transfer roundup",
+                "transfer round-up",
+                "latest transfer news",
+                "transfer news and rumors",
+            ],
+            22,
+            "headline frames this as transfer roundup/window coverage",
+        ),
+
         (
             "transfer_official",
             [
@@ -1012,6 +1049,14 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
             subtype = "advanced_transfer_report"
         else:
             subtype = "reported_interest"
+
+    elif primary_type == "transfer_roundup":
+        if "grade" in full or "grading" in full:
+            subtype = "transfer_window_grades"
+        elif "window" in full:
+            subtype = "transfer_window_roundup"
+        else:
+            subtype = "transfer_roundup"
 
     elif primary_type == "transfer_rumor":
         subtype = "unconfirmed_transfer_claim"
@@ -2052,6 +2097,133 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
 
 
 # -----------------------------
+# AI article type classifier beta
+# -----------------------------
+def ai_detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
+    """
+    AI classifier runs in shadow mode first.
+
+    It does NOT control the live article type yet.
+    It is used to compare AI classification vs rule classification.
+    """
+
+    client = gemini_client()
+
+    if client is None:
+        return {
+            "enabled": False,
+            "article_type": None,
+            "article_subtype": None,
+            "confidence": 0.0,
+            "reason": "Gemini API key not available.",
+        }
+
+    clipped = clean_html(text)[:3500]
+
+    allowed_types = [
+        "match_report",
+        "live_commentary",
+        "official_announcement",
+        "transfer_official",
+        "transfer_report",
+        "transfer_rumor",
+        "transfer_roundup",
+        "injury_confirmed",
+        "injury_rumor",
+        "lineup_confirmed",
+        "lineup_predicted",
+        "squad_news",
+        "manager_interview",
+        "player_interview",
+        "agent_interview",
+        "press_conference",
+        "discipline_legal",
+        "managerial_news",
+        "contract_news",
+        "fixture_schedule",
+        "tactical_analysis",
+        "stats_data_report",
+        "opinion_analysis",
+        "ownership_finance",
+        "generic_news",
+    ]
+
+    prompt = (
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        "Task: classify the type of this sports article.\n\n"
+        "Important rules:\n"
+        "- Classify the ARTICLE TYPE, not credibility.\n"
+        "- Use the headline and URL as strong context.\n"
+        "- Use the body text to support the classification, but do not let old match context override a clear transfer headline.\n"
+        "- Do not call something an official transfer unless the story clearly says a signing/deal/transfer was completed or officially announced.\n"
+        "- If it says linked, eyeing, interested, monitoring, rumors, or reports, use transfer_rumor.\n"
+        "- If the article is grading, ranking, summarizing, or reviewing multiple transfers or a transfer window, use transfer_roundup.\n"
+        "- If it is mainly explaining opinions, predictions, rankings, verdicts, or takeaways, use opinion_analysis.\n"
+        "- If unsure, use generic_news with low confidence.\n\n"
+        f"Allowed article_type values:\n{json.dumps(allowed_types)}\n\n"
+        "Output JSON format:\n"
+        "{\n"
+        '  "article_type": "transfer_rumor",\n'
+        '  "article_subtype": "unconfirmed_transfer_claim",\n'
+        '  "confidence": 0.91,\n'
+        '  "reason": "Short explanation of why this article type was chosen."\n'
+        "}\n\n"
+        f"Title: {title}\n"
+        f"URL: {url}\n\n"
+        f"Text:\n{clipped}\n"
+    )
+
+    try:
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+
+        raw = (resp.text or "").strip()
+
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
+
+        data = json.loads(raw)
+
+        article_type = str(data.get("article_type", "generic_news")).strip()
+        article_subtype = str(data.get("article_subtype", "general")).strip()
+        reason = str(data.get("reason", "")).strip()
+
+        try:
+            confidence = float(data.get("confidence", 0.0))
+        except Exception:
+            confidence = 0.0
+
+        confidence = max(0.0, min(0.99, confidence))
+
+        if article_type not in allowed_types:
+            article_type = "generic_news"
+            confidence = min(confidence, 0.35)
+            reason = "AI returned an unsupported article type, so it was treated as generic."
+
+        return {
+            "enabled": True,
+            "article_type": article_type,
+            "article_type_label": ARTICLE_TYPE_LABELS.get(article_type, "Generic Sports News"),
+            "article_subtype": article_subtype,
+            "confidence": round(confidence, 2),
+            "reason": reason,
+        }
+
+    except Exception as e:
+        return {
+            "enabled": True,
+            "article_type": None,
+            "article_subtype": None,
+            "confidence": 0.0,
+            "reason": f"AI classifier failed: {type(e).__name__}: {str(e)[:140]}",
+        }
+
+# -----------------------------
 # endpoints
 # -----------------------------
 @app.post("/ingest", response_model=IngestResponse)
@@ -2204,6 +2376,130 @@ def stories(
     finally:
         conn.close()
 
+def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[str, Any]:
+    client = gemini_client()
+
+    if client is None:
+        return {
+            "claim": "AI video analysis is unavailable.",
+            "evidence_used": ["Gemini API key not available."],
+            "logic_check": "Cannot check logic without AI access.",
+            "hype_check": "Cannot check hype without AI access.",
+            "evidence_score": 0,
+            "logic_score": 0,
+            "verdict": "ai_unavailable",
+            "debug": {
+                "mode": "video",
+                "ai_enabled": False,
+            },
+        }
+
+    clipped_transcript = clean_html(transcript)[:5000]
+
+    prompt = (
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        "Task: analyze a sports rumor/news video transcript.\n\n"
+        "You are not deciding absolute truth. You are judging the quality of the claim, "
+        "the evidence used, the logic, and whether the creator is overstating the claim.\n\n"
+        "Output JSON format:\n"
+        "{\n"
+        '  "claim": "Main claim made by the video.",\n'
+        '  "evidence_used": ["Evidence or reasons the creator gives."],\n'
+        '  "logic_check": "Does the reasoning actually support the claim?",\n'
+        '  "hype_check": "Is the video overstating, baiting, or being careful?",\n'
+        '  "evidence_score": 0,\n'
+        '  "logic_score": 0,\n'
+        '  "verdict": "plausible_rumor"\n'
+        "}\n\n"
+        "Scoring rules:\n"
+        "- evidence_score = how confirmed or sourced the claim is, from 0 to 100.\n"
+        "- logic_score = how reasonable the argument is, from 0 to 100.\n"
+        "- Use low evidence_score if there is no official confirmation or named source.\n"
+        "- Use higher logic_score if the rumor makes sense based on club need, player situation, contract, or reliable reporting.\n"
+        "- Penalize hype if the creator treats speculation like fact.\n\n"
+        "Allowed verdict examples:\n"
+        "- confirmed\n"
+        "- strong_report\n"
+        "- plausible_rumor\n"
+        "- weak_rumor\n"
+        "- mostly_opinion\n"
+        "- engagement_bait\n\n"
+        f"Video title: {title}\n"
+        f"URL: {url}\n\n"
+        f"Transcript:\n{clipped_transcript}\n"
+    )
+
+    try:
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+
+        raw = (resp.text or "").strip()
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
+
+        data = json.loads(raw)
+
+        evidence_score = int(float(data.get("evidence_score", 0)))
+        logic_score = int(float(data.get("logic_score", 0)))
+
+        evidence_score = max(0, min(100, evidence_score))
+        logic_score = max(0, min(100, logic_score))
+
+        evidence_used = data.get("evidence_used", [])
+        if not isinstance(evidence_used, list):
+            evidence_used = [str(evidence_used)]
+
+        return {
+            "claim": str(data.get("claim", "No clear claim found.")),
+            "evidence_used": [str(x) for x in evidence_used],
+            "logic_check": str(data.get("logic_check", "")),
+            "hype_check": str(data.get("hype_check", "")),
+            "evidence_score": evidence_score,
+            "logic_score": logic_score,
+            "verdict": str(data.get("verdict", "unclear")),
+            "debug": {
+                "mode": "video",
+                "ai_enabled": True,
+                "transcript_chars": len(transcript),
+                "transcript_chars_sent": len(clipped_transcript),
+            },
+        }
+
+    except Exception as e:
+        return {
+            "claim": "AI video analysis failed.",
+            "evidence_used": [f"{type(e).__name__}: {str(e)[:160]}"],
+            "logic_check": "Could not complete logic check.",
+            "hype_check": "Could not complete hype check.",
+            "evidence_score": 0,
+            "logic_score": 0,
+            "verdict": "analysis_failed",
+            "debug": {
+                "mode": "video",
+                "ai_enabled": True,
+                "error": str(e)[:200],
+            },
+        }
+
+@app.post("/analyze/video", response_model=VideoAnalyzeResponse)
+def analyze_video(req: VideoAnalyzeRequest):
+    result = ai_video_claim_readout(req.title, req.transcript, req.url)
+
+    return VideoAnalyzeResponse(
+        claim=result.get("claim", ""),
+        evidence_used=result.get("evidence_used", []),
+        logic_check=result.get("logic_check", ""),
+        hype_check=result.get("hype_check", ""),
+        evidence_score=int(result.get("evidence_score", 0)),
+        logic_score=int(result.get("logic_score", 0)),
+        verdict=result.get("verdict", "unclear"),
+        debug=result.get("debug", {}),
+    )
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
@@ -2226,6 +2522,9 @@ def analyze(req: AnalyzeRequest):
 
     type_info = detect_article_type(req.title, cleaned_text, req.url)
     mark("article_type_ms")
+
+    ai_type_info = ai_detect_article_type(req.title, cleaned_text, req.url)
+    mark("ai_article_type_ms")
 
     tldr = gemini_tldr(req.title, cleaned_text, max_bullets=req.max_bullets)
     mark("tldr_ms")
@@ -2250,10 +2549,18 @@ def analyze(req: AnalyzeRequest):
 
         reasons=score.get("reasons", []),
         debug={
+            "timings": timings_ms,
             "total_ms": total_ms,
-            "timings_ms": timings_ms,
-            "original_text_chars": original_chars,
-            "analyzed_text_chars": len(cleaned_text),
-            "max_analyze_chars": MAX_ANALYZE_CHARS,
+            "original_chars": original_chars,
+            "chars_sent": len(cleaned_text),
+
+            "rule_article_type": {
+                "article_type": type_info.get("primary_type"),
+                "article_type_label": type_info.get("label"),
+                "article_subtype": type_info.get("subtype"),
+                "confidence": type_info.get("confidence"),
+                "signals": type_info.get("signals", []),
+            },
+            "ai_article_type_shadow": ai_type_info,
         },
     )

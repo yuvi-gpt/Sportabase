@@ -1,5 +1,5 @@
-// const API = "http://127.0.0.1:8000";
-const API = "https://sportabase-api.onrender.com"; // switch back after Render deploy
+const API = "http://127.0.0.1:8000";
+// const API = "https://sportabase-api.onrender.com"; // switch back after Render deploy
 
 // Performance controls
 const MAX_ARTICLE_CHARS = 6000;
@@ -1251,7 +1251,7 @@ async function injectAndRun(tabId) {
         }
       }
       function cacheKeyForUrl(url) {
-        return `sportabase_scan_cache_v4:${url}`;
+        return `sportabase_scan_cache_ai_local_v1:${url}`;
       }
 
       function showLoadingOverlay(message = "Reading this story...") {
@@ -1514,6 +1514,8 @@ async function injectAndRun(tabId) {
 
         const totalMs = Math.round(performance.now() - startedAt);
         log("response:", data);
+        log("Rule article type:", data?.debug?.rule_article_type);
+        log("AI shadow article type:", data?.debug?.ai_article_type_shadow);
         log("total client time ms:", totalMs);
 
         await setCachedScan(payload.url, data);
