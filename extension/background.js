@@ -1250,6 +1250,110 @@ async function injectAndRun(tabId) {
           };
         }
       }
+
+      function showVideoOverlay() {
+        const existing = document.getElementById("sportabase-overlay");
+        if (existing) existing.remove();
+
+        const overlay = document.createElement("div");
+        overlay.id = "sportabase-overlay";
+
+        overlay.style.cssText = `
+          position: fixed;
+          top: 18px;
+          right: 18px;
+          width: 380px;
+          z-index: 2147483647;
+          padding: 20px;
+          border-radius: 18px;
+          background: #101114;
+          color: white;
+          font-family: Arial, sans-serif;
+          box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+        `;
+
+        overlay.innerHTML = `
+          <button
+            id="sportabase-video-close"
+            style="
+              float:right;
+              border:none;
+              background:transparent;
+              color:white;
+              font-size:20px;
+              cursor:pointer;
+            "
+          >×</button>
+
+          <div style="font-size:13px; opacity:0.7;">SPORTABASE VIDEO MODE</div>
+          <h2 style="margin:10px 0;">Video detected</h2>
+          <div style="font-size:14px; line-height:1.5;">
+            ${escapeHtml(document.title || "YouTube video")}
+          </div>
+        
+        
+        <button
+          id="sportabase-video-analyze"
+          style="
+            width:100%;
+            margin-top:16px;
+            padding:11px 14px;
+            border:none;
+            border-radius:12px;
+            background:white;
+            color:#101114;
+            font-weight:700;
+            cursor:pointer;
+          "
+        >
+          Analyze Video
+        </button>
+
+        <div
+          id="sportabase-video-status"
+          style="
+            margin-top:12px;
+            font-size:13px;
+            line-height:1.5;
+            opacity:0.75;
+          "
+        >
+          Ready to analyze this video.
+        </div>
+        
+        `;
+
+        document.body.appendChild(overlay);
+
+        document.getElementById("sportabase-video-close").onclick = () => {
+          overlay.remove();
+        };
+        document.getElementById("sportabase-video-analyze").onclick = () => {
+          const status = document.getElementById("sportabase-video-status");
+
+          const transcriptParts = Array.from(
+            document.querySelectorAll(
+              'transcript-segment-view-model span[role="text"]'
+            )
+          )
+            .map((element) => element.innerText.trim())
+            .filter(Boolean);
+
+          const transcript = transcriptParts.join(" ");
+
+          if (!transcript) {
+            status.textContent =
+              "No transcript found. Open the YouTube transcript, then click Analyze Video again.";
+            return;
+          }
+
+          status.textContent = `Transcript detected: ${transcript.length} characters.`;
+          console.log("[sportabase] Transcript characters:", transcript.length);
+          console.log("[sportabase] Transcript start:", transcript.slice(0, 1500));
+          console.log("[sportabase] Transcript end:", transcript.slice(-1500));
+        };
+      }
+
       function cacheKeyForUrl(url) {
         return `sportabase_scan_cache_ai_local_v1:${url}`;
       }
@@ -1437,9 +1541,16 @@ async function injectAndRun(tabId) {
         }
       }
 
-    
+      const isYouTubeVideoPage =
+        window.location.href.includes("youtube.com/watch") ||
+        document.querySelector("ytd-watch-flexy") !== null;
 
       const startedAt = performance.now();
+
+      if (isYouTubeVideoPage) {
+        showVideoOverlay();
+        return;
+      }
 
       showLoadingOverlay("Reading the page...", 15);
 

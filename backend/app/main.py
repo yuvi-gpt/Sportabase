@@ -2021,7 +2021,12 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
     return out
 
 
-def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
+def gemini_tldr(
+    title: str,
+    text: str,
+    max_bullets: int = 3,
+    language_info: Optional[Dict[str, Any]] = None,
+) -> List[str]:
     text = clean_html(text)
 
     client = gemini_client()
@@ -2033,6 +2038,9 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n"
         f"Task: summarize the sports/news article into exactly {max_bullets} TL;DR bullets.\n\n"
+        f"Detected language information: {json.dumps(language_info or {})}\n"
+        "Understand the article in its original language, including mixed or code-switched text.\n"
+        "Return the TL;DR bullets in English for now.\n\n"
         "Rules:\n"
         "- Each bullet must be one sentence.\n"
         "- Each bullet must be under 26 words.\n"
@@ -2099,7 +2107,12 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
 # -----------------------------
 # AI article type classifier beta
 # -----------------------------
-def ai_detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
+def ai_detect_article_type(
+    title: str,
+    text: str,
+    url: str = "",
+    language_info: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     AI classifier runs in shadow mode first.
 
@@ -2151,6 +2164,8 @@ def ai_detect_article_type(title: str, text: str, url: str = "") -> Dict[str, An
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n\n"
         "Task: classify the type of this sports article.\n\n"
+        f"Detected language information: {json.dumps(language_info or {})}\n"
+        "Understand the article in its original language, including mixed or code-switched text.\n\n"
         "Important rules:\n"
         "- Classify the ARTICLE TYPE, not credibility.\n"
         "- Use the headline and URL as strong context.\n"
@@ -2376,6 +2391,92 @@ def stories(
     finally:
         conn.close()
 
+def detect_content_language(text: str) -> Dict[str, Any]:
+    cleaned = clean_html(text).strip()
+
+    if not cleaned:
+        return {
+            "detected_language": "unknown",
+            "languages": [],
+            "mixed_language": False,
+            "language_confidence": 0.0,
+        }
+
+    client = gemini_client()
+
+    if client is None:
+        return {
+            "detected_language": "unknown",
+            "languages": [],
+            "mixed_language": False,
+            "language_confidence": 0.0,
+        }
+
+    sample = cleaned[:3000]
+
+    if len(cleaned) > 6000:
+        sample += "\n\n[END SAMPLE]\n" + cleaned[-3000:]
+
+    prompt = (
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        "Detect the language or languages used in this sports content.\n"
+        "Recognize mixed-language and code-switched text such as Hinglish.\n"
+        "Do not treat player names, club names, or short foreign phrases as a separate language.\n\n"
+        "Output JSON format:\n"
+        "{\n"
+        '  "detected_language": "Hindi-English mixed",\n'
+        '  "languages": ["Hindi", "English"],\n'
+        '  "mixed_language": true,\n'
+        '  "language_confidence": 0.95\n'
+        "}\n\n"
+        f"Content:\n{sample}\n"
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+
+        raw = (response.text or "").strip()
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
+
+        data = json.loads(raw)
+
+        languages = data.get("languages", [])
+        if not isinstance(languages, list):
+            languages = [str(languages)]
+
+        try:
+            confidence = float(data.get("language_confidence", 0.0))
+        except Exception:
+            confidence = 0.0
+
+        return {
+            "detected_language": str(
+                data.get("detected_language", "unknown")
+            ),
+            "languages": [str(language) for language in languages],
+            "mixed_language": bool(data.get("mixed_language", False)),
+            "language_confidence": round(
+                max(0.0, min(1.0, confidence)),
+                2,
+            ),
+        }
+
+    except Exception as error:
+        return {
+            "detected_language": "unknown",
+            "languages": [],
+            "mixed_language": False,
+            "language_confidence": 0.0,
+            "error": f"{type(error).__name__}: {str(error)[:160]}",
+        }
+
 def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[str, Any]:
     client = gemini_client()
 
@@ -2394,11 +2495,16 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
             },
         }
 
+    language_info = detect_content_language(transcript)
+    
     clipped_transcript = clean_html(transcript)[:5000]
 
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n\n"
         "Task: analyze a sports rumor/news video transcript.\n\n"
+        f"Detected language information: {json.dumps(language_info)}\n"
+        "Understand the original meaning even if the transcript is multilingual or code-switched.\n"
+        "Return the final readout in English for now.\n\n"
         "You are not deciding absolute truth. You are judging the quality of the claim, "
         "the evidence used, the logic, and whether the creator is overstating the claim.\n\n"
         "Output JSON format:\n"
@@ -2465,6 +2571,7 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
             "debug": {
                 "mode": "video",
                 "ai_enabled": True,
+                "language": language_info,
                 "transcript_chars": len(transcript),
                 "transcript_chars_sent": len(clipped_transcript),
             },
@@ -2516,6 +2623,8 @@ def analyze(req: AnalyzeRequest):
 
     cleaned_text = clean_html(req.text)
     original_chars = len(cleaned_text)
+    language_info = detect_content_language(cleaned_text)
+    mark("language_detection_ms")
 
     cleaned_text = cleaned_text[:MAX_ANALYZE_CHARS]
     mark("clean_and_cap_ms")
@@ -2523,10 +2632,63 @@ def analyze(req: AnalyzeRequest):
     type_info = detect_article_type(req.title, cleaned_text, req.url)
     mark("article_type_ms")
 
-    ai_type_info = ai_detect_article_type(req.title, cleaned_text, req.url)
+    ai_type_info = ai_detect_article_type(
+        req.title,
+        cleaned_text,
+        req.url,
+        language_info=language_info,
+    )
     mark("ai_article_type_ms")
 
-    tldr = gemini_tldr(req.title, cleaned_text, max_bullets=req.max_bullets)
+    final_type_info = type_info
+
+    detected_language = str(
+        language_info.get("detected_language", "unknown")
+    ).strip().lower()
+
+    is_non_english_or_mixed = (
+        bool(language_info.get("mixed_language", False))
+        or detected_language not in {"english", "unknown"}
+    )
+
+    ai_type = ai_type_info.get("article_type")
+    ai_confidence = float(ai_type_info.get("confidence", 0.0) or 0.0)
+
+    rule_type = str(type_info.get("primary_type", "generic_news"))
+    rule_confidence = float(type_info.get("confidence", 0.0) or 0.0)
+
+    rule_is_weak_generic = (
+        rule_type == "generic_news"
+        and rule_confidence <= 0.35
+    )
+
+    if (
+        ai_type
+        and ai_confidence >= 0.80
+        and (
+            is_non_english_or_mixed
+            or rule_is_weak_generic
+        )
+    ):
+        final_type_info = {
+            "primary_type": ai_type,
+            "label": ai_type_info.get(
+                "article_type_label",
+                ARTICLE_TYPE_LABELS.get(ai_type, "Generic Sports News"),
+            ),
+            "subtype": ai_type_info.get("article_subtype", "general"),
+            "confidence": ai_confidence,
+            "signals": [
+                "High-confidence multilingual AI classification."
+            ],
+        }
+
+    tldr = gemini_tldr(
+        req.title,
+        cleaned_text,
+        max_bullets=req.max_bullets,
+        language_info=language_info,
+    )
     mark("tldr_ms")
 
     score = merit_score(req.title, cleaned_text, req.url, type_info)
@@ -2541,11 +2703,11 @@ def analyze(req: AnalyzeRequest):
         merit_score=int(score["total"]),
         badge=str(score["badge"]),
 
-        article_type=str(type_info.get("primary_type", "generic_news")),
-        article_type_label=str(type_info.get("label", "Generic Sports News")),
-        article_subtype=str(type_info.get("subtype", "general")),
-        type_confidence=float(type_info.get("confidence", 0.0)),
-        type_signals=type_info.get("signals", []),
+        article_type=str(final_type_info.get("primary_type", "generic_news")),
+        article_type_label=str(final_type_info.get("label", "Generic Sports News")),
+        article_subtype=str(final_type_info.get("subtype", "general")),
+        type_confidence=float(final_type_info.get("confidence", 0.0)),
+        type_signals=final_type_info.get("signals", []),
 
         reasons=score.get("reasons", []),
         debug={
@@ -2553,6 +2715,7 @@ def analyze(req: AnalyzeRequest):
             "total_ms": total_ms,
             "original_chars": original_chars,
             "chars_sent": len(cleaned_text),
+            "language": language_info,
 
             "rule_article_type": {
                 "article_type": type_info.get("primary_type"),
