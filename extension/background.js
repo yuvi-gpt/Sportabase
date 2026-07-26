@@ -1262,14 +1262,32 @@ async function injectAndRun(tabId) {
           position: fixed;
           top: 18px;
           right: 18px;
-          width: 380px;
+          width: 430px;
+          height: min(560px, calc(100vh - 36px));
+          min-width: 320px;
+          min-height: 260px;
+          max-width: calc(100vw - 36px);
+          max-height: calc(100vh - 36px);
           z-index: 2147483647;
           padding: 20px;
-          border-radius: 18px;
-          background: #101114;
+          box-sizing: border-box;
+          overflow-y: auto;
+          overflow-x: hidden;
+          border-radius: 22px;
+          border: 1px solid rgba(255,255,255,0.14);
+          background:
+            linear-gradient(
+              105deg,
+              rgba(2,4,10,0.98) 0%,
+              rgba(3,6,14,0.96) 38%,
+              rgba(6,10,22,0.94) 100%
+            );
           color: white;
-          font-family: Arial, sans-serif;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+          font-family:
+            Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+          box-shadow:
+            0 24px 70px rgba(0,0,0,0.58),
+            0 0 42px rgba(37,99,235,0.12);
         `;
 
         overlay.innerHTML = `
