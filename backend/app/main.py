@@ -245,6 +245,27 @@ def clean_html(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+def prepare_video_transcript(transcript: str) -> Dict[str, Any]:
+    raw_transcript = clean_html(transcript)
+
+    cleaned_transcript = re.sub(
+        r"\[(music|applause|laughter)\]",
+        " ",
+        raw_transcript,
+        flags=re.IGNORECASE,
+    )
+    cleaned_transcript = re.sub(
+        r"\s+",
+        " ",
+        cleaned_transcript,
+    ).strip()
+
+    return {
+        "raw_transcript": raw_transcript,
+        "cleaned_transcript": cleaned_transcript,
+        "transcript_confidence": None,
+        "uncertain_corrections": [],
+    }
 
 def _clamp(value: float, lo: int = 0, hi: int = 100) -> int:
     return max(lo, min(hi, int(round(value))))
@@ -2503,7 +2524,8 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
         "language_confidence": 0.0,
     }
     
-    cleaned_transcript = clean_html(transcript)
+    transcript_data = prepare_video_transcript(transcript)
+    cleaned_transcript = transcript_data["cleaned_transcript"]
 
     if len(cleaned_transcript) <= 12000:
         clipped_transcript = cleaned_transcript
@@ -2705,6 +2727,18 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
             "debug": {
                 "mode": "video",
                 "ai_enabled": True,
+                "transcript_raw_chars": len(
+                    transcript_data["raw_transcript"]
+                ),
+                "transcript_cleaned_chars": len(
+                    transcript_data["cleaned_transcript"]
+                ),
+                "transcript_confidence": transcript_data[
+                    "transcript_confidence"
+                ],
+                "uncertain_corrections": transcript_data[
+                    "uncertain_corrections"
+                ],
                 "language": language_info,
                 "transcript_chars": len(transcript),
                 "transcript_chars_sent": len(clipped_transcript),
@@ -2723,6 +2757,18 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
             "debug": {
                 "mode": "video",
                 "ai_enabled": True,
+                "transcript_raw_chars": len(
+                    transcript_data["raw_transcript"]
+                ),
+                "transcript_cleaned_chars": len(
+                    transcript_data["cleaned_transcript"]
+                ),
+                "transcript_confidence": transcript_data[
+                    "transcript_confidence"
+                ],
+                "uncertain_corrections": transcript_data[
+                    "uncertain_corrections"
+                ],
                 "error": str(e)[:200],
             },
         }
