@@ -1233,7 +1233,7 @@ async function injectAndRun(tabId) {
         `;
 
         document.body.appendChild(overlay);
-        
+
         const cleanupGradientIntensity = installSportabaseGradientIntensityControls(overlay);
 
         const cleanupWindowControls = installSportabaseWindowControls(
@@ -1308,8 +1308,8 @@ async function injectAndRun(tabId) {
           <div style="font-size:14px; line-height:1.5;">
             ${escapeHtml(document.title || "YouTube video")}
           </div>
-        
-        
+
+
         <button
           id="sportabase-video-analyze"
           style="
@@ -1338,7 +1338,7 @@ async function injectAndRun(tabId) {
         >
           Ready to analyze this video.
         </div>
-        
+
         `;
 
         document.body.appendChild(overlay);
@@ -1406,6 +1406,39 @@ async function injectAndRun(tabId) {
                     .join("")
                 : "<li style=\"margin-top:5px;\">No evidence details returned.</li>";
 
+            const correctionItems =
+              Array.isArray(data.debug?.uncertain_corrections) &&
+              data.debug.uncertain_corrections.length
+                ? data.debug.uncertain_corrections
+                    .map((correction) => {
+                      const original = escapeHtml(
+                        String(correction?.original || "Unknown caption")
+                      );
+                      const suggested = escapeHtml(
+                        String(correction?.suggested || "Unknown correction")
+                      );
+                      const reason = escapeHtml(
+                        String(correction?.reason || "Contextual caption uncertainty")
+                      );
+
+                      const confidence = Number(correction?.confidence);
+                      const confidenceText = Number.isFinite(confidence)
+                        ? ` (${Math.round(confidence * 100)}% confidence)`
+                        : "";
+
+                      return `
+                        <li style="margin-top:7px;">
+                          <strong>${original}</strong>
+                          → ${suggested}${confidenceText}
+                          <div style="margin-top:2px; opacity:0.7;">
+                            ${reason}
+                          </div>
+                        </li>
+                      `;
+                    })
+                    .join("")
+                : "";
+
             status.innerHTML = `
               <div style="font-size:12px; opacity:0.7;">
                 ${escapeHtml(
@@ -1429,6 +1462,32 @@ async function injectAndRun(tabId) {
                       )}%`
                 }
               </div>
+
+              ${
+                correctionItems
+                  ? `
+                    <div style="
+                      margin-top:12px;
+                      padding:10px;
+                      border-radius:10px;
+                      background:rgba(245,158,11,0.10);
+                      border:1px solid rgba(245,158,11,0.25);
+                    ">
+                      <div style="
+                        font-size:11px;
+                        font-weight:800;
+                        opacity:0.75;
+                      ">
+                        POSSIBLE CAPTION ERRORS
+                      </div>
+
+                      <ul style="margin:3px 0 0; padding-left:18px;">
+                        ${correctionItems}
+                      </ul>
+                    </div>
+                  `
+                  : ""
+              }
 
               <div style="display:flex; gap:8px; margin-top:12px;">
                 <div style="
