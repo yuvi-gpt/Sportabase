@@ -117,6 +117,7 @@ class VideoAnalyzeRequest(BaseModel):
 
 
 class VideoAnalyzeResponse(BaseModel):
+    content_type: str = "unknown"
     claim: str
     evidence_used: List[str]
     logic_check: str
@@ -2526,40 +2527,63 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
 
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n\n"
-        "Task: analyze a sports rumor/news video transcript.\n\n"
+        "Task: analyze a sports video transcript.\n\n"
+        "The video may be reporting news, discussing a rumor, presenting technical "
+        "analysis, giving an opinion, investigating a topic, or using engagement bait.\n"
+        "Do not assume that every video is a rumor or breaking-news report.\n\n"
         "Detect the transcript's language or languages as part of this same analysis.\n"
         "Set mixed_language to true when the speaker meaningfully switches languages.\n"
         "Understand multilingual and code-switched speech in its original context.\n"
         "Return the claim analysis in English for now.\n\n"
-        "You are not deciding absolute truth. You are judging the quality of the claim, "
-        "the evidence used, the logic, and whether the creator is overstating the claim.\n\n"
+        "Judge the video according to the type of content it actually contains.\n"
+        "Separate dramatic presentation style from the quality of the underlying "
+        "reasoning and evidence.\n"
+        "A sensational title or introduction alone does not make a video engagement bait.\n"
+        "You are not deciding absolute truth. You are evaluating the main claim, "
+        "supporting evidence, reasoning quality, and level of overstatement.\n\n"
         "Output JSON format:\n"
         "{\n"
         '  "detected_language": "English",\n'
         '  "languages": ["English"],\n'
         '  "mixed_language": false,\n'
         '  "language_confidence": 0.95,\n'
-        '  "claim": "Main claim made by the video.",\n'
-        '  "evidence_used": ["Evidence or reasons the creator gives."],\n'
-        '  "logic_check": "Does the reasoning actually support the claim?",\n'
-        '  "hype_check": "Is the video overstating, baiting, or being careful?",\n'
+        '  "content_type": "sports_analysis",\n'
+        '  "claim": "Main claim or argument made by the video.",\n'
+        '  "evidence_used": ["Evidence, examples, sources, or reasoning used."],\n'
+        '  "logic_check": "Whether the reasoning supports the main claim.",\n'
+        '  "hype_check": "Whether presentation is careful, dramatic, or misleading.",\n'
         '  "evidence_score": 0,\n'
         '  "logic_score": 0,\n'
-        '  "verdict": "plausible_rumor"\n'
+        '  "verdict": "well_supported_analysis"\n'
         "}\n\n"
+        "First choose one content_type:\n"
+        "- confirmed_news\n"
+        "- sports_report\n"
+        "- rumor\n"
+        "- sports_analysis\n"
+        "- sports_opinion\n"
+        "- engagement_bait\n"
+        "- not_sports_content\n\n"
+
         "Scoring rules:\n"
-        "- evidence_score = how confirmed or sourced the claim is, from 0 to 100.\n"
-        "- logic_score = how reasonable the argument is, from 0 to 100.\n"
-        "- Use low evidence_score if there is no official confirmation or named source.\n"
-        "- Use higher logic_score if the rumor makes sense based on club need, player situation, contract, or reliable reporting.\n"
-        "- Penalize hype if the creator treats speculation like fact.\n\n"
-        "Allowed verdict examples:\n"
+        "- evidence_score measures the quality of support presented in the video, from 0 to 100.\n"
+        "- Evidence may include official statements, named reporting, statistics, technical details, historical examples, or clearly explained observations.\n"
+        "- Do not require official confirmation for analysis or opinion videos.\n"
+        "- logic_score measures whether the reasoning connects the evidence to the main claim, from 0 to 100.\n"
+        "- Score evidence and logic independently from title style, thumbnails, dramatic wording, or editing.\n"
+        "- A video may be dramatic while still presenting reasonable analysis.\n"
+        "- Use engagement_bait only when the video substantially misrepresents, fabricates, or fails to support its central claim.\n\n"
+
+        "Choose one verdict:\n"
         "- confirmed\n"
-        "- strong_report\n"
+        "- well_supported_report\n"
+        "- well_supported_analysis\n"
+        "- reasonable_opinion\n"
         "- plausible_rumor\n"
-        "- weak_rumor\n"
-        "- mostly_opinion\n"
-        "- engagement_bait\n\n"
+        "- weakly_supported\n"
+        "- misleading\n"
+        "- engagement_bait\n"
+        "- not_sports_content\n\n"
         f"Video title: {title}\n"
         f"URL: {url}\n\n"
         f"Transcript:\n{clipped_transcript}\n"
@@ -2615,14 +2639,69 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
         if not isinstance(evidence_used, list):
             evidence_used = [str(evidence_used)]
 
+        allowed_content_types = {
+            "confirmed_news",
+            "sports_report",
+            "rumor",
+            "sports_analysis",
+            "sports_opinion",
+            "engagement_bait",
+            "not_sports_content",
+        }
+
+        content_type = str(
+            data.get("content_type", "unknown")
+        ).strip().lower()
+
+        if content_type not in allowed_content_types:
+            content_type = "unknown"
+
+        allowed_verdicts = {
+            "confirmed",
+            "well_supported_report",
+            "well_supported_analysis",
+            "reasonable_opinion",
+            "plausible_rumor",
+            "weakly_supported",
+            "misleading",
+            "engagement_bait",
+            "not_sports_content",
+        }
+
+        verdict = str(
+            data.get("verdict", "weakly_supported")
+        ).strip().lower()
+
+        if verdict not in allowed_verdicts:
+            verdict = "weakly_supported"
+
+        if content_type == "unknown":
+            verdict_to_content_type = {
+                "confirmed": "confirmed_news",
+                "well_supported_report": "sports_report",
+                "well_supported_analysis": "sports_analysis",
+                "reasonable_opinion": "sports_opinion",
+                "plausible_rumor": "rumor",
+                "engagement_bait": "engagement_bait",
+                "not_sports_content": "not_sports_content",
+            }
+
+            content_type = verdict_to_content_type.get(
+                verdict,
+                "unknown",
+            )
+
         return {
-            "claim": str(data.get("claim", "No clear claim found.")),
+            "content_type": content_type,
+            "claim": str(
+                data.get("claim", "No clear claim found.")
+            ),
             "evidence_used": [str(x) for x in evidence_used],
             "logic_check": str(data.get("logic_check", "")),
             "hype_check": str(data.get("hype_check", "")),
             "evidence_score": evidence_score,
             "logic_score": logic_score,
-            "verdict": str(data.get("verdict", "unclear")),
+            "verdict": verdict,
             "debug": {
                 "mode": "video",
                 "ai_enabled": True,

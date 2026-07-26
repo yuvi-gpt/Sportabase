@@ -1379,6 +1379,7 @@ async function injectAndRun(tabId) {
             console.log("[sportabase] Video analysis result:", data);
 
             status.textContent =
+              `Type: ${data.content_type} | ` +
               `Verdict: ${data.verdict} | ` +
               `Evidence: ${data.evidence_score}/100 | ` +
               `Logic: ${data.logic_score}/100`;
