@@ -1389,7 +1389,34 @@ async function injectAndRun(tabId) {
             );
 
             if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
+              let errorDetail = "";
+
+              try {
+                const errorData = await response.json();
+                errorDetail = String(
+                  errorData?.detail ||
+                  errorData?.message ||
+                  ""
+                );
+              } catch (_) {
+                errorDetail = "";
+              }
+
+              if (response.status === 429) {
+                throw new Error(
+                  "Gemini quota has been exhausted. Try again after the quota resets."
+                );
+              }
+
+              if (response.status === 503) {
+                throw new Error(
+                  "Gemini is temporarily overloaded. Try again later."
+                );
+              }
+
+              throw new Error(
+                errorDetail || `Video analysis failed with HTTP ${response.status}.`
+              );
             }
 
             const data = await response.json();
