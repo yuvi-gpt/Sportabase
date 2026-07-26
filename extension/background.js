@@ -1328,7 +1328,7 @@ async function injectAndRun(tabId) {
         document.getElementById("sportabase-video-close").onclick = () => {
           overlay.remove();
         };
-        document.getElementById("sportabase-video-analyze").onclick = () => {
+        document.getElementById("sportabase-video-analyze").onclick = async () => {
           const status = document.getElementById("sportabase-video-status");
 
           const transcriptParts = Array.from(
@@ -1347,10 +1347,45 @@ async function injectAndRun(tabId) {
             return;
           }
 
-          status.textContent = `Transcript detected: ${transcript.length} characters.`;
-          console.log("[sportabase] Transcript characters:", transcript.length);
-          console.log("[sportabase] Transcript start:", transcript.slice(0, 1500));
-          console.log("[sportabase] Transcript end:", transcript.slice(-1500));
+          status.textContent = "Analyzing the video claim...";
+
+          const videoTitle =
+            document.querySelector("h1 yt-formatted-string")?.innerText?.trim() ||
+            document.title.replace(" - YouTube", "");
+
+          try {
+            const response = await fetchJsonWithTimeout(
+              `${API}/analyze/video`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  title: videoTitle,
+                  transcript,
+                  url: window.location.href,
+                }),
+              },
+              120000
+            );
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            console.log("[sportabase] Video analysis result:", data);
+
+            status.textContent =
+              `Verdict: ${data.verdict} | ` +
+              `Evidence: ${data.evidence_score}/100 | ` +
+              `Logic: ${data.logic_score}/100`;
+          } catch (error) {
+            console.error("[sportabase] Video analysis failed:", error);
+            status.textContent = "Video analysis failed. Check that localhost is running.";
+          }
         };
       }
 

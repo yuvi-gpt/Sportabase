@@ -2057,7 +2057,7 @@ def gemini_tldr(
 
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
 
@@ -2190,7 +2190,7 @@ def ai_detect_article_type(
 
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
 
@@ -2495,20 +2495,50 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
             },
         }
 
-    language_info = detect_content_language(transcript)
+    language_info = {
+        "detected_language": "unknown",
+        "languages": [],
+        "mixed_language": False,
+        "language_confidence": 0.0,
+    }
     
-    clipped_transcript = clean_html(transcript)[:5000]
+    cleaned_transcript = clean_html(transcript)
+
+    if len(cleaned_transcript) <= 12000:
+        clipped_transcript = cleaned_transcript
+    else:
+        section_size = 4000
+        middle_start = max(
+            0,
+            (len(cleaned_transcript) // 2) - (section_size // 2),
+        )
+
+        clipped_transcript = (
+            "[START OF VIDEO]\n"
+            + cleaned_transcript[:section_size]
+            + "\n\n[MIDDLE OF VIDEO]\n"
+            + cleaned_transcript[
+                middle_start:middle_start + section_size
+            ]
+            + "\n\n[END OF VIDEO]\n"
+            + cleaned_transcript[-section_size:]
+        )
 
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n\n"
         "Task: analyze a sports rumor/news video transcript.\n\n"
-        f"Detected language information: {json.dumps(language_info)}\n"
-        "Understand the original meaning even if the transcript is multilingual or code-switched.\n"
-        "Return the final readout in English for now.\n\n"
+        "Detect the transcript's language or languages as part of this same analysis.\n"
+        "Set mixed_language to true when the speaker meaningfully switches languages.\n"
+        "Understand multilingual and code-switched speech in its original context.\n"
+        "Return the claim analysis in English for now.\n\n"
         "You are not deciding absolute truth. You are judging the quality of the claim, "
         "the evidence used, the logic, and whether the creator is overstating the claim.\n\n"
         "Output JSON format:\n"
         "{\n"
+        '  "detected_language": "English",\n'
+        '  "languages": ["English"],\n'
+        '  "mixed_language": false,\n'
+        '  "language_confidence": 0.95,\n'
         '  "claim": "Main claim made by the video.",\n'
         '  "evidence_used": ["Evidence or reasons the creator gives."],\n'
         '  "logic_check": "Does the reasoning actually support the claim?",\n'
@@ -2537,7 +2567,7 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
 
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
 
@@ -2549,6 +2579,31 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
             raw = raw[start:end + 1]
 
         data = json.loads(raw)
+
+        languages = data.get("languages", [])
+        if not isinstance(languages, list):
+            languages = [str(languages)]
+
+        try:
+            language_confidence = float(
+                data.get("language_confidence", 0.0)
+            )
+        except Exception:
+            language_confidence = 0.0
+
+        language_info = {
+            "detected_language": str(
+                data.get("detected_language", "unknown")
+            ),
+            "languages": [str(language) for language in languages],
+            "mixed_language": bool(
+                data.get("mixed_language", False)
+            ),
+            "language_confidence": round(
+                max(0.0, min(1.0, language_confidence)),
+                2,
+            ),
+        }
 
         evidence_score = int(float(data.get("evidence_score", 0)))
         logic_score = int(float(data.get("logic_score", 0)))
