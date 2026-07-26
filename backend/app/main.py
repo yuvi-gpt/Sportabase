@@ -267,6 +267,35 @@ def prepare_video_transcript(transcript: str) -> Dict[str, Any]:
         "uncertain_corrections": [],
     }
 
+def split_video_transcript(
+    transcript: str,
+    chunk_size: int = 4000,
+    overlap: int = 400,
+) -> List[str]:
+    text = clean_html(transcript)
+
+    if not text:
+        return []
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+
+    overlap = max(0, min(overlap, chunk_size - 1))
+    step = chunk_size - overlap
+
+    chunks: List[str] = []
+
+    for start in range(0, len(text), step):
+        chunk = text[start:start + chunk_size].strip()
+
+        if chunk:
+            chunks.append(chunk)
+
+        if start + chunk_size >= len(text):
+            break
+
+    return chunks
+
 def _clamp(value: float, lo: int = 0, hi: int = 100) -> int:
     return max(lo, min(hi, int(round(value))))
 
@@ -2527,24 +2556,36 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
     transcript_data = prepare_video_transcript(transcript)
     cleaned_transcript = transcript_data["cleaned_transcript"]
 
-    if len(cleaned_transcript) <= 12000:
-        clipped_transcript = cleaned_transcript
-    else:
-        section_size = 4000
-        middle_start = max(
-            0,
-            (len(cleaned_transcript) // 2) - (section_size // 2),
-        )
+    transcript_chunks = split_video_transcript(
+        cleaned_transcript,
+        chunk_size=4000,
+        overlap=400,
+    )
 
-        clipped_transcript = (
-            "[START OF VIDEO]\n"
-            + cleaned_transcript[:section_size]
-            + "\n\n[MIDDLE OF VIDEO]\n"
-            + cleaned_transcript[
-                middle_start:middle_start + section_size
-            ]
-            + "\n\n[END OF VIDEO]\n"
-            + cleaned_transcript[-section_size:]
+    if not transcript_chunks:
+        clipped_transcript = ""
+    elif len(transcript_chunks) <= 3:
+        clipped_transcript = "\n\n".join(
+            (
+                f"[TRANSCRIPT CHUNK {index + 1} "
+                f"OF {len(transcript_chunks)}]\n{chunk}"
+            )
+            for index, chunk in enumerate(transcript_chunks)
+        )
+    else:
+        selected_indices = [
+            0,
+            len(transcript_chunks) // 2,
+            len(transcript_chunks) - 1,
+        ]
+
+        clipped_transcript = "\n\n".join(
+            (
+                f"[TRANSCRIPT CHUNK {index + 1} "
+                f"OF {len(transcript_chunks)}]\n"
+                f"{transcript_chunks[index]}"
+            )
+            for index in selected_indices
         )
 
     prompt = (
