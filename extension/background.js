@@ -1419,6 +1419,17 @@ async function injectAndRun(tabId) {
                 )}
               </div>
 
+              <div style="margin-top:6px; font-size:12px; opacity:0.7;">
+                Transcript confidence:
+                ${
+                  data.debug?.transcript_confidence == null
+                    ? "Not available"
+                    : `${Math.round(
+                        Number(data.debug.transcript_confidence) * 100
+                      )}%`
+                }
+              </div>
+
               <div style="display:flex; gap:8px; margin-top:12px;">
                 <div style="
                   flex:1;
