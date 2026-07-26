@@ -2597,6 +2597,12 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
         "Detect the transcript's language or languages as part of this same analysis.\n"
         "Set mixed_language to true when the speaker meaningfully switches languages.\n"
         "Understand multilingual and code-switched speech in its original context.\n"
+        "Estimate transcript_confidence from 0.0 to 1.0 based on caption clarity.\n"
+        "Do not silently rewrite or assume uncertain words.\n"
+        "Add an uncertain_corrections item only when the video title, surrounding "
+        "sentences, or clear sports context strongly suggests a caption error.\n"
+        "Each correction must include original, suggested, reason, and confidence.\n"
+        "Use an empty uncertain_corrections list when no correction is justified.\n"
         "Return the claim analysis in English for now.\n\n"
         "Judge the video according to the type of content it actually contains.\n"
         "Separate dramatic presentation style from the quality of the underlying "
@@ -2610,6 +2616,15 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
         '  "languages": ["English"],\n'
         '  "mixed_language": false,\n'
         '  "language_confidence": 0.95,\n'
+        '  "transcript_confidence": 0.85,\n'
+        '  "uncertain_corrections": [\n'
+        '    {\n'
+        '      "original": "Possible caption error",\n'
+        '      "suggested": "Likely intended wording",\n'
+        '      "reason": "Why the surrounding context suggests this correction.",\n'
+        '      "confidence": 0.65\n'
+        '    }\n'
+        '  ],\n'
         '  "content_type": "sports_analysis",\n'
         '  "claim": "Main claim or argument made by the video.",\n'
         '  "evidence_used": ["Evidence, examples, sources, or reasoning used."],\n'
@@ -2691,6 +2706,29 @@ def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[s
                 2,
             ),
         }
+
+        try:
+            transcript_confidence = float(
+                data.get("transcript_confidence", 0.0)
+            )
+        except Exception:
+            transcript_confidence = 0.0
+
+        uncertain_corrections = data.get(
+            "uncertain_corrections",
+            [],
+        )
+
+        if not isinstance(uncertain_corrections, list):
+            uncertain_corrections = []
+
+        transcript_data["transcript_confidence"] = round(
+            max(0.0, min(1.0, transcript_confidence)),
+            2,
+        )
+        transcript_data["uncertain_corrections"] = (
+            uncertain_corrections
+        )
 
         evidence_score = int(float(data.get("evidence_score", 0)))
         logic_score = int(float(data.get("logic_score", 0)))
