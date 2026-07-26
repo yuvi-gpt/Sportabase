@@ -1378,11 +1378,91 @@ async function injectAndRun(tabId) {
 
             console.log("[sportabase] Video analysis result:", data);
 
-            status.textContent =
-              `Type: ${data.content_type} | ` +
-              `Verdict: ${data.verdict} | ` +
-              `Evidence: ${data.evidence_score}/100 | ` +
-              `Logic: ${data.logic_score}/100`;
+            const evidenceItems =
+              Array.isArray(data.evidence_used) && data.evidence_used.length
+                ? data.evidence_used
+                    .map(
+                      (item) =>
+                        `<li style="margin-top:5px;">${escapeHtml(String(item))}</li>`
+                    )
+                    .join("")
+                : "<li style=\"margin-top:5px;\">No evidence details returned.</li>";
+
+            status.innerHTML = `
+              <div style="font-size:12px; opacity:0.7;">
+                ${escapeHtml(
+                  String(data.content_type || "unknown").replace(/_/g, " ")
+                )}
+              </div>
+
+              <div style="margin-top:5px; font-size:17px; font-weight:800;">
+                ${escapeHtml(
+                  String(data.verdict || "unknown").replace(/_/g, " ")
+                )}
+              </div>
+
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <div style="
+                  flex:1;
+                  padding:9px;
+                  border-radius:10px;
+                  background:rgba(255,255,255,0.08);
+                ">
+                  <div style="font-size:11px; opacity:0.65;">EVIDENCE</div>
+                  <div style="margin-top:3px; font-size:18px; font-weight:800;">
+                    ${Number(data.evidence_score) || 0}/100
+                  </div>
+                </div>
+
+                <div style="
+                  flex:1;
+                  padding:9px;
+                  border-radius:10px;
+                  background:rgba(255,255,255,0.08);
+                ">
+                  <div style="font-size:11px; opacity:0.65;">LOGIC</div>
+                  <div style="margin-top:3px; font-size:18px; font-weight:800;">
+                    ${Number(data.logic_score) || 0}/100
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:14px;">
+                <div style="font-size:11px; font-weight:800; opacity:0.65;">
+                  MAIN CLAIM
+                </div>
+                <div style="margin-top:5px;">
+                  ${escapeHtml(String(data.claim || "No clear claim returned."))}
+                </div>
+              </div>
+
+              <div style="margin-top:14px;">
+                <div style="font-size:11px; font-weight:800; opacity:0.65;">
+                  EVIDENCE USED
+                </div>
+                <ul style="margin:3px 0 0; padding-left:18px;">
+                  ${evidenceItems}
+                </ul>
+              </div>
+
+              <div style="margin-top:14px;">
+                <div style="font-size:11px; font-weight:800; opacity:0.65;">
+                  LOGIC CHECK
+                </div>
+                <div style="margin-top:5px;">
+                  ${escapeHtml(String(data.logic_check || "No logic assessment returned."))}
+                </div>
+              </div>
+
+              <div style="margin-top:14px;">
+                <div style="font-size:11px; font-weight:800; opacity:0.65;">
+                  HYPE CHECK
+                </div>
+                <div style="margin-top:5px;">
+                  ${escapeHtml(String(data.hype_check || "No hype assessment returned."))}
+                </div>
+              </div>
+            `;
           } catch (error) {
             console.error("[sportabase] Video analysis failed:", error);
             status.textContent = "Video analysis failed. Check that localhost is running.";
