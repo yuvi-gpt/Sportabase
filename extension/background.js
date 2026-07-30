@@ -8,11 +8,31 @@ const FETCH_TIMEOUT_MS = 22000; // 22 seconds
 
 async function injectAndRun(tabId) {
   const prefs = await chrome.storage.local.get({
-    sportabaseSizeMode: "compact",
+    // Appearance
+    sportabaseAppearance: "system",
+    sportabaseAccentMode: "dynamic",
+    sportabaseAccentColor: "#1ed760",
+    sportabaseGlowLevel: "reduced",
+    sportabaseMotionLevel: "full",
+    sportabaseHighContrast: false,
+
+    // Typography and spacing
+    sportabaseTextScale: "medium",
+    sportabaseDensity: "comfortable",
+
+    // Panel
+    sportabaseSizeMode: "comfort",
     sportabaseCustomWidth: null,
     sportabaseCustomHeight: null,
     sportabaseLeft: null,
     sportabaseTop: null,
+    sportabaseRememberPosition: true,
+
+    // Content behaviour
+    sportabaseDetailLevel: "full",
+    sportabaseAutoTranscript: true,
+    sportabaseRememberSections: true,
+    sportabaseKeepOpenOnNavigation: false,
   });
 
   await chrome.scripting.executeScript({
@@ -606,159 +626,95 @@ async function injectAndRun(tabId) {
       }
 
       function ensureSportabaseStyles() {
-        const existing = document.getElementById("sportabase-dynamic-styles");
+        const existing = document.getElementById(
+          "sportabase-dynamic-styles"
+        );
+
         if (existing) existing.remove();
 
         const style = document.createElement("style");
         style.id = "sportabase-dynamic-styles";
+
         style.textContent = `
-          @keyframes sportabase-panel-float {
-            0%, 100% {
-              transform: translateY(0px);
-            }
-            50% {
-              transform: translateY(-2px);
-            }
-          }
-
-          @keyframes sportabase-horizontal-flow {
-            0% {
-              transform: translate3d(22%, -2%, 0) skewX(-11deg) scale(1.08);
-              background-position: 0% 50%;
-            }
-            45% {
-              transform: translate3d(-6%, 2%, 0) skewX(-7deg) scale(1.16);
-              background-position: 72% 50%;
-            }
-            100% {
-              transform: translate3d(-24%, -1%, 0) skewX(-12deg) scale(1.1);
-              background-position: 140% 50%;
-            }
-          }
-
-          @keyframes sportabase-ripple-lines {
-            0% {
-              transform: translate3d(18%, 0, 0) rotate(-2deg);
-            }
-            50% {
-              transform: translate3d(-8%, 3%, 0) rotate(-2deg);
-            }
-            100% {
-              transform: translate3d(-26%, -2%, 0) rotate(-2deg);
-            }
-          }
-
-          @keyframes sportabase-depth-pulse {
-            0%, 100% {
-              transform: translate3d(8%, 0, 0) scale(1);
-            }
-            50% {
-              transform: translate3d(-7%, -2%, 0) scale(1.06);
-            }
-          }
-
+          #sportabase-overlay,
           #sportabase-overlay * {
             box-sizing: border-box;
           }
 
           #sportabase-overlay {
-            animation: sportabase-panel-float 5.5s ease-in-out infinite;
+            isolation: isolate;
+            -webkit-font-smoothing: antialiased;
           }
 
-          #sportabase-overlay .sportabase-gradient-field {
-            position: absolute;
-            inset: -18% -34% -18% -24%;
-            z-index: 0;
-            pointer-events: none;
-            border-radius: inherit;
-            background:
-              linear-gradient(
-                100deg,
-                rgba(0,0,0,0) 0%,
-                rgba(0,0,0,0) 20%,
-                var(--sb-soft-glow) 45%,
-                var(--sb-glow) 66%,
-                rgba(0,0,0,0) 92%
-              );
-            background-size: 230% 100%;
-            opacity: var(--sb-field-opacity, 0.48);
-            filter: blur(var(--sb-blur, 24px)) saturate(var(--sb-saturate, 145%));
-            animation: sportabase-horizontal-flow 8.5s ease-in-out infinite alternate;
-          }
-
-          #sportabase-overlay .sportabase-gradient-ripple {
-            position: absolute;
-            inset: -10% -34% -10% -16%;
-            z-index: 0;
-            pointer-events: none;
-            border-radius: inherit;
-            background:
-              repeating-linear-gradient(
-                100deg,
-                rgba(0,0,0,0) 0px,
-                rgba(0,0,0,0) 46px,
-                var(--sb-soft-glow) 70px,
-                rgba(0,0,0,0) 108px
-              );
-            opacity: var(--sb-ripple-opacity, 0.16);
-            filter: blur(16px) saturate(var(--sb-saturate, 135%));
-            animation: sportabase-ripple-lines 6.8s ease-in-out infinite alternate;
-          }
-
+          #sportabase-overlay .sportabase-gradient-field,
+          #sportabase-overlay .sportabase-gradient-ripple,
           #sportabase-overlay .sportabase-gradient-depth {
             position: absolute;
             inset: 0;
             z-index: 0;
             pointer-events: none;
             border-radius: inherit;
+          }
+
+          #sportabase-overlay .sportabase-gradient-field {
             background:
-              radial-gradient(circle at 90% 18%, var(--sb-glow) 0%, transparent 28%),
-              linear-gradient(
-                90deg,
-                rgba(0,0,0,0.32) 0%,
-                rgba(0,0,0,0.08) 45%,
-                var(--sb-soft-glow) 100%
+              radial-gradient(
+                circle at 100% 0%,
+                var(--sb-soft-glow, transparent),
+                transparent 44%
               );
-            opacity: var(--sb-depth-opacity, 0.24);
-            filter: blur(10px) saturate(var(--sb-saturate, 135%));
-            animation: sportabase-depth-pulse 10s ease-in-out infinite;
+            opacity: var(--sb-field-opacity, 0.22);
+          }
+
+          #sportabase-overlay .sportabase-gradient-ripple {
+            display: none;
+          }
+
+          #sportabase-overlay .sportabase-gradient-depth {
+            background:
+              linear-gradient(
+                135deg,
+                transparent 40%,
+                var(--sb-soft-glow, transparent) 100%
+              );
+            opacity: var(--sb-depth-opacity, 0.12);
           }
 
           #sportabase-overlay::-webkit-scrollbar,
-          #sportabase-overlay *::-webkit-scrollbar {
-            width: 8px;
-          }
+            #sportabase-overlay *::-webkit-scrollbar {
+              width: 6px;
+              height: 6px;
+            }
 
-          #sportabase-overlay::-webkit-scrollbar-thumb,
-          #sportabase-overlay *::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.18);
-            border-radius: 999px;
-          }
+            #sportabase-overlay::-webkit-scrollbar-thumb,
+            #sportabase-overlay *::-webkit-scrollbar-thumb {
+              background: var(
+                --sb-ui-border,
+                rgba(255, 255, 255, 0.18)
+              );
+              border: 1px solid transparent;
+              background-clip: padding-box;
+              border-radius: 999px;
+            }
 
-          #sportabase-overlay .sportabase-size-btn {
-            background: rgba(255,255,255,0.09);
-            color: rgba(255,255,255,0.86);
-            border: 1px solid rgba(255,255,255,0.13);
-            border-radius: 999px;
-            padding: 4px 7px;
-            font-size: 10.5px;
-            font-weight: 800;
-            cursor: pointer;
-            line-height: 1;
-          }
+            #sportabase-overlay .sportabase-content-scroll {
+              scrollbar-gutter: stable;
+              overscroll-behavior: contain;
+            }
 
-          #sportabase-overlay .sportabase-size-btn:hover {
-            background: rgba(255,255,255,0.16);
-          }
+            #sportabase-overlay *::-webkit-scrollbar-track {
+              background: transparent;
+            }
 
-          #sportabase-overlay .sportabase-resize-handle {
+            #sportabase-overlay .sportabase-resize-handle {
             position: absolute;
-            z-index: 2147483647;
+            z-index: 3;
             background: transparent;
             pointer-events: auto;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="n"] {
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="n"] {
             top: 0;
             left: 18px;
             right: 18px;
@@ -766,7 +722,8 @@ async function injectAndRun(tabId) {
             cursor: ns-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="s"] {
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="s"] {
             bottom: 0;
             left: 18px;
             right: 18px;
@@ -774,7 +731,8 @@ async function injectAndRun(tabId) {
             cursor: ns-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="e"] {
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="e"] {
             top: 18px;
             right: 0;
             bottom: 18px;
@@ -782,7 +740,8 @@ async function injectAndRun(tabId) {
             cursor: ew-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="w"] {
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="w"] {
             top: 18px;
             left: 0;
             bottom: 18px;
@@ -790,40 +749,861 @@ async function injectAndRun(tabId) {
             cursor: ew-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="ne"] {
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="ne"],
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="nw"],
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="se"],
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="sw"] {
+            width: 24px;
+            height: 24px;
+          }
+
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="ne"] {
             top: 0;
             right: 0;
-            width: 22px;
-            height: 22px;
             cursor: nesw-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="nw"] {
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="nw"] {
             top: 0;
             left: 0;
-            width: 22px;
-            height: 22px;
             cursor: nwse-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="se"] {
-            bottom: 0;
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="se"] {
             right: 0;
-            width: 24px;
-            height: 24px;
+            bottom: 0;
             cursor: nwse-resize;
           }
 
-          #sportabase-overlay .sportabase-resize-handle[data-dir="sw"] {
-            bottom: 0;
+          #sportabase-overlay
+            .sportabase-resize-handle[data-dir="sw"] {
             left: 0;
-            width: 24px;
-            height: 24px;
+            bottom: 0;
             cursor: nesw-resize;
           }
+         `;
+
+        (document.head || document.documentElement).appendChild(style);
+      }
+
+      function getSportabaseUiDefaults() {
+        return {
+          sportabaseAppearance: "system",
+          sportabaseAccentMode: "dynamic",
+          sportabaseAccentColor: "#1ed760",
+          sportabaseGlowLevel: "reduced",
+          sportabaseMotionLevel: "full",
+          sportabaseHighContrast: false,
+          sportabaseTextScale: "medium",
+          sportabaseDensity: "comfortable",
+          sportabaseSizeMode: "comfort",
+          sportabaseCustomWidth: null,
+          sportabaseCustomHeight: null,
+          sportabaseLeft: null,
+          sportabaseTop: null,
+          sportabaseRememberPosition: true,
+          sportabaseDetailLevel: "full",
+          sportabaseAutoTranscript: true,
+          sportabaseRememberSections: true,
+          sportabaseKeepOpenOnNavigation: false,
+        };
+      }
+
+      function applySportabaseUiPreferences(overlay) {
+        if (!overlay) return;
+
+        const appearance =
+          prefs?.sportabaseAppearance || "system";
+
+        const prefersLight =
+          window.matchMedia?.(
+            "(prefers-color-scheme: light)"
+          )?.matches || false;
+
+        const resolvedAppearance =
+          appearance === "system"
+            ? prefersLight
+              ? "light"
+              : "dark"
+            : appearance;
+
+        const textScaleMap = {
+          small: 0.94,
+          medium: 1,
+          large: 1.08,
+        };
+
+        const densityMap = {
+          compact: 0.84,
+          comfortable: 1,
+          spacious: 1.14,
+        };
+
+        const glowMap = {
+          off: 0,
+          reduced: 0.52,
+          full: 1,
+        };
+
+        const textScale =
+          textScaleMap[prefs?.sportabaseTextScale] || 1;
+
+        const density =
+          densityMap[prefs?.sportabaseDensity] || 1;
+
+        const glowStrength =
+          glowMap[prefs?.sportabaseGlowLevel] ?? 0.52;
+
+        const fixedAccent =
+          prefs?.sportabaseAccentColor || "#1ed760";
+
+        const palette =
+          resolvedAppearance === "light"
+            ? {
+                panel:
+                  "linear-gradient(180deg, #ffffff 0%, #f4f5f7 100%)",
+                surface: "rgba(255,255,255,0.92)",
+                raised: "rgba(242,244,247,0.96)",
+                text: "#101114",
+                muted: "#62666d",
+                border: "rgba(15,23,42,0.13)",
+                divider: "rgba(15,23,42,0.10)",
+                shadow: "rgba(15,23,42,0.22)",
+              }
+            : {
+                panel:
+                  "linear-gradient(180deg, #121212 0%, #0b0b0c 100%)",
+                surface: "rgba(27,27,29,0.94)",
+                raised: "rgba(38,38,41,0.94)",
+                text: "#f7f7f8",
+                muted: "#a2a2a8",
+                border: "rgba(255,255,255,0.11)",
+                divider: "rgba(255,255,255,0.08)",
+                shadow: "rgba(0,0,0,0.56)",
+              };
+
+        overlay.dataset.sbAppearance =
+          resolvedAppearance;
+
+        overlay.dataset.sbAccentMode =
+          prefs?.sportabaseAccentMode || "dynamic";
+
+        overlay.dataset.sbMotionLevel =
+          prefs?.sportabaseMotionLevel || "full";
+
+        overlay.dataset.sbDensity =
+          prefs?.sportabaseDensity || "comfortable";
+
+        overlay.style.setProperty(
+          "--sb-ui-panel",
+          palette.panel
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-surface",
+          palette.surface
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-raised",
+          palette.raised
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-text",
+          palette.text
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-muted",
+          palette.muted
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-border",
+          palette.border
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-divider",
+          palette.divider
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-shadow",
+          palette.shadow
+        );
+
+        overlay.style.setProperty(
+          "--sb-ui-accent",
+          fixedAccent
+        );
+
+        overlay.style.setProperty(
+          "--sb-text-scale",
+          String(textScale)
+        );
+
+        overlay.style.setProperty(
+          "--sb-density",
+          String(density)
+        );
+
+        overlay.style.setProperty(
+          "--sb-glow-strength",
+          String(glowStrength)
+        );
+
+        overlay.style.fontFamily = [
+          '"Circular Std"',
+          '"Circular Spotify Tx T"',
+          '"Avenir Next"',
+          '"Segoe UI Variable Display"',
+          '"Segoe UI"',
+          "Inter",
+          "system-ui",
+          "sans-serif",
+        ].join(", ");
+
+        overlay.style.fontSize =
+          `${Math.round(14 * textScale)}px`;
+
+        overlay.style.background = palette.panel;
+        overlay.style.color = palette.text;
+
+        overlay.style.border = prefs?.sportabaseHighContrast
+          ? `2px solid ${palette.text}`
+          : `1px solid ${palette.border}`;
+
+        overlay.style.boxShadow =
+          `0 24px 70px ${palette.shadow}`;
+
+        const motionLevel =
+          prefs?.sportabaseMotionLevel || "full";
+
+        if (motionLevel === "none") {
+          overlay.style.animation = "none";
+
+          overlay
+            .querySelectorAll(
+              ".sportabase-gradient-field, " +
+              ".sportabase-gradient-ripple, " +
+              ".sportabase-gradient-depth"
+            )
+            .forEach((element) => {
+              element.style.animation = "none";
+            });
+        } else if (motionLevel === "reduced") {
+          overlay.style.animationDuration = "12s";
+        }
+
+        const gradientOpacity =
+          prefs?.sportabaseGlowLevel === "off"
+            ? "0"
+            : prefs?.sportabaseGlowLevel === "full"
+              ? "1"
+              : "0.42";
+
+        overlay
+          .querySelectorAll(
+            ".sportabase-gradient-field, " +
+            ".sportabase-gradient-ripple, " +
+            ".sportabase-gradient-depth"
+          )
+          .forEach((element) => {
+            element.style.opacity = gradientOpacity;
+          });
+      }
+
+      function installSportabaseSettingsDrawer(
+        overlay,
+        SIZE_PRESETS
+      ) {
+        const previousDrawer = overlay.querySelector(
+          "#sportabase-settings-layer"
+        );
+
+        if (previousDrawer) {
+          previousDrawer.remove();
+        }
+
+        const defaults = getSportabaseUiDefaults();
+
+        const layer = document.createElement("div");
+        layer.id = "sportabase-settings-layer";
+
+        layer.style.cssText = `
+          position:absolute;
+          inset:0;
+          z-index:2147483646;
+          display:none;
+          overflow:hidden;
+          border-radius:inherit;
         `;
 
-        document.head.appendChild(style);
+        layer.innerHTML = `
+          <button
+            id="sportabase-settings-backdrop"
+            aria-label="Close settings"
+            style="
+              position:absolute;
+              inset:0;
+              width:100%;
+              height:100%;
+              border:0;
+              background:rgba(0,0,0,0.58);
+              backdrop-filter:blur(4px);
+              cursor:default;
+            "
+          ></button>
+
+          <section
+            id="sportabase-settings-drawer"
+            style="
+              position:absolute;
+              top:0;
+              right:0;
+              width:min(340px, 92%);
+              height:100%;
+              overflow-y:auto;
+              padding:
+                calc(18px * var(--sb-density, 1));
+              background:var(--sb-ui-panel);
+              color:var(--sb-ui-text);
+              border-left:
+                1px solid var(--sb-ui-border);
+              box-shadow:
+                -22px 0 54px rgba(0,0,0,0.38);
+            "
+          >
+            <header
+              style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:14px;
+                padding-bottom:15px;
+                border-bottom:
+                  1px solid var(--sb-ui-divider);
+              "
+            >
+              <div>
+                <div
+                  style="
+                    font-size:18px;
+                    font-weight:760;
+                    letter-spacing:-0.35px;
+                  "
+                >
+                  Settings
+                </div>
+
+                <div
+                  style="
+                    margin-top:3px;
+                    color:var(--sb-ui-muted);
+                    font-size:12px;
+                  "
+                >
+                  Appearance and behaviour
+                </div>
+              </div>
+
+              <button
+                id="sportabase-settings-close"
+                aria-label="Close settings"
+                style="
+                  width:32px;
+                  height:32px;
+                  display:grid;
+                  place-items:center;
+                  border-radius:50%;
+                  border:
+                    1px solid var(--sb-ui-border);
+                  background:var(--sb-ui-raised);
+                  color:var(--sb-ui-text);
+                  cursor:pointer;
+                  font-size:17px;
+                "
+              >
+                ×
+              </button>
+            </header>
+
+            <div
+              style="
+                display:grid;
+                gap:22px;
+                padding-top:18px;
+              "
+            >
+              <section>
+                <div
+                  style="
+                    margin-bottom:10px;
+                    color:var(--sb-ui-muted);
+                    font-size:11px;
+                    font-weight:760;
+                    letter-spacing:0.75px;
+                    text-transform:uppercase;
+                  "
+                >
+                  Appearance
+                </div>
+
+                <label class="sportabase-setting-row">
+                  <span>Theme</span>
+
+                  <select
+                    data-sb-setting="sportabaseAppearance"
+                  >
+                    <option value="system">System</option>
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Accent</span>
+
+                  <select
+                    data-sb-setting="sportabaseAccentMode"
+                  >
+                    <option value="dynamic">
+                      Dynamic score
+                    </option>
+                    <option value="fixed">
+                      Fixed color
+                    </option>
+                  </select>
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Accent color</span>
+
+                  <input
+                    type="color"
+                    data-sb-setting="sportabaseAccentColor"
+                    value="#1ed760"
+                    style="
+                      width:44px;
+                      height:30px;
+                      border:0;
+                      padding:0;
+                      background:transparent;
+                      cursor:pointer;
+                    "
+                  />
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Glow</span>
+
+                  <select
+                    data-sb-setting="sportabaseGlowLevel"
+                  >
+                    <option value="off">Off</option>
+                    <option value="reduced">Reduced</option>
+                    <option value="full">Full</option>
+                  </select>
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Motion</span>
+
+                  <select
+                    data-sb-setting="sportabaseMotionLevel"
+                  >
+                    <option value="full">Full</option>
+                    <option value="reduced">Reduced</option>
+                    <option value="none">None</option>
+                  </select>
+                </label>
+
+                <label class="sportabase-toggle-row">
+                  <span>High contrast</span>
+
+                  <input
+                    type="checkbox"
+                    data-sb-setting="sportabaseHighContrast"
+                  />
+                </label>
+              </section>
+
+              <section>
+                <div
+                  style="
+                    margin-bottom:10px;
+                    color:var(--sb-ui-muted);
+                    font-size:11px;
+                    font-weight:760;
+                    letter-spacing:0.75px;
+                    text-transform:uppercase;
+                  "
+                >
+                  Layout
+                </div>
+
+                <label class="sportabase-setting-row">
+                  <span>Panel size</span>
+
+                  <select
+                    id="sportabase-settings-size"
+                  >
+                    <option value="compact">Compact</option>
+                    <option value="comfort">
+                      Comfortable
+                    </option>
+                    <option value="wide">Wide</option>
+                    <option value="debug">Extra wide</option>
+                  </select>
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Text size</span>
+
+                  <select
+                    data-sb-setting="sportabaseTextScale"
+                  >
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                  </select>
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Content density</span>
+
+                  <select
+                    data-sb-setting="sportabaseDensity"
+                  >
+                    <option value="compact">Compact</option>
+                    <option value="comfortable">
+                      Comfortable
+                    </option>
+                    <option value="spacious">Spacious</option>
+                  </select>
+                </label>
+
+                <label class="sportabase-toggle-row">
+                  <span>Remember size and position</span>
+
+                  <input
+                    type="checkbox"
+                    data-sb-setting="sportabaseRememberPosition"
+                  />
+                </label>
+              </section>
+
+              <section>
+                <div
+                  style="
+                    margin-bottom:10px;
+                    color:var(--sb-ui-muted);
+                    font-size:11px;
+                    font-weight:760;
+                    letter-spacing:0.75px;
+                    text-transform:uppercase;
+                  "
+                >
+                  Behaviour
+                </div>
+
+                <label class="sportabase-toggle-row">
+                  <span>Automatically find transcripts</span>
+
+                  <input
+                    type="checkbox"
+                    data-sb-setting="sportabaseAutoTranscript"
+                  />
+                </label>
+
+                <label class="sportabase-setting-row">
+                  <span>Default detail</span>
+
+                  <select
+                    data-sb-setting="sportabaseDetailLevel"
+                  >
+                    <option value="compact">
+                      Compact
+                    </option>
+                    <option value="full">
+                      Full
+                    </option>
+                  </select>
+                </label>
+
+                <label class="sportabase-toggle-row">
+                  <span>Remember collapsed sections</span>
+
+                  <input
+                    type="checkbox"
+                    data-sb-setting="sportabaseRememberSections"
+                  />
+                </label>
+              </section>
+
+              <section
+                style="
+                  padding-top:4px;
+                  border-top:
+                    1px solid var(--sb-ui-divider);
+                "
+              >
+                <button
+                  id="sportabase-settings-reset"
+                  style="
+                    width:100%;
+                    padding:11px 13px;
+                    border-radius:999px;
+                    border:
+                      1px solid var(--sb-ui-border);
+                    background:var(--sb-ui-raised);
+                    color:var(--sb-ui-text);
+                    font-weight:720;
+                    cursor:pointer;
+                  "
+                >
+                  Restore defaults
+                </button>
+
+                <div
+                  style="
+                    margin-top:12px;
+                    color:var(--sb-ui-muted);
+                    font-size:11px;
+                    text-align:center;
+                  "
+                >
+                  Sportabase local beta
+                </div>
+              </section>
+            </div>
+          </section>
+        `;
+
+        overlay.appendChild(layer);
+
+        layer
+          .querySelectorAll(".sportabase-setting-row")
+          .forEach((row) => {
+            row.style.cssText = `
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              gap:14px;
+              min-height:42px;
+              border-bottom:
+                1px solid var(--sb-ui-divider);
+              font-size:13px;
+            `;
+          });
+
+        layer
+          .querySelectorAll(".sportabase-toggle-row")
+          .forEach((row) => {
+            row.style.cssText = `
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              gap:14px;
+              min-height:42px;
+              border-bottom:
+                1px solid var(--sb-ui-divider);
+              font-size:13px;
+            `;
+          });
+
+        layer
+          .querySelectorAll("select")
+          .forEach((select) => {
+            select.style.cssText = `
+              max-width:150px;
+              padding:7px 9px;
+              border-radius:10px;
+              border:
+                1px solid var(--sb-ui-border);
+              background:var(--sb-ui-raised);
+              color:var(--sb-ui-text);
+              font:inherit;
+              cursor:pointer;
+            `;
+          });
+
+        function syncControls() {
+          layer
+            .querySelectorAll("[data-sb-setting]")
+            .forEach((control) => {
+              const key = control.dataset.sbSetting;
+              const value = prefs[key];
+
+              if (control.type === "checkbox") {
+                control.checked = Boolean(value);
+              } else {
+                control.value =
+                  value ?? defaults[key] ?? "";
+              }
+            });
+
+          const sizeControl = layer.querySelector(
+            "#sportabase-settings-size"
+          );
+
+          if (sizeControl) {
+            sizeControl.value =
+              prefs.sportabaseSizeMode === "custom"
+                ? "comfort"
+                : prefs.sportabaseSizeMode || "comfort";
+          }
+        }
+
+        function updatePreference(key, value) {
+          prefs[key] = value;
+
+          saveOverlayPrefs({
+            [key]: value,
+          });
+
+          applySportabaseUiPreferences(overlay);
+        }
+
+        function openSettings() {
+          syncControls();
+          layer.style.display = "block";
+        }
+
+        function closeSettings() {
+          layer.style.display = "none";
+        }
+
+        overlay
+          .querySelectorAll(".sportabase-settings-button")
+          .forEach((button) => {
+            button.addEventListener(
+              "click",
+              openSettings
+            );
+          });
+
+        layer
+          .querySelector(
+            "#sportabase-settings-close"
+          )
+          ?.addEventListener(
+            "click",
+            closeSettings
+          );
+
+        layer
+          .querySelector(
+            "#sportabase-settings-backdrop"
+          )
+          ?.addEventListener(
+            "click",
+            closeSettings
+          );
+
+        layer
+          .querySelectorAll("[data-sb-setting]")
+          .forEach((control) => {
+            const eventName =
+              control.type === "color"
+                ? "input"
+                : "change";
+
+            control.addEventListener(
+              eventName,
+              () => {
+                const key = control.dataset.sbSetting;
+
+                const value =
+                  control.type === "checkbox"
+                    ? control.checked
+                    : control.value;
+
+                updatePreference(key, value);
+              }
+            );
+          });
+
+        layer
+          .querySelector(
+            "#sportabase-settings-size"
+          )
+          ?.addEventListener(
+            "change",
+            (event) => {
+              const mode = event.target.value;
+
+              const preset =
+                SIZE_PRESETS[mode] ||
+                SIZE_PRESETS.comfort;
+
+              overlay.style.width =
+                `${preset.width}px`;
+
+              overlay.style.height =
+                `${Math.min(
+                  preset.height,
+                  Math.floor(window.innerHeight * 0.9)
+                )}px`;
+
+              prefs.sportabaseSizeMode = mode;
+              prefs.sportabaseCustomWidth = null;
+              prefs.sportabaseCustomHeight = null;
+
+              saveOverlayPrefs({
+                sportabaseSizeMode: mode,
+                sportabaseCustomWidth: null,
+                sportabaseCustomHeight: null,
+              });
+            }
+          );
+
+        layer
+          .querySelector(
+            "#sportabase-settings-reset"
+          )
+          ?.addEventListener(
+            "click",
+            () => {
+              Object.assign(prefs, defaults);
+
+              saveOverlayPrefs(defaults);
+
+              const preset =
+                SIZE_PRESETS.comfort;
+
+              overlay.style.left = "";
+              overlay.style.top = "18px";
+              overlay.style.right = "18px";
+              overlay.style.width =
+                `${preset.width}px`;
+              overlay.style.height =
+                `${Math.min(
+                  preset.height,
+                  Math.floor(window.innerHeight * 0.9)
+                )}px`;
+
+              applySportabaseUiPreferences(overlay);
+              syncControls();
+            }
+          );
+
+        applySportabaseUiPreferences(overlay);
+        syncControls();
+
+        return {
+          open: openSettings,
+          close: closeSettings,
+        };
       }
 
       function showOverlay(data) {
@@ -959,13 +1739,12 @@ async function injectAndRun(tabId) {
             style="
               position:relative;
               z-index:2;
-              padding:16px;
-              background:
-                linear-gradient(90deg, rgba(2,4,8,0.68) 0%, rgba(4,6,12,0.48) 48%, rgba(6,10,18,0.16) 100%);
-              backdrop-filter: blur(12px) saturate(125%);
+              padding:calc(18px * var(--sb-density, 1));
+              background:transparent;
               height:100%;
               max-height:100%;
               overflow:auto;
+              color:var(--sb-ui-text);
             "
           >
             <div id="sportabase-drag-handle" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
@@ -1010,37 +1789,65 @@ async function injectAndRun(tabId) {
                 >
                   ${articleTypeLabel} · ${articleSubtype} · ${typeConfidence}%
                 </div>
-
-                <div
-                  style="
-                    margin-top:8px;
-                    display:flex;
-                    align-items:center;
-                    gap:5px;
-                    flex-wrap:wrap;
-                  "
-                >
-                  <button class="sportabase-size-btn" data-size-mode="compact">S</button>
-                  <button class="sportabase-size-btn" data-size-mode="comfort">M</button>
-                  <button class="sportabase-size-btn" data-size-mode="wide">L</button>
-                  <button class="sportabase-size-btn" data-size-mode="debug">XL</button>
-                  <button class="sportabase-size-btn" data-size-mode="reset">Reset</button>
-                </div>
               </div>
 
-              <button id="sportabase-close"
+              <div
                 style="
-                  background:rgba(255,255,255,0.10);
-                  color:#fff;
-                  border:1px solid rgba(255,255,255,0.14);
-                  border-radius:999px;
-                  padding:7px 10px;
-                  cursor:pointer;
-                  font-size:12px;
-                  height:max-content;
-                ">
-                Close
-              </button>
+                  display:flex;
+                  align-items:center;
+                  gap:7px;
+                "
+              >
+                <button
+                  class="sportabase-settings-button"
+                  aria-label="Open settings"
+                  title="Settings"
+                  style="
+                    width:34px;
+                    height:34px;
+                    display:grid;
+                    place-items:center;
+                    border-radius:50%;
+                    border:1px solid var(--sb-ui-border);
+                    background:var(--sb-ui-raised);
+                    color:var(--sb-ui-text);
+                    cursor:pointer;
+                  "
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
+                    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V20.3h-3v-.09a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.02 15a1.7 1.7 0 0 0-1.55-1.03H5.4v-3h.07A1.7 1.7 0 0 0 7.02 9.94a1.7 1.7 0 0 0-.34-1.88L6.62 8l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.71 4.7v-.08h3v.08a1.7 1.7 0 0 0 1.03 1.58 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1.03h.08v3h-.08A1.7 1.7 0 0 0 19.4 15Z"></path>
+                  </svg>
+                </button>
+
+                <button
+                  id="sportabase-close"
+                  aria-label="Close Sportabase"
+                  title="Close"
+                  style="
+                    width:34px;
+                    height:34px;
+                    display:grid;
+                    place-items:center;
+                    border-radius:50%;
+                    border:1px solid var(--sb-ui-border);
+                    background:var(--sb-ui-raised);
+                    color:var(--sb-ui-text);
+                    cursor:pointer;
+                    font-size:20px;
+                    line-height:1;
+                  "
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div
@@ -1234,6 +2041,13 @@ async function injectAndRun(tabId) {
 
         document.body.appendChild(overlay);
 
+        applySportabaseUiPreferences(overlay);
+
+        installSportabaseSettingsDrawer(
+          overlay,
+          SIZE_PRESETS
+        );
+
         const cleanupGradientIntensity = installSportabaseGradientIntensityControls(overlay);
 
         const cleanupWindowControls = installSportabaseWindowControls(
@@ -1252,126 +2066,553 @@ async function injectAndRun(tabId) {
       }
 
       function showVideoOverlay() {
+        ensureSportabaseStyles();
+
         const existing = document.getElementById("sportabase-overlay");
         if (existing) existing.remove();
+
+        const SIZE_PRESETS = {
+          compact: { label: "S", width: 360, height: 430 },
+          comfort: { label: "M", width: 430, height: 560 },
+          wide: { label: "L", width: 520, height: 620 },
+          debug: { label: "XL", width: 610, height: 720 },
+        };
+
+        const savedMode = prefs?.sportabaseSizeMode || "comfort";
+        const selectedPreset =
+          SIZE_PRESETS[savedMode] || SIZE_PRESETS.comfort;
+
+        const startWidth = clampNum(
+          prefs?.sportabaseCustomWidth || selectedPreset.width,
+          320,
+          760
+        );
+
+        const startHeight = clampNum(
+          prefs?.sportabaseCustomHeight || selectedPreset.height,
+          260,
+          Math.floor(window.innerHeight * 0.85)
+        );
+
+        const initialScore = 55;
+        let currentTheme = getTheme(initialScore, "developing");
 
         const overlay = document.createElement("div");
         overlay.id = "sportabase-overlay";
 
-        overlay.style.cssText = `
-          position: fixed;
-          top: 18px;
-          right: 18px;
-          width: 430px;
-          height: min(560px, calc(100vh - 36px));
-          min-width: 320px;
-          min-height: 260px;
-          max-width: calc(100vw - 36px);
-          max-height: calc(100vh - 36px);
-          z-index: 2147483647;
-          padding: 20px;
-          box-sizing: border-box;
-          overflow-y: auto;
-          overflow-x: hidden;
-          border-radius: 22px;
-          border: 1px solid rgba(255,255,255,0.14);
-          background:
-            linear-gradient(
-              105deg,
-              rgba(2,4,10,0.98) 0%,
-              rgba(3,6,14,0.96) 38%,
-              rgba(6,10,22,0.94) 100%
+        function humanizeVideoLabel(value) {
+          return String(value || "unknown")
+            .replace(/_/g, " ")
+            .replace(
+              /\b\w/g,
+              (character) => character.toUpperCase()
             );
-          color: white;
-          font-family:
-            Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-          box-shadow:
-            0 24px 70px rgba(0,0,0,0.58),
-            0 0 42px rgba(37,99,235,0.12);
+        }
+
+        function applyVideoTheme(score, badge = "") {
+          const safeScore = Math.max(
+            0,
+            Math.min(100, Number(score) || 0)
+          );
+
+          currentTheme = getTheme(safeScore, badge);
+
+          overlay.style.setProperty(
+            "--sb-color",
+            currentTheme.color
+          );
+          overlay.style.setProperty(
+            "--sb-glow",
+            currentTheme.glow
+          );
+          overlay.style.setProperty(
+            "--sb-soft-glow",
+            currentTheme.softGlow
+          );
+          overlay.style.setProperty(
+            "--sb-border",
+            currentTheme.border
+          );
+
+          overlay.style.border =
+            `1px solid ${currentTheme.border}`;
+
+          overlay.style.boxShadow =
+            `0 24px 70px rgba(0,0,0,0.58), ` +
+            `0 0 42px ${currentTheme.softGlow}`;
+
+          const analyzeButton = overlay.querySelector(
+            "#sportabase-video-analyze"
+          );
+
+          const accentColor =
+            prefs?.sportabaseAccentMode === "fixed"
+              ? prefs?.sportabaseAccentColor || "#1ed760"
+              : currentTheme.color;
+
+          if (analyzeButton) {
+            analyzeButton.style.background = accentColor;
+            analyzeButton.style.color = "#0b0b0c";
+            analyzeButton.style.border =
+              "1px solid rgba(255,255,255,0.08)";
+            analyzeButton.style.boxShadow =
+              `0 8px 24px ${currentTheme.softGlow}`;
+          }
+        }
+
+        overlay.style.position = "fixed";
+        overlay.style.top = "18px";
+        overlay.style.right = "18px";
+
+        if (
+          Number.isFinite(Number(prefs?.sportabaseLeft)) &&
+          Number.isFinite(Number(prefs?.sportabaseTop))
+        ) {
+          const safeLeft = clampNum(
+            prefs.sportabaseLeft,
+            8,
+            Math.max(8, window.innerWidth - startWidth - 8)
+          );
+
+          const safeTop = clampNum(
+            prefs.sportabaseTop,
+            8,
+            Math.max(8, window.innerHeight - startHeight - 8)
+          );
+
+          overlay.style.left = `${safeLeft}px`;
+          overlay.style.top = `${safeTop}px`;
+          overlay.style.right = "auto";
+        }
+
+        overlay.style.width = `${startWidth}px`;
+        overlay.style.height = `${startHeight}px`;
+        overlay.style.minWidth = "320px";
+        overlay.style.minHeight = "260px";
+        overlay.style.maxWidth = "calc(100vw - 16px)";
+        overlay.style.maxHeight = "90vh";
+        overlay.style.overflow = "hidden";
+        overlay.style.resize = "none";
+        overlay.style.zIndex = "2147483647";
+        overlay.style.borderRadius = "22px";
+
+        overlay.style.fontFamily =
+          "Inter, system-ui, -apple-system, " +
+          "Segoe UI, Roboto, Arial, sans-serif";
+
+        overlay.style.color = "#fff";
+
+        overlay.style.background = `
+          linear-gradient(
+            105deg,
+            rgba(2, 4, 10, 0.98) 0%,
+            rgba(3, 6, 14, 0.96) 38%,
+            rgba(6, 10, 22, 0.92) 62%,
+            rgba(8, 13, 28, 0.96) 100%
+          )
         `;
 
+        const videoTitle =
+          document
+            .querySelector("h1 yt-formatted-string")
+            ?.innerText?.trim() ||
+          document.title.replace(" - YouTube", "") ||
+          "YouTube video";
+
         overlay.innerHTML = `
-          <button
-            id="sportabase-video-close"
+          <div class="sportabase-gradient-field"></div>
+          <div class="sportabase-gradient-ripple"></div>
+          <div class="sportabase-gradient-depth"></div>
+
+          <div
+            class="sportabase-content-scroll"
             style="
-              float:right;
-              border:none;
+              position:relative;
+              z-index:2;
+              width:100%;
+              height:100%;
+              overflow-y:auto;
+              overflow-x:hidden;
+              padding:calc(18px * var(--sb-density, 1));
               background:transparent;
-              color:white;
-              font-size:20px;
-              cursor:pointer;
+              color:var(--sb-ui-text);
             "
-          >×</button>
+          >
+            <div
+              id="sportabase-drag-handle"
+              style="
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                gap:12px;
+              "
+            >
+              <div>
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    font-size:13px;
+                    font-weight:900;
+                    letter-spacing:0.2px;
+                    color:var(--sb-ui-text);
+                  "
+                >
+                  <span
+                    style="
+                      width:9px;
+                      height:9px;
+                      border-radius:50%;
+                      background:var(--sb-color);
+                      box-shadow:0 0 8px var(--sb-soft-glow);
+                      display:inline-block;
+                    "
+                  ></span>
 
-          <div style="font-size:13px; opacity:0.7;">SPORTABASE VIDEO MODE</div>
-          <h2 style="margin:10px 0;">Video detected</h2>
-          <div style="font-size:14px; line-height:1.5;">
-            ${escapeHtml(document.title || "YouTube video")}
+                  Sportabase Video Readout
+                </div>
+
+                <div
+                  id="sportabase-video-mode-label"
+                  style="
+                    margin-top:4px;
+                    display:block;
+                    padding:0;
+                    background:transparent;
+                    border:none;
+                    color:var(--sb-ui-muted);
+                    font-size:11.5px;
+                    font-weight:600;
+                    letter-spacing:-0.05px;
+                  "
+                >
+                  YouTube · Video Mode
+                </div>
+
+
+              </div>
+
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:7px;
+                "
+              >
+                <button
+                  class="sportabase-settings-button"
+                  aria-label="Open settings"
+                  title="Settings"
+                  style="
+                    width:30px;
+                    height:30px;
+                    display:grid;
+                    place-items:center;
+                    border-radius:50%;
+                    border:1px solid var(--sb-ui-border);
+                    background:var(--sb-ui-raised);
+                    color:var(--sb-ui-text);
+                    cursor:pointer;
+                  "
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                  >
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                      d="
+                        M19.4 15a1.7 1.7 0 0 0 .34 1.88
+                        l.06.06-2.12 2.12-.06-.06
+                        a1.7 1.7 0 0 0-1.88-.34
+                        1.7 1.7 0 0 0-1.03 1.55v.09h-3v-.09
+                        a1.7 1.7 0 0 0-1.03-1.55
+                        1.7 1.7 0 0 0-1.88.34l-.06.06
+                        -2.12-2.12.06-.06A1.7 1.7 0 0 0 7.02 15
+                        a1.7 1.7 0 0 0-1.55-1.03H5.4v-3h.07
+                        A1.7 1.7 0 0 0 7.02 9.94
+                        a1.7 1.7 0 0 0-.34-1.88L6.62 8
+                        l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34
+                        A1.7 1.7 0 0 0 11.71 4.7v-.08h3v.08
+                        a1.7 1.7 0 0 0 1.03 1.58
+                        1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8
+                        l-.06.06a1.7 1.7 0 0 0-.34 1.88
+                        1.7 1.7 0 0 0 1.55 1.03h.08v3h-.08
+                        A1.7 1.7 0 0 0 19.4 15Z
+                      "
+                    ></path>
+                  </svg>
+                </button>
+
+                <button
+                  id="sportabase-video-close"
+                  aria-label="Close Sportabase"
+                  title="Close"
+                  style="
+                    width:34px;
+                    height:34px;
+                    display:grid;
+                    place-items:center;
+                    border-radius:50%;
+                    border:1px solid var(--sb-ui-border);
+                    background:var(--sb-ui-raised);
+                    color:var(--sb-ui-text);
+                    cursor:pointer;
+                    font-size:18px;
+                    line-height:1;
+                  "
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div
+              style="
+              margin-top:14px;
+              padding:14px;
+              border-radius:16px;
+              background:var(--sb-ui-surface);
+              border:1px solid var(--sb-ui-border);
+              box-shadow:0 10px 28px var(--sb-ui-shadow);
+            "
+            >
+              <div
+                style="
+                  font-size:12px;
+                  color:var(--sb-ui-muted);
+                "
+              >
+                Video detected
+              </div>
+
+              <div
+                style="
+                  margin-top:6px;
+                  font-size:13px;
+                  font-weight:750;
+                  color:var(--sb-ui-text);
+                  line-height:1.4;
+                  letter-spacing:-0.1px;
+                  display:-webkit-box;
+                  -webkit-box-orient:vertical;
+                  -webkit-line-clamp:2;
+                  overflow:hidden;
+                "
+              >
+                ${escapeHtml(videoTitle)}
+              </div>
+
+              <button
+                id="sportabase-video-analyze"
+                style="
+                  width:100%;
+                  margin-top:14px;
+                  padding:11px 14px;
+                  border:none;
+                  border-radius:12px;
+                  color:#071018;
+                  font-weight:900;
+                  cursor:pointer;
+                  box-shadow:0 0 18px var(--sb-soft-glow);
+                "
+              >
+                Analyze Video
+              </button>
+            </div>
+
+            <div
+              id="sportabase-video-status"
+              style="
+                margin-top:14px;
+                font-size:13px;
+                line-height:1.5;
+                color:var(--sb-ui-muted);
+              "
+            >
+              Sportabase will locate the transcript automatically
+              and analyze the video.
+            </div>
           </div>
-
-
-        <button
-          id="sportabase-video-analyze"
-          style="
-            width:100%;
-            margin-top:16px;
-            padding:11px 14px;
-            border:none;
-            border-radius:12px;
-            background:white;
-            color:#101114;
-            font-weight:700;
-            cursor:pointer;
-          "
-        >
-          Analyze Video
-        </button>
-
-        <div
-          id="sportabase-video-status"
-          style="
-            margin-top:12px;
-            font-size:13px;
-            line-height:1.5;
-            opacity:0.75;
-          "
-        >
-          Ready to analyze this video.
-        </div>
-
         `;
 
         document.body.appendChild(overlay);
 
-        document.getElementById("sportabase-video-close").onclick = () => {
+        applyVideoTheme(initialScore, "developing");
+        applySportabaseUiPreferences(overlay);
+
+        installSportabaseSettingsDrawer(
+          overlay,
+          SIZE_PRESETS
+        );
+
+        const cleanupGradientIntensity =
+          installSportabaseGradientIntensityControls(overlay);
+
+        const cleanupWindowControls =
+          installSportabaseWindowControls(
+            overlay,
+            SIZE_PRESETS
+          );
+
+        const closeButton = overlay.querySelector(
+          "#sportabase-video-close"
+        );
+
+        const analyzeButton = overlay.querySelector(
+          "#sportabase-video-analyze"
+        );
+
+        const status = overlay.querySelector(
+          "#sportabase-video-status"
+        );
+
+        const modeLabel = overlay.querySelector(
+          "#sportabase-video-mode-label"
+        );
+
+        closeButton.onclick = () => {
+          cleanupGradientIntensity();
+          cleanupWindowControls();
           overlay.remove();
         };
-        document.getElementById("sportabase-video-analyze").onclick = async () => {
-          const status = document.getElementById("sportabase-video-status");
 
-          const transcriptParts = Array.from(
+        const wait = (milliseconds) =>
+          new Promise(
+            (resolve) => setTimeout(resolve, milliseconds)
+          );
+
+        const transcriptSelector =
+          'transcript-segment-view-model span[role="text"]';
+
+        function findTranscriptButton() {
+          const directButton = document.querySelector(
+            "ytd-video-description-transcript-section-renderer " +
+            "button, " +
+            'button[aria-label*="transcript" i], ' +
+            'button[title*="transcript" i]'
+          );
+
+          if (directButton) return directButton;
+
+          return Array.from(
             document.querySelectorAll(
-              'transcript-segment-view-model span[role="text"]'
+              "button, " +
+              "tp-yt-paper-button, " +
+              "ytd-button-renderer button, " +
+              "yt-button-shape button"
             )
-          )
-            .map((element) => element.innerText.trim())
-            .filter(Boolean);
+          ).find((element) => {
+            const searchableText = [
+              element.innerText,
+              element.getAttribute("aria-label"),
+              element.getAttribute("title"),
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .trim()
+              .toLowerCase();
 
-          const transcript = transcriptParts.join(" ");
+            return (
+              searchableText.includes("show transcript") ||
+              searchableText === "transcript"
+            );
+          });
+        }
 
-          if (!transcript) {
-            status.textContent =
-              "No transcript found. Open the YouTube transcript, then click Analyze Video again.";
-            return;
+        async function ensureTranscriptVisible() {
+          if (document.querySelector(transcriptSelector)) {
+            return true;
           }
 
-          status.textContent = "Analyzing the video claim...";
+          let transcriptButton = findTranscriptButton();
 
-          const videoTitle =
-            document.querySelector("h1 yt-formatted-string")?.innerText?.trim() ||
-            document.title.replace(" - YouTube", "");
+          if (!transcriptButton) {
+            const metadata =
+              document.querySelector("ytd-watch-metadata");
+
+            const expandButton = metadata?.querySelector(
+              "#expand, " +
+              "tp-yt-paper-button#expand, " +
+              "ytd-text-inline-expander #expand"
+            );
+
+            if (expandButton) {
+              expandButton.click();
+              await wait(350);
+              transcriptButton = findTranscriptButton();
+            }
+          }
+
+          if (!transcriptButton) {
+            return false;
+          }
+
+          transcriptButton.click();
+
+          const startedAt = Date.now();
+
+          while (
+            !document.querySelector(transcriptSelector) &&
+            Date.now() - startedAt < 7000
+          ) {
+            await wait(250);
+          }
+
+          return Boolean(
+            document.querySelector(transcriptSelector)
+          );
+        }
+
+        analyzeButton.onclick = async () => {
+          if (analyzeButton.disabled) return;
+
+          analyzeButton.disabled = true;
+          analyzeButton.style.opacity = "0.72";
+          analyzeButton.style.cursor = "wait";
+          analyzeButton.textContent = "Finding transcript...";
+
+          status.textContent =
+            "Opening and reading the YouTube transcript...";
 
           try {
+            const transcriptReady =
+              await ensureTranscriptVisible();
+
+            if (!transcriptReady) {
+              throw new Error(
+                "No transcript is available for this video. " +
+                "The creator may have disabled captions."
+              );
+            }
+
+            const transcriptParts = Array.from(
+              document.querySelectorAll(transcriptSelector)
+            )
+              .map(
+                (element) => element.innerText.trim()
+              )
+              .filter(Boolean);
+
+            const transcript = transcriptParts.join(" ");
+
+            if (!transcript) {
+              throw new Error(
+                "The transcript panel opened, but no " +
+                "transcript text was found."
+              );
+            }
+
+            analyzeButton.textContent = "Analyzing video...";
+
+            status.textContent =
+              "Evaluating the claim, evidence, logic, and hype...";
+
             const response = await fetchJsonWithTimeout(
               `${API}/analyze/video`,
               {
@@ -1393,6 +2634,7 @@ async function injectAndRun(tabId) {
 
               try {
                 const errorData = await response.json();
+
                 errorDetail = String(
                   errorData?.detail ||
                   errorData?.message ||
@@ -1404,183 +2646,524 @@ async function injectAndRun(tabId) {
 
               if (response.status === 429) {
                 throw new Error(
-                  "Gemini quota has been exhausted. Try again after the quota resets."
+                  "Gemini quota has been exhausted. " +
+                  "Try again after the quota resets."
                 );
               }
 
               if (response.status === 503) {
                 throw new Error(
-                  "Gemini is temporarily overloaded. Try again later."
+                  "Gemini is temporarily overloaded. " +
+                  "Try again later."
                 );
               }
 
               throw new Error(
-                errorDetail || `Video analysis failed with HTTP ${response.status}.`
+                errorDetail ||
+                `Video analysis failed with HTTP ` +
+                `${response.status}.`
               );
             }
 
             const data = await response.json();
 
-            console.log("[sportabase] Video analysis result:", data);
+            if (
+              data.verdict === "analysis_failed" ||
+              String(data.claim || "")
+                .toLowerCase()
+                .includes("analysis failed")
+            ) {
+              const backendError =
+                data.debug?.error ||
+                data.evidence_used?.[0] ||
+                "AI analysis failed.";
+
+              throw new Error(String(backendError));
+            }
+
+            console.log(
+              "[sportabase] Video analysis result:",
+              data
+            );
+
+            const evidenceScore = Math.max(
+              0,
+              Math.min(
+                100,
+                Number(data.evidence_score) || 0
+              )
+            );
+
+            const logicScore = Math.max(
+              0,
+              Math.min(
+                100,
+                Number(data.logic_score) || 0
+              )
+            );
+
+            const supportScore = Math.round(
+              (evidenceScore + logicScore) / 2
+            );
+
+            applyVideoTheme(
+              supportScore,
+              data.verdict
+            );
+
+            const rawContentType = String(
+              data.content_type || ""
+            )
+              .trim()
+              .toLowerCase();
+
+            const contentTypeLabel =
+              rawContentType &&
+              rawContentType !== "unknown"
+                ? humanizeVideoLabel(rawContentType)
+                : "Video analysis";
+
+            const verdictLabel =
+              humanizeVideoLabel(data.verdict);
+
+            if (modeLabel) {
+              modeLabel.style.color =
+                "var(--sb-ui-muted)";
+
+              modeLabel.textContent =
+                contentTypeLabel;
+            }
 
             const evidenceItems =
-              Array.isArray(data.evidence_used) && data.evidence_used.length
+              Array.isArray(data.evidence_used) &&
+              data.evidence_used.length
                 ? data.evidence_used
                     .map(
-                      (item) =>
-                        `<li style="margin-top:5px;">${escapeHtml(String(item))}</li>`
+                      (item) => `
+                        <li style="margin-top:6px;">
+                          ${escapeHtml(String(item))}
+                        </li>
+                      `
                     )
                     .join("")
-                : "<li style=\"margin-top:5px;\">No evidence details returned.</li>";
-
-            const correctionItems =
-              Array.isArray(data.debug?.uncertain_corrections) &&
-              data.debug.uncertain_corrections.length
-                ? data.debug.uncertain_corrections
-                    .map((correction) => {
-                      const original = escapeHtml(
-                        String(correction?.original || "Unknown caption")
-                      );
-                      const suggested = escapeHtml(
-                        String(correction?.suggested || "Unknown correction")
-                      );
-                      const reason = escapeHtml(
-                        String(correction?.reason || "Contextual caption uncertainty")
-                      );
-
-                      const confidence = Number(correction?.confidence);
-                      const confidenceText = Number.isFinite(confidence)
-                        ? ` (${Math.round(confidence * 100)}% confidence)`
-                        : "";
-
-                      return `
-                        <li style="margin-top:7px;">
-                          <strong>${original}</strong>
-                          → ${suggested}${confidenceText}
-                          <div style="margin-top:2px; opacity:0.7;">
-                            ${reason}
-                          </div>
-                        </li>
-                      `;
-                    })
-                    .join("")
-                : "";
+                : `
+                    <li style="margin-top:6px;">
+                      No evidence details returned.
+                    </li>
+                  `;
 
             status.innerHTML = `
-              <div style="font-size:12px; opacity:0.7;">
-                ${escapeHtml(
-                  String(data.content_type || "unknown").replace(/_/g, " ")
-                )}
-              </div>
-
-              <div style="margin-top:5px; font-size:17px; font-weight:800;">
-                ${escapeHtml(
-                  String(data.verdict || "unknown").replace(/_/g, " ")
-                )}
-              </div>
-
-              <div style="margin-top:6px; font-size:12px; opacity:0.7;">
-                Transcript confidence:
-                ${
-                  data.debug?.transcript_confidence == null
-                    ? "Not available"
-                    : `${Math.round(
-                        Number(data.debug.transcript_confidence) * 100
-                      )}%`
-                }
-              </div>
-
-              ${
-                correctionItems
-                  ? `
-                    <div style="
-                      margin-top:12px;
-                      padding:10px;
-                      border-radius:10px;
-                      background:rgba(245,158,11,0.10);
-                      border:1px solid rgba(245,158,11,0.25);
-                    ">
-                      <div style="
-                        font-size:11px;
-                        font-weight:800;
-                        opacity:0.75;
-                      ">
-                        POSSIBLE CAPTION ERRORS
-                      </div>
-
-                      <ul style="margin:3px 0 0; padding-left:18px;">
-                        ${correctionItems}
-                      </ul>
+              <section
+                style="
+                  padding:14px;
+                  border-radius:16px;
+                  background:var(--sb-ui-surface);
+                  border:1px solid var(--sb-ui-border);
+                  box-shadow:0 8px 22px var(--sb-ui-shadow);
+                "
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    justify-content:space-between;
+                    gap:14px;
+                  "
+                >
+                  <div>
+                    <div
+                      style="
+                        font-size:12px;
+                        font-weight:600;
+                        color:var(--sb-ui-muted);
+                      "
+                    >
+                      Overall support
                     </div>
-                  `
-                  : ""
-              }
 
-              <div style="display:flex; gap:8px; margin-top:12px;">
-                <div style="
-                  flex:1;
-                  padding:9px;
-                  border-radius:10px;
-                  background:rgba(255,255,255,0.08);
-                ">
-                  <div style="font-size:11px; opacity:0.65;">EVIDENCE</div>
-                  <div style="margin-top:3px; font-size:18px; font-weight:800;">
-                    ${Number(data.evidence_score) || 0}/100
+                    <div
+                      style="
+                        display:flex;
+                        align-items:baseline;
+                        gap:4px;
+                        margin-top:4px;
+                        color:var(--sb-ui-text);
+                      "
+                    >
+                      <span
+                        style="
+                          font-size:30px;
+                          font-weight:800;
+                          line-height:1;
+                          letter-spacing:-1px;
+                        "
+                      >
+                        ${supportScore}
+                      </span>
+
+                      <span
+                        style="
+                          font-size:13px;
+                          font-weight:600;
+                          color:var(--sb-ui-muted);
+                        "
+                      >
+                        /100
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    style="
+                      max-width:175px;
+                      padding:7px 10px;
+                      border-radius:10px;
+                      background:var(--sb-ui-raised);
+                      border:1px solid ${currentTheme.border};
+                      color:var(--sb-ui-text);
+                      font-size:11.5px;
+                      font-weight:700;
+                      line-height:1.3;
+                      text-align:center;
+                    "
+                  >
+                    ${escapeHtml(verdictLabel)}
                   </div>
                 </div>
 
-                <div style="
-                  flex:1;
-                  padding:9px;
-                  border-radius:10px;
-                  background:rgba(255,255,255,0.08);
-                ">
-                  <div style="font-size:11px; opacity:0.65;">LOGIC</div>
-                  <div style="margin-top:3px; font-size:18px; font-weight:800;">
-                    ${Number(data.logic_score) || 0}/100
-                  </div>
+                <div
+                  style="
+                    margin-top:12px;
+                    height:5px;
+                    border-radius:999px;
+                    background:var(--sb-ui-raised);
+                    overflow:hidden;
+                  "
+                >
+                  <div
+                    style="
+                      width:${supportScore}%;
+                      height:100%;
+                      border-radius:999px;
+                      background:${currentTheme.color};
+                    "
+                  ></div>
+                </div>
+              </section>
+
+              <section
+                style="
+                  margin-top:17px;
+                  padding:0 2px;
+                "
+              >
+                <div
+                  style="
+                    font-size:14px;
+                    font-weight:750;
+                    letter-spacing:-0.2px;
+                    color:var(--sb-ui-text);
+                  "
+                >
+                  Main claim
+                </div>
+
+                <div
+                  style="
+                    margin-top:7px;
+                    color:var(--sb-ui-text);
+                    font-size:13px;
+                    line-height:1.55;
+                  "
+                >
+                  ${escapeHtml(
+                    String(
+                      data.claim ||
+                      "No clear claim returned."
+                    )
+                  )}
+                </div>
+              </section>
+
+              <div
+                style="
+                  display:grid;
+                  grid-template-columns:
+                    repeat(2, minmax(0, 1fr));
+                  gap:8px;
+                  margin-top:16px;
+                "
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:baseline;
+                    justify-content:space-between;
+                    gap:8px;
+                    padding:10px 11px;
+                    border-radius:12px;
+                    background:var(--sb-ui-raised);
+                    border:1px solid var(--sb-ui-border);
+                  "
+                >
+                  <span
+                    style="
+                      font-size:11.5px;
+                      font-weight:600;
+                      color:var(--sb-ui-muted);
+                    "
+                  >
+                    Evidence
+                  </span>
+
+                  <span
+                    style="
+                      color:var(--sb-ui-text);
+                      white-space:nowrap;
+                    "
+                  >
+                    <strong
+                      style="
+                        font-size:18px;
+                        font-weight:800;
+                      "
+                    >
+                      ${evidenceScore}
+                    </strong>
+
+                    <span
+                      style="
+                        font-size:11px;
+                        color:var(--sb-ui-muted);
+                      "
+                    >
+                      /100
+                    </span>
+                  </span>
+                </div>
+
+                <div
+                  style="
+                    display:flex;
+                    align-items:baseline;
+                    justify-content:space-between;
+                    gap:8px;
+                    padding:10px 11px;
+                    border-radius:12px;
+                    background:var(--sb-ui-raised);
+                    border:1px solid var(--sb-ui-border);
+                  "
+                >
+                  <span
+                    style="
+                      font-size:11.5px;
+                      font-weight:600;
+                      color:var(--sb-ui-muted);
+                    "
+                  >
+                    Logic
+                  </span>
+
+                  <span
+                    style="
+                      color:var(--sb-ui-text);
+                      white-space:nowrap;
+                    "
+                  >
+                    <strong
+                      style="
+                        font-size:18px;
+                        font-weight:800;
+                      "
+                    >
+                      ${logicScore}
+                    </strong>
+
+                    <span
+                      style="
+                        font-size:11px;
+                        color:var(--sb-ui-muted);
+                      "
+                    >
+                      /100
+                    </span>
+                  </span>
                 </div>
               </div>
 
-              <div style="margin-top:14px;">
-                <div style="font-size:11px; font-weight:800; opacity:0.65;">
-                  MAIN CLAIM
+              <section
+                style="
+                  margin-top:18px;
+                  padding-top:15px;
+                  border-top:1px solid var(--sb-ui-divider);
+                "
+              >
+                <div
+                  style="
+                    font-size:13px;
+                    font-weight:700;
+                    letter-spacing:-0.1px;
+                    color:var(--sb-ui-text);
+                  "
+                >
+                  Evidence used
                 </div>
-                <div style="margin-top:5px;">
-                  ${escapeHtml(String(data.claim || "No clear claim returned."))}
-                </div>
-              </div>
 
-              <div style="margin-top:14px;">
-                <div style="font-size:11px; font-weight:800; opacity:0.65;">
-                  EVIDENCE USED
-                </div>
-                <ul style="margin:3px 0 0; padding-left:18px;">
+                <ul
+                  style="
+                    margin:8px 0 0 17px;
+                    padding:0;
+                    color:var(--sb-ui-muted);
+                    font-size:12.5px;
+                    line-height:1.5;
+                  "
+                >
                   ${evidenceItems}
                 </ul>
-              </div>
+              </section>
 
-              <div style="margin-top:14px;">
-                <div style="font-size:11px; font-weight:800; opacity:0.65;">
-                  LOGIC CHECK
+              <section
+                style="
+                  margin-top:17px;
+                  padding-top:15px;
+                  border-top:1px solid var(--sb-ui-divider);
+                "
+              >
+                <div
+                  style="
+                    font-size:13px;
+                    font-weight:700;
+                    letter-spacing:-0.1px;
+                    color:var(--sb-ui-text);
+                  "
+                >
+                  Logic check
                 </div>
-                <div style="margin-top:5px;">
-                  ${escapeHtml(String(data.logic_check || "No logic assessment returned."))}
-                </div>
-              </div>
 
-              <div style="margin-top:14px;">
-                <div style="font-size:11px; font-weight:800; opacity:0.65;">
-                  HYPE CHECK
+                <div
+                  style="
+                    margin-top:7px;
+                    color:var(--sb-ui-muted);
+                    font-size:12.5px;
+                    line-height:1.5;
+                  "
+                >
+                  ${escapeHtml(
+                    String(
+                      data.logic_check ||
+                      "No logic assessment returned."
+                    )
+                  )}
                 </div>
-                <div style="margin-top:5px;">
-                  ${escapeHtml(String(data.hype_check || "No hype assessment returned."))}
+              </section>
+
+              <section
+                style="
+                  margin-top:17px;
+                  padding:15px 0 8px;
+                  border-top:1px solid var(--sb-ui-divider);
+                "
+              >
+                <div
+                  style="
+                    font-size:13px;
+                    font-weight:700;
+                    letter-spacing:-0.1px;
+                    color:var(--sb-ui-text);
+                  "
+                >
+                  Hype check
+                </div>
+
+                <div
+                  style="
+                    margin-top:7px;
+                    color:var(--sb-ui-muted);
+                    font-size:12.5px;
+                    line-height:1.5;
+                  "
+                >
+                  ${escapeHtml(
+                    String(
+                      data.hype_check ||
+                      "No hype assessment returned."
+                    )
+                  )}
+                </div>
+              </section>
+            `;
+
+            analyzeButton.textContent = "Reanalyze";
+
+            Object.assign(
+              analyzeButton.style,
+              {
+                width: "auto",
+                minWidth: "0",
+                marginTop: "10px",
+                padding: "8px 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "9px",
+                background: "var(--sb-ui-raised)",
+                color: "var(--sb-ui-text)",
+                border: "1px solid var(--sb-ui-border)",
+                boxShadow: "none",
+                fontSize: "12px",
+                fontWeight: "700",
+              }
+            );
+          } catch (error) {
+            console.error(
+              "[sportabase] Video analysis failed:",
+              error
+            );
+
+            applyVideoTheme(10, "unverified");
+
+            status.innerHTML = `
+              <div
+                style="
+                  padding:14px;
+                  border-radius:14px;
+                  background:var(--sb-ui-surface);
+                  border:1px solid rgba(239,68,68,0.48);
+                  border-left:4px solid #ef4444;
+                  color:var(--sb-ui-text);
+                  box-shadow:0 12px 28px var(--sb-ui-shadow);
+                "
+              >
+                <div
+                  style="
+                    font-weight:800;
+                    color:#ef4444;
+                    letter-spacing:-0.1px;
+                  "
+                >
+                  Video analysis unavailable
+                </div>
+
+                <div
+                  style="
+                    margin-top:7px;
+                    line-height:1.5;
+                    color:var(--sb-ui-muted);
+                    overflow-wrap:anywhere;
+                  "
+                >
+                  ${escapeHtml(
+                    String(error?.message || error)
+                  )}
                 </div>
               </div>
             `;
-          } catch (error) {
-            console.error("[sportabase] Video analysis failed:", error);
-            status.textContent = "Video analysis failed. Check that localhost is running.";
+
+            analyzeButton.textContent = "Try Again";
+          } finally {
+            analyzeButton.disabled = false;
+            analyzeButton.style.opacity = "1";
+            analyzeButton.style.cursor = "pointer";
           }
         };
       }
