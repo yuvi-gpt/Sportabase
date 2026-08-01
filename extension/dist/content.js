@@ -28,6 +28,12 @@
     }
   });
 
+  // src/styles/video-results.css
+  var init_video_results = __esm({
+    "src/styles/video-results.css"() {
+    }
+  });
+
   // src/ui/logo.js
   function getSportabaseLogoMarkup() {
     return `
@@ -1077,12 +1083,351 @@
     }
   });
 
-  // src/content/video-mode.js
+  // src/content/api.js
+  async function postJson(url, payload, {
+    timeoutMs = 12e4
+  } = {}) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      timeoutMs
+    );
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      const responseText = await response.text();
+      let data = null;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (_) {
+        data = null;
+      }
+      if (!response.ok) {
+        const details = String(
+          data?.detail || data?.message || responseText || ""
+        );
+        if (response.status === 429) {
+          throw new SportabaseApiError(
+            "The AI analysis quota is temporarily exhausted. Try again after it resets.",
+            {
+              status: response.status,
+              details
+            }
+          );
+        }
+        if (response.status === 503) {
+          throw new SportabaseApiError(
+            "The AI analysis service is temporarily busy. Try again in a moment.",
+            {
+              status: response.status,
+              details
+            }
+          );
+        }
+        throw new SportabaseApiError(
+          details || `Sportabase returned HTTP ${response.status}.`,
+          {
+            status: response.status,
+            details
+          }
+        );
+      }
+      return data;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new SportabaseApiError(
+          "The analysis took too long and was stopped. Try again once.",
+          {
+            status: 408
+          }
+        );
+      }
+      if (error instanceof SportabaseApiError) {
+        throw error;
+      }
+      throw new SportabaseApiError(
+        "Sportabase could not reach the analysis service.",
+        {
+          details: String(
+            error?.message || error || ""
+          )
+        }
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+  var SportabaseApiError;
+  var init_api = __esm({
+    "src/content/api.js"() {
+      SportabaseApiError = class extends Error {
+        constructor(message, {
+          status = 0,
+          details = ""
+        } = {}) {
+          super(message);
+          this.name = "SportabaseApiError";
+          this.status = status;
+          this.details = details;
+        }
+      };
+    }
+  });
+
+  // src/ui/loader.js
   function escapeHtml(value) {
     return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   }
+  function getStageIndex(progress) {
+    if (progress < 42) return 0;
+    if (progress < 76) return 1;
+    return 2;
+  }
+  function createAnalysisLoader({
+    container,
+    modeLabel = "VIDEO INTELLIGENCE",
+    message = "Preparing the analysis\u2026",
+    progress = 12
+  } = {}) {
+    if (!container) {
+      return {
+        update() {
+        },
+        destroy() {
+        }
+      };
+    }
+    container.innerHTML = `
+    <div class="sb-analysis-loader">
+      <div
+        class="sb-loader-ambient"
+        aria-hidden="true"
+      ></div>
+
+      <section
+        class="sb-loader-card"
+        role="status"
+        aria-live="polite"
+      >
+        <div class="sb-loader-brand-row">
+          <div
+            class="sb-loader-symbol"
+            aria-hidden="true"
+          >
+            <div class="sb-loader-orbit"></div>
+
+            <div class="sb-loader-core">
+              SB
+            </div>
+          </div>
+
+          <div class="sb-loader-brand-copy">
+            <div class="sb-loader-title">
+              Sportabase
+            </div>
+
+            <div class="sb-loader-mode">
+              ${escapeHtml(modeLabel)}
+            </div>
+          </div>
+
+          <div class="sb-loader-live-pill">
+            <span></span>
+            LIVE
+          </div>
+        </div>
+
+        <div class="sb-loader-message-area">
+          <div
+            class="sb-loader-message"
+            data-sb-loader-message
+          >
+            ${escapeHtml(message)}
+          </div>
+
+          <div class="sb-loader-progress-row">
+            <div class="sb-loader-analyzing">
+              <span></span>
+              ANALYZING
+            </div>
+
+            <div
+              class="sb-loader-stage-count"
+              data-sb-loader-stage-count
+            >
+              Stage 1 of 3
+            </div>
+          </div>
+
+          <div
+            class="sb-loader-track"
+            role="progressbar"
+            aria-label="Sportabase analysis progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="${progress}"
+            data-sb-loader-track
+          >
+            <div
+              class="sb-loader-bar"
+              data-sb-loader-bar
+              style="width:${progress}%;"
+            ></div>
+          </div>
+
+          <div class="sb-loader-stages">
+            <div
+              class="sb-loader-stage"
+              data-sb-loader-stage="0"
+            >
+              <span></span>
+              Read
+            </div>
+
+            <div
+              class="sb-loader-stage"
+              data-sb-loader-stage="1"
+            >
+              <span></span>
+              Evaluate
+            </div>
+
+            <div
+              class="sb-loader-stage"
+              data-sb-loader-stage="2"
+            >
+              <span></span>
+              Distill
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+    const messageElement = container.querySelector(
+      "[data-sb-loader-message]"
+    );
+    const barElement = container.querySelector(
+      "[data-sb-loader-bar]"
+    );
+    const trackElement = container.querySelector(
+      "[data-sb-loader-track]"
+    );
+    const stageCountElement = container.querySelector(
+      "[data-sb-loader-stage-count]"
+    );
+    const stageElements = Array.from(
+      container.querySelectorAll(
+        "[data-sb-loader-stage]"
+      )
+    );
+    function update({
+      message: nextMessage,
+      progress: nextProgress
+    } = {}) {
+      const numericProgress = Number(nextProgress);
+      const safeProgress = Number.isFinite(numericProgress) ? Math.max(
+        5,
+        Math.min(
+          95,
+          Math.round(numericProgress)
+        )
+      ) : 12;
+      if (nextMessage !== void 0 && messageElement) {
+        messageElement.textContent = String(nextMessage);
+      }
+      if (barElement) {
+        barElement.style.width = `${safeProgress}%`;
+      }
+      if (trackElement) {
+        trackElement.setAttribute(
+          "aria-valuenow",
+          String(safeProgress)
+        );
+      }
+      const activeStage = getStageIndex(safeProgress);
+      if (stageCountElement) {
+        stageCountElement.textContent = `Stage ${activeStage + 1} of 3`;
+      }
+      stageElements.forEach(
+        (stageElement, index) => {
+          stageElement.classList.remove(
+            "sb-loader-stage-active",
+            "sb-loader-stage-complete"
+          );
+          if (index < activeStage) {
+            stageElement.classList.add(
+              "sb-loader-stage-complete"
+            );
+          }
+          if (index === activeStage) {
+            stageElement.classList.add(
+              "sb-loader-stage-active"
+            );
+          }
+        }
+      );
+    }
+    update({
+      message,
+      progress
+    });
+    return {
+      update,
+      destroy() {
+        container.innerHTML = "";
+      }
+    };
+  }
+  var init_loader2 = __esm({
+    "src/ui/loader.js"() {
+    }
+  });
+
+  // src/content/video-mode.js
+  function escapeHtml2(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function wait2(milliseconds) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+  function clampScore(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return 0;
+    }
+    return Math.max(
+      0,
+      Math.min(100, Math.round(numericValue))
+    );
+  }
+  function humanizeLabel(value) {
+    const normalized = String(
+      value || "Video analysis"
+    ).trim().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
+    return normalized.replace(
+      /\b\w/g,
+      (character) => character.toUpperCase()
+    );
+  }
   function getVideoTitle() {
     return document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") || "YouTube video";
+  }
+  function getScoreColor(score) {
+    if (score < 35) return "#ef4444";
+    if (score < 50) return "#f59e0b";
+    if (score < 65) return "#3b82f6";
+    if (score < 80) return "#8b5cf6";
+    if (score < 90) return "#14b8a6";
+    return "#22c55e";
   }
   function getAnalyzeButtonMarkup(label) {
     return `
@@ -1099,237 +1444,571 @@
       <path d="m17 8-5-5-5 5"></path>
     </svg>
 
-    <span>${escapeHtml(label)}</span>
+    <span>${escapeHtml2(label)}</span>
   `;
   }
+  function validateVideoResponse(data) {
+    if (!data || typeof data !== "object") {
+      throw new SportabaseApiError(
+        "Sportabase returned an empty video analysis."
+      );
+    }
+    const verdict = String(
+      data.verdict || ""
+    ).toLowerCase();
+    const claim = String(
+      data.claim || ""
+    ).toLowerCase();
+    if (verdict === "analysis_failed" || claim.includes("analysis failed")) {
+      const backendError = String(
+        data.debug?.error || data.evidence_used?.[0] || "The AI analysis could not be completed."
+      );
+      throw new SportabaseApiError(
+        backendError
+      );
+    }
+    return data;
+  }
+  function getFriendlyErrorMessage(error) {
+    if (error instanceof SportabaseApiError) {
+      return error.message;
+    }
+    const message = String(
+      error?.message || error || ""
+    );
+    if (message.toLowerCase().includes(
+      "transcript"
+    )) {
+      return message;
+    }
+    return "Sportabase could not analyze this video right now. Please try again.";
+  }
   function openVideoMode({
-    shell
+    shell,
+    config = {}
   } = {}) {
     if (!shell?.content) return;
+    const videoTitle = getVideoTitle();
+    let analysisRunning = false;
+    let loadingTicker = null;
     shell.setModeLabel(
       "VIDEO INTELLIGENCE \xB7 YOUTUBE"
     );
-    const videoTitle = getVideoTitle();
-    shell.content.innerHTML = `
-    <div class="sb-video-layout">
-      <section class="sb-video-card">
-        <div class="sb-video-card-header">
-          <div class="sb-video-ready-icon">
+    function stopLoadingTicker() {
+      if (!loadingTicker) return;
+      window.clearInterval(
+        loadingTicker
+      );
+      loadingTicker = null;
+    }
+    function renderLanding() {
+      stopLoadingTicker();
+      analysisRunning = false;
+      shell.setModeLabel(
+        "VIDEO INTELLIGENCE \xB7 YOUTUBE"
+      );
+      shell.content.innerHTML = `
+      <div class="sb-video-layout">
+        <section class="sb-video-card">
+          <div class="sb-video-card-header">
+            <div class="sb-video-ready-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect
+                  x="3"
+                  y="5"
+                  width="18"
+                  height="14"
+                  rx="3"
+                ></rect>
+
+                <path
+                  d="m10 9 5 3-5 3V9Z"
+                ></path>
+              </svg>
+            </div>
+
+            <div class="sb-video-heading">
+              <div class="sb-video-eyebrow">
+                VIDEO READY
+              </div>
+
+              <h2>
+                Transcript-based intelligence
+              </h2>
+            </div>
+
+            <div class="sb-video-detected-pill">
+              <span></span>
+              DETECTED
+            </div>
+          </div>
+
+          <div class="sb-video-context">
+            <div class="sb-video-context-label">
+              Current video
+            </div>
+
+            <div class="sb-video-title">
+              ${escapeHtml2(videoTitle)}
+            </div>
+          </div>
+
+          <button
+            class="sb-primary-button"
+            type="button"
+            data-sb-video-analyze
+          >
+            ${getAnalyzeButtonMarkup(
+        "Analyze video"
+      )}
+          </button>
+
+          <div class="sb-video-feature-grid">
+            <div>
+              <span>01</span>
+              Transcript
+            </div>
+
+            <div>
+              <span>02</span>
+              Evidence
+            </div>
+
+            <div>
+              <span>03</span>
+              Logic
+            </div>
+          </div>
+        </section>
+
+        <div class="sb-video-status">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.9"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"
+            ></path>
+
+            <path d="m9 12 2 2 4-4"></path>
+          </svg>
+
+          <span>
+            Sportabase will locate the
+            YouTube transcript automatically.
+          </span>
+        </div>
+      </div>
+    `;
+      shell.content.querySelector(
+        "[data-sb-video-analyze]"
+      )?.addEventListener(
+        "click",
+        runAnalysis
+      );
+    }
+    function renderError(error) {
+      stopLoadingTicker();
+      analysisRunning = false;
+      const friendlyMessage = getFriendlyErrorMessage(error);
+      shell.setModeLabel(
+        "VIDEO INTELLIGENCE \xB7 UNAVAILABLE"
+      );
+      shell.content.innerHTML = `
+      <div class="sb-video-state-layout">
+        <section class="sb-video-error-card">
+          <div class="sb-video-state-icon">
             <svg
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              stroke-width="1.8"
+              stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
               aria-hidden="true"
             >
-              <rect
-                x="3"
-                y="5"
-                width="18"
-                height="14"
-                rx="3"
-              ></rect>
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+              ></circle>
 
-              <path d="m10 9 5 3-5 3V9Z"></path>
+              <path d="M12 8v5"></path>
+              <path d="M12 16h.01"></path>
             </svg>
           </div>
 
-          <div class="sb-video-heading">
-            <div class="sb-video-eyebrow">
-              VIDEO READY
+          <div class="sb-video-state-eyebrow">
+            ANALYSIS UNAVAILABLE
+          </div>
+
+          <h2>
+            Sportabase could not finish this readout
+          </h2>
+
+          <p>
+            ${escapeHtml2(friendlyMessage)}
+          </p>
+
+          <button
+            class="sb-primary-button"
+            type="button"
+            data-sb-video-retry
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 6v5h-5"></path>
+              <path d="M4 18v-5h5"></path>
+
+              <path
+                d="M18.5 9a7 7 0 0 0-11.7-2.6L4 9"
+              ></path>
+
+              <path
+                d="M5.5 15a7 7 0 0 0 11.7 2.6L20 15"
+              ></path>
+            </svg>
+
+            <span>Try again</span>
+          </button>
+
+          <button
+            class="sb-secondary-button"
+            type="button"
+            data-sb-video-back
+          >
+            Return to video overview
+          </button>
+        </section>
+      </div>
+    `;
+      shell.content.querySelector(
+        "[data-sb-video-retry]"
+      )?.addEventListener(
+        "click",
+        runAnalysis
+      );
+      shell.content.querySelector(
+        "[data-sb-video-back]"
+      )?.addEventListener(
+        "click",
+        renderLanding
+      );
+    }
+    function renderResults(data, transcriptResult) {
+      stopLoadingTicker();
+      analysisRunning = false;
+      const evidenceScore = clampScore(data.evidence_score);
+      const logicScore = clampScore(data.logic_score);
+      const supportScore = Math.round(
+        (evidenceScore + logicScore) / 2
+      );
+      const scoreColor = getScoreColor(supportScore);
+      const verdictLabel = humanizeLabel(
+        data.verdict || "Assessment complete"
+      );
+      const contentTypeLabel = humanizeLabel(
+        data.content_type || "Video analysis"
+      );
+      const evidenceItems = Array.isArray(data.evidence_used) && data.evidence_used.length ? data.evidence_used.map(
+        (item) => `
+                <li>
+                  ${escapeHtml2(item)}
+                </li>
+              `
+      ).join("") : `
+            <li>
+              No specific evidence details
+              were returned.
+            </li>
+          `;
+      shell.overlay.style.setProperty(
+        "--sb-score-color",
+        scoreColor
+      );
+      shell.setModeLabel(
+        `VIDEO INTELLIGENCE \xB7 ${contentTypeLabel.toUpperCase()}`
+      );
+      shell.content.innerHTML = `
+      <div class="sb-video-results">
+        <section class="sb-result-score-card">
+          <div class="sb-result-score-top">
+            <div>
+              <div class="sb-result-eyebrow">
+                OVERALL SUPPORT
+              </div>
+
+              <div class="sb-result-score">
+                <strong>
+                  ${supportScore}
+                </strong>
+
+                <span>/100</span>
+              </div>
             </div>
 
-            <h2>Transcript-based intelligence</h2>
+            <div class="sb-result-verdict">
+              ${escapeHtml2(verdictLabel)}
+            </div>
           </div>
 
-          <div class="sb-video-detected-pill">
-            <span></span>
-            DETECTED
+          <div class="sb-result-score-track">
+            <div
+              style="
+                width:${supportScore}%;
+              "
+            ></div>
           </div>
+
+          <div class="sb-result-transcript-meta">
+            ${transcriptResult.segmentCount}
+            transcript segments \xB7
+            ${transcriptResult.characterCount.toLocaleString()}
+            characters analyzed
+          </div>
+        </section>
+
+        <section class="sb-result-claim-card">
+          <div class="sb-result-section-label">
+            Main claim
+          </div>
+
+          <p>
+            ${escapeHtml2(
+        data.claim || "No clear central claim was returned."
+      )}
+          </p>
+        </section>
+
+        <div class="sb-result-metrics">
+          <section>
+            <span>Evidence</span>
+
+            <strong>
+              ${evidenceScore}
+            </strong>
+
+            <small>/100</small>
+          </section>
+
+          <section>
+            <span>Logic</span>
+
+            <strong>
+              ${logicScore}
+            </strong>
+
+            <small>/100</small>
+          </section>
         </div>
 
-        <div class="sb-video-context">
-          <div class="sb-video-context-label">
-            Current video
+        <section class="sb-result-detail-card">
+          <div class="sb-result-section-label">
+            Evidence used
           </div>
 
-          <div class="sb-video-title">
-            ${escapeHtml(videoTitle)}
-          </div>
-        </div>
+          <ul>
+            ${evidenceItems}
+          </ul>
+        </section>
 
-        <button
-          class="sb-primary-button"
-          type="button"
-          data-sb-video-analyze
+        <section class="sb-result-detail-card">
+          <div class="sb-result-section-label">
+            Logic check
+          </div>
+
+          <p>
+            ${escapeHtml2(
+        data.logic_check || "No logic assessment was returned."
+      )}
+          </p>
+        </section>
+
+        <section
+          class="
+            sb-result-detail-card
+            sb-result-hype-card
+          "
         >
-          ${getAnalyzeButtonMarkup("Analyze video")}
-        </button>
-
-        <div class="sb-video-feature-grid">
-          <div>
-            <span>01</span>
-            Transcript
+          <div class="sb-result-section-label">
+            Hype check
           </div>
 
-          <div>
-            <span>02</span>
-            Evidence
-          </div>
+          <p>
+            ${escapeHtml2(
+        data.hype_check || "No presentation assessment was returned."
+      )}
+          </p>
+        </section>
 
-          <div>
-            <span>03</span>
-            Logic
-          </div>
+        <div class="sb-result-actions">
+          <button
+            class="sb-secondary-button"
+            type="button"
+            data-sb-video-overview
+          >
+            Video overview
+          </button>
+
+          <button
+            class="sb-primary-button"
+            type="button"
+            data-sb-video-reanalyze
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 6v5h-5"></path>
+              <path d="M4 18v-5h5"></path>
+
+              <path
+                d="M18.5 9a7 7 0 0 0-11.7-2.6L4 9"
+              ></path>
+
+              <path
+                d="M5.5 15a7 7 0 0 0 11.7 2.6L20 15"
+              ></path>
+            </svg>
+
+            <span>Analyze again</span>
+          </button>
         </div>
-      </section>
-
-      <div
-        class="sb-video-status"
-        data-sb-video-status
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.9"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path
-            d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"
-          ></path>
-
-          <path d="m9 12 2 2 4-4"></path>
-        </svg>
-
-        <span>
-          Sportabase will locate the YouTube
-          transcript automatically.
-        </span>
       </div>
-    </div>
-  `;
-    const analyzeButton = shell.content.querySelector(
-      "[data-sb-video-analyze]"
-    );
-    const status = shell.content.querySelector(
-      "[data-sb-video-status]"
-    );
-    analyzeButton?.addEventListener(
-      "click",
-      async () => {
-        analyzeButton.disabled = true;
-        analyzeButton.classList.add(
-          "sb-button-loading"
+    `;
+      shell.content.querySelector(
+        "[data-sb-video-overview]"
+      )?.addEventListener(
+        "click",
+        renderLanding
+      );
+      shell.content.querySelector(
+        "[data-sb-video-reanalyze]"
+      )?.addEventListener(
+        "click",
+        runAnalysis
+      );
+    }
+    async function runAnalysis() {
+      if (analysisRunning) return;
+      analysisRunning = true;
+      stopLoadingTicker();
+      shell.setModeLabel(
+        "VIDEO INTELLIGENCE \xB7 ANALYZING"
+      );
+      const loader = createAnalysisLoader({
+        container: shell.content,
+        modeLabel: "VIDEO INTELLIGENCE \xB7 YOUTUBE",
+        message: "Opening and reading the YouTube transcript\u2026",
+        progress: 18
+      });
+      try {
+        const transcriptResult = await extractYouTubeTranscript();
+        loader.update({
+          message: "Transcript found. Preparing the video analysis\u2026",
+          progress: 38
+        });
+        await wait2(320);
+        let loadingStepIndex = 0;
+        loader.update(
+          ANALYSIS_STEPS[loadingStepIndex]
         );
-        analyzeButton.innerHTML = `
-        <span class="sb-button-spinner"></span>
-        <span>Finding transcript...</span>
-      `;
-        status.className = "sb-video-status sb-video-status-loading";
-        status.innerHTML = `
-        <span class="sb-status-pulse"></span>
-
-        <span>
-          Opening and reading the YouTube transcript\u2026
-        </span>
-      `;
-        try {
-          const transcriptResult = await extractYouTubeTranscript();
-          status.className = "sb-video-status sb-video-status-success";
-          status.innerHTML = `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-
-          <div>
-            <strong>Transcript found</strong>
-
-            <span>
-              ${transcriptResult.segmentCount}
-              segments \xB7
-              ${transcriptResult.characterCount.toLocaleString()}
-              characters
-            </span>
-          </div>
-        `;
-          analyzeButton.classList.remove(
-            "sb-button-loading"
+        loadingTicker = window.setInterval(() => {
+          if (loadingStepIndex < ANALYSIS_STEPS.length - 1) {
+            loadingStepIndex += 1;
+          }
+          loader.update(
+            ANALYSIS_STEPS[loadingStepIndex]
           );
-          analyzeButton.innerHTML = `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M20 6 9 17l-5-5"></path>
-          </svg>
-
-          <span>Transcript ready</span>
-        `;
-          console.log(
-            "[sportabase] Transcript extracted:",
-            transcriptResult
-          );
-        } catch (error) {
-          console.error(
-            "[sportabase] Transcript extraction failed:",
-            error
-          );
-          status.className = "sb-video-status sb-video-status-error";
-          status.innerHTML = `
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="9"></circle>
-            <path d="M12 8v5"></path>
-            <path d="M12 16h.01"></path>
-          </svg>
-
-          <div>
-            <strong>Transcript unavailable</strong>
-
-            <span>
-              ${escapeHtml(
-            error?.message || "The transcript could not be read."
-          )}
-            </span>
-          </div>
-        `;
-          analyzeButton.disabled = false;
-          analyzeButton.classList.remove(
-            "sb-button-loading"
-          );
-          analyzeButton.innerHTML = getAnalyzeButtonMarkup("Try again");
-        }
+        }, 1900);
+        const apiBase = String(
+          config.api || "http://127.0.0.1:8000"
+        ).replace(/\/+$/, "");
+        const response = await postJson(
+          `${apiBase}/analyze/video`,
+          {
+            title: videoTitle,
+            transcript: transcriptResult.transcript,
+            url: window.location.href
+          },
+          {
+            timeoutMs: 12e4
+          }
+        );
+        stopLoadingTicker();
+        loader.update({
+          message: "Finalizing your Sportabase video readout\u2026",
+          progress: 95
+        });
+        const validatedResponse = validateVideoResponse(response);
+        await wait2(380);
+        renderResults(
+          validatedResponse,
+          transcriptResult
+        );
+      } catch (error) {
+        console.error(
+          "[sportabase] Video analysis failed:",
+          error
+        );
+        renderError(error);
       }
-    );
+    }
+    renderLanding();
   }
+  var ANALYSIS_STEPS;
   var init_video_mode = __esm({
     "src/content/video-mode.js"() {
       init_youtube_transcript();
+      init_api();
+      init_loader2();
+      ANALYSIS_STEPS = [
+        {
+          message: "Identifying the video's central claim\u2026",
+          progress: 52
+        },
+        {
+          message: "Tracing the supporting evidence\u2026",
+          progress: 64
+        },
+        {
+          message: "Testing the argument for gaps\u2026",
+          progress: 76
+        },
+        {
+          message: "Separating substance from presentation\u2026",
+          progress: 86
+        },
+        {
+          message: "Distilling the final assessment\u2026",
+          progress: 93
+        }
+      ];
     }
   });
 
@@ -1338,6 +2017,7 @@
     "src/content/index.js"() {
       init_sportabase();
       init_loader();
+      init_video_results();
       init_overlay_shell();
       init_article_mode();
       init_video_mode();

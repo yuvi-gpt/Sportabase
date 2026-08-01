@@ -1128,4 +1128,313 @@
     transform: scale(1.04);
   }
 }
+
+/* src/styles/video-results.css */
+#sportabase-root .sb-video-state-layout {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 18px 0;
+}
+#sportabase-root .sb-video-error-card {
+  width: min(420px, 100%);
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, #ef4444 44%, var(--sb-border));
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      145deg,
+      rgba(239, 68, 68, 0.08),
+      transparent 52%),
+    var(--sb-surface);
+  color: var(--sb-text);
+  box-shadow: 0 18px 44px color-mix(in srgb, var(--sb-shadow) 74%, transparent);
+  text-align: center;
+}
+#sportabase-root .sb-video-state-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border: 1px solid rgba(239, 68, 68, 0.34);
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.09);
+  color: #ef4444;
+}
+#sportabase-root .sb-video-state-icon svg {
+  width: 21px;
+  height: 21px;
+}
+#sportabase-root .sb-video-state-eyebrow {
+  color: #ef4444;
+  font-size: 9px;
+  font-weight: 840;
+  letter-spacing: 0.85px;
+}
+#sportabase-root .sb-video-error-card h2 {
+  margin: 7px 0 0;
+  color: var(--sb-text);
+  font-size: 17px;
+  font-weight: 840;
+  line-height: 1.3;
+  letter-spacing: -0.4px;
+}
+#sportabase-root .sb-video-error-card p {
+  margin: 10px 0 0;
+  color: var(--sb-muted);
+  font-size: 11.5px;
+  font-weight: 570;
+  line-height: 1.55;
+}
+#sportabase-root .sb-secondary-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid var(--sb-border);
+  border-radius: 11px;
+  background: var(--sb-raised);
+  color: var(--sb-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 740;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease;
+}
+#sportabase-root .sb-secondary-button:hover {
+  border-color: var(--sb-accent);
+  background: var(--sb-surface);
+  transform: translateY(-1px);
+}
+#sportabase-root .sb-secondary-button:active {
+  transform: scale(0.98);
+}
+#sportabase-root .sb-video-error-card .sb-primary-button {
+  margin-top: 18px;
+}
+#sportabase-root .sb-video-error-card .sb-secondary-button {
+  width: 100%;
+  margin-top: 8px;
+}
+#sportabase-root .sb-video-results {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+#sportabase-root .sb-result-score-card {
+  position: relative;
+  overflow: hidden;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 34%, var(--sb-border));
+  border-radius: 18px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 15%, transparent),
+      transparent 46%),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 7%, transparent),
+      transparent 55%),
+    var(--sb-surface);
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--sb-shadow) 72%, transparent);
+}
+#sportabase-root .sb-result-score-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+#sportabase-root .sb-result-eyebrow {
+  color: var(--sb-muted);
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: 0.82px;
+}
+#sportabase-root .sb-result-score {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-top: 6px;
+}
+#sportabase-root .sb-result-score strong {
+  color: var(--sb-text);
+  font-size: 39px;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -2px;
+  text-shadow: 0 8px 24px color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 35%, transparent);
+}
+#sportabase-root .sb-result-score span {
+  color: var(--sb-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+#sportabase-root .sb-result-verdict {
+  max-width: 180px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 40%, var(--sb-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 10%, var(--sb-raised));
+  color: var(--sb-text);
+  font-size: 9.5px;
+  font-weight: 760;
+  line-height: 1.3;
+  letter-spacing: 0.1px;
+  text-align: center;
+}
+#sportabase-root .sb-result-score-track {
+  height: 6px;
+  overflow: hidden;
+  margin-top: 15px;
+  border: 1px solid var(--sb-border);
+  border-radius: 999px;
+  background: var(--sb-raised);
+}
+#sportabase-root .sb-result-score-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      90deg,
+      var(--sb-score-color, var(--sb-accent)),
+      color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 58%, white 42%));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 52%, transparent);
+  transition: width 520ms ease;
+}
+#sportabase-root .sb-result-transcript-meta {
+  margin-top: 10px;
+  color: var(--sb-muted);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+#sportabase-root .sb-result-claim-card,
+#sportabase-root .sb-result-detail-card {
+  padding: 15px;
+  border: 1px solid var(--sb-border);
+  border-radius: 15px;
+  background: var(--sb-surface);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--sb-shadow) 54%, transparent);
+}
+#sportabase-root .sb-result-section-label {
+  color: var(--sb-text);
+  font-size: 11px;
+  font-weight: 790;
+  line-height: 1.3;
+  letter-spacing: -0.1px;
+}
+#sportabase-root .sb-result-claim-card p,
+#sportabase-root .sb-result-detail-card p {
+  margin: 8px 0 0;
+  color: var(--sb-muted);
+  font-size: 11.5px;
+  font-weight: 560;
+  line-height: 1.58;
+}
+#sportabase-root .sb-result-claim-card p {
+  color: var(--sb-text);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+#sportabase-root .sb-result-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+#sportabase-root .sb-result-metrics section {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--sb-border);
+  border-radius: 13px;
+  background: var(--sb-raised);
+}
+#sportabase-root .sb-result-metrics span {
+  margin-right: auto;
+  color: var(--sb-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+#sportabase-root .sb-result-metrics strong {
+  color: var(--sb-text);
+  font-size: 20px;
+  font-weight: 840;
+  line-height: 1;
+}
+#sportabase-root .sb-result-metrics small {
+  color: var(--sb-muted);
+  font-size: 9px;
+  font-weight: 620;
+}
+#sportabase-root .sb-result-detail-card ul {
+  margin: 9px 0 0 17px;
+  padding: 0;
+  color: var(--sb-muted);
+  font-size: 11px;
+  font-weight: 560;
+  line-height: 1.55;
+}
+#sportabase-root .sb-result-detail-card li + li {
+  margin-top: 7px;
+}
+#sportabase-root .sb-result-hype-card {
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--sb-score-color, var(--sb-accent)) 6%, transparent),
+      transparent 58%),
+    var(--sb-surface);
+}
+#sportabase-root .sb-result-actions {
+  position: sticky;
+  bottom: -18px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 2px -18px -18px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--sb-divider);
+  background: var(--sb-header-background);
+  backdrop-filter: blur(18px) saturate(135%);
+  box-shadow: 0 -14px 30px rgba(0, 0, 0, 0.14);
+}
+#sportabase-root .sb-result-actions .sb-primary-button {
+  width: auto;
+  min-width: 145px;
+  min-height: 40px;
+  margin-top: 0;
+  padding: 9px 14px;
+}
+#sportabase-root .sb-result-actions .sb-secondary-button {
+  min-width: 120px;
+}
+@media (max-width: 430px) {
+  #sportabase-root .sb-result-score-top {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #sportabase-root .sb-result-verdict {
+    max-width: none;
+    align-self: flex-start;
+  }
+  #sportabase-root .sb-result-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  #sportabase-root .sb-result-actions .sb-primary-button,
+  #sportabase-root .sb-result-actions .sb-secondary-button {
+    width: 100%;
+  }
+}
 /*# sourceMappingURL=content.css.map */

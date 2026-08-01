@@ -2,6 +2,8 @@
 
 import "../styles/loader.css";
 
+import "../styles/video-results.css";
+
 import {
   openSportabaseShell,
 } from "../ui/overlay-shell.js";
