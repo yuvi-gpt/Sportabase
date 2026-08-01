@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import re
@@ -109,6 +109,23 @@ class AnalyzeResponse(BaseModel):
 
     reasons: List[str] = Field(default_factory=list)
     debug: Dict[str, Any] = Field(default_factory=dict)
+
+class VideoAnalyzeRequest(BaseModel):
+    title: str = ""
+    transcript: str
+    url: str = ""
+
+
+class VideoAnalyzeResponse(BaseModel):
+    content_type: str = "unknown"
+    claim: str
+    evidence_used: List[str]
+    logic_check: str
+    hype_check: str
+    evidence_score: int
+    logic_score: int
+    verdict: str
+    debug: Dict[str, Any] = {}
 
 
 # -----------------------------
@@ -228,6 +245,56 @@ def clean_html(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+def prepare_video_transcript(transcript: str) -> Dict[str, Any]:
+    raw_transcript = clean_html(transcript)
+
+    cleaned_transcript = re.sub(
+        r"\[(music|applause|laughter)\]",
+        " ",
+        raw_transcript,
+        flags=re.IGNORECASE,
+    )
+    cleaned_transcript = re.sub(
+        r"\s+",
+        " ",
+        cleaned_transcript,
+    ).strip()
+
+    return {
+        "raw_transcript": raw_transcript,
+        "cleaned_transcript": cleaned_transcript,
+        "transcript_confidence": None,
+        "uncertain_corrections": [],
+    }
+
+def split_video_transcript(
+    transcript: str,
+    chunk_size: int = 4000,
+    overlap: int = 400,
+) -> List[str]:
+    text = clean_html(transcript)
+
+    if not text:
+        return []
+
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+
+    overlap = max(0, min(overlap, chunk_size - 1))
+    step = chunk_size - overlap
+
+    chunks: List[str] = []
+
+    for start in range(0, len(text), step):
+        chunk = text[start:start + chunk_size].strip()
+
+        if chunk:
+            chunks.append(chunk)
+
+        if start + chunk_size >= len(text):
+            break
+
+    return chunks
 
 def _clamp(value: float, lo: int = 0, hi: int = 100) -> int:
     return max(lo, min(hi, int(round(value))))
@@ -274,6 +341,7 @@ ARTICLE_TYPE_LABELS = {
     "transfer_official": "Official Transfer",
     "transfer_report": "Transfer Report",
     "transfer_rumor": "Transfer Rumor",
+    "transfer_roundup": "Transfer Roundup",
     "injury_confirmed": "Confirmed Injury Update",
     "injury_rumor": "Injury Rumor / Fitness Doubt",
     "lineup_confirmed": "Confirmed Lineup",
@@ -297,11 +365,11 @@ ARTICLE_TYPE_LABELS = {
 
 def _has_scoreline(text: str) -> bool:
     patterns = [
-        r"\b\d+\s*[-–]\s*\d+\b",          # 2-1, 1–0
+        r"\b\d+\s*[-â€“]\s*\d+\b",          # 2-1, 1â€“0
         r"\b\d+\s+to\s+\d+\b",           # 2 to 1
-        r"\bwon\s+\d+\s*[-–]\s*\d+\b",
-        r"\blost\s+\d+\s*[-–]\s*\d+\b",
-        r"\bdrew\s+\d+\s*[-–]\s*\d+\b",
+        r"\bwon\s+\d+\s*[-â€“]\s*\d+\b",
+        r"\blost\s+\d+\s*[-â€“]\s*\d+\b",
+        r"\bdrew\s+\d+\s*[-â€“]\s*\d+\b",
     ]
     return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
@@ -487,6 +555,26 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
             18,
             "headline frames this as transfer coverage",
         ),
+
+        (
+            "transfer_roundup",
+            [
+                "transfer window",
+                "summer transfer window",
+                "winter transfer window",
+                "transfer grades",
+                "transfer window grades",
+                "grading big signings",
+                "big signings",
+                "transfer roundup",
+                "transfer round-up",
+                "latest transfer news",
+                "transfer news and rumors",
+            ],
+            22,
+            "headline frames this as transfer roundup/window coverage",
+        ),
+
         (
             "transfer_official",
             [
@@ -1013,6 +1101,14 @@ def detect_article_type(title: str, text: str, url: str = "") -> Dict[str, Any]:
         else:
             subtype = "reported_interest"
 
+    elif primary_type == "transfer_roundup":
+        if "grade" in full or "grading" in full:
+            subtype = "transfer_window_grades"
+        elif "window" in full:
+            subtype = "transfer_window_roundup"
+        else:
+            subtype = "transfer_roundup"
+
     elif primary_type == "transfer_rumor":
         subtype = "unconfirmed_transfer_claim"
 
@@ -1169,7 +1265,7 @@ HEDGE_WORDS = [
 
 
 OFFICIAL_WORDS = [
-    # strict official confirmation only — do NOT include plain "official"
+    # strict official confirmation only â€” do NOT include plain "official"
     "officially confirmed",
     "officially announced",
     "confirmed by the club",
@@ -1567,7 +1663,7 @@ def merit_score(
 
     word_count = max(len(body_original.split()), 1)
     nums = len(re.findall(r"\b\d+([.,]\d+)?\b", body_original))
-    quotes = body_original.count('"') + body_original.count("“") + body_original.count("”")
+    quotes = body_original.count('"') + body_original.count("â€œ") + body_original.count("â€")
     proper_nouns = len(re.findall(r"\b[A-Z][a-z]{2,}\b", body_original))
 
     hedge_hits = signal_hits(HEDGE_WORDS, body)
@@ -1923,7 +2019,7 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
     def sent_score(s: str) -> float:
         lower = s.lower()
         nums = len(re.findall(r"\b\d+([.,]\d+)?\b", s))
-        quotes = s.count('"') + s.count("“") + s.count("”")
+        quotes = s.count('"') + s.count("â€œ") + s.count("â€")
         evidence = len(signal_hits(EVIDENCE_WORDS, lower))
         impact = len(signal_hits(IMPACT_WORDS, lower))
         official = len(signal_hits(OFFICIAL_WORDS, lower))
@@ -1966,8 +2062,6 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
 
     out: List[str] = []
     for s in ranked:
-        if len(s) > 230:
-            s = s[:227].rstrip() + "..."
         out.append(s)
 
         if len(out) >= max_bullets:
@@ -1976,7 +2070,12 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
     return out
 
 
-def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
+def gemini_tldr(
+    title: str,
+    text: str,
+    max_bullets: int = 3,
+    language_info: Optional[Dict[str, Any]] = None,
+) -> List[str]:
     text = clean_html(text)
 
     client = gemini_client()
@@ -1988,23 +2087,26 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
     prompt = (
         "Return ONLY valid JSON. No markdown. No commentary.\n"
         f"Task: summarize the sports/news article into exactly {max_bullets} TL;DR bullets.\n\n"
+        f"Detected language information: {json.dumps(language_info or {})}\n"
+        "Understand the article in its original language, including mixed or code-switched text.\n"
+        "Return the TL;DR bullets in English for now.\n\n"
         "Rules:\n"
         "- Each bullet must be one sentence.\n"
-        "- Each bullet must be under 26 words.\n"
+        "- Each bullet should be approximately 25 to 35 words, with one complete and specific insight.\n"
         "- Prioritize concrete facts: who, what, when, why it matters.\n"
         "- Remove site boilerplate, ads, newsletter text, captions, and navigation text.\n"
         "- Do not invent facts not present in the text.\n"
         "- Do not mention that this is an article.\n"
         "- Do not repeat the title as a bullet.\n"
         "- If the text is mostly opinion, summarize the claim as opinion, not fact.\n\n"
-        'Output format: {"bullets": ["...", "...", "..."]}\n\n'
+        'Output format: {"bullets": ["bullet 1", "bullet 2", "..."]}\n\n'
         f"Title: {title}\n\n"
         f"Text:\n{clipped}\n"
     )
 
     try:
         resp = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             contents=prompt,
         )
 
@@ -2030,9 +2132,6 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
             if not b:
                 continue
 
-            words = b.split()
-            if len(words) > 28:
-                b = " ".join(words[:28]).rstrip(" ,;:") + "..."
 
             low = b.lower()
             if low not in [x.lower() for x in cleaned]:
@@ -2050,6 +2149,140 @@ def gemini_tldr(title: str, text: str, max_bullets: int = 3) -> List[str]:
         print("gemini_tldr fallback:", type(e).__name__, str(e)[:160])
         return extractive_fallback(text, max_bullets=max_bullets)
 
+
+# -----------------------------
+# AI article type classifier beta
+# -----------------------------
+def ai_detect_article_type(
+    title: str,
+    text: str,
+    url: str = "",
+    language_info: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    AI classifier runs in shadow mode first.
+
+    It does NOT control the live article type yet.
+    It is used to compare AI classification vs rule classification.
+    """
+
+    client = gemini_client()
+
+    if client is None:
+        return {
+            "enabled": False,
+            "article_type": None,
+            "article_subtype": None,
+            "confidence": 0.0,
+            "reason": "Gemini API key not available.",
+        }
+
+    clipped = clean_html(text)[:3500]
+
+    allowed_types = [
+        "match_report",
+        "live_commentary",
+        "official_announcement",
+        "transfer_official",
+        "transfer_report",
+        "transfer_rumor",
+        "transfer_roundup",
+        "injury_confirmed",
+        "injury_rumor",
+        "lineup_confirmed",
+        "lineup_predicted",
+        "squad_news",
+        "manager_interview",
+        "player_interview",
+        "agent_interview",
+        "press_conference",
+        "discipline_legal",
+        "managerial_news",
+        "contract_news",
+        "fixture_schedule",
+        "tactical_analysis",
+        "stats_data_report",
+        "opinion_analysis",
+        "ownership_finance",
+        "generic_news",
+    ]
+
+    prompt = (
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        "Task: classify the type of this sports article.\n\n"
+        f"Detected language information: {json.dumps(language_info or {})}\n"
+        "Understand the article in its original language, including mixed or code-switched text.\n\n"
+        "Important rules:\n"
+        "- Classify the ARTICLE TYPE, not credibility.\n"
+        "- Use the headline and URL as strong context.\n"
+        "- Use the body text to support the classification, but do not let old match context override a clear transfer headline.\n"
+        "- Do not call something an official transfer unless the story clearly says a signing/deal/transfer was completed or officially announced.\n"
+        "- If it says linked, eyeing, interested, monitoring, rumors, or reports, use transfer_rumor.\n"
+        "- If the article is grading, ranking, summarizing, or reviewing multiple transfers or a transfer window, use transfer_roundup.\n"
+        "- If it is mainly explaining opinions, predictions, rankings, verdicts, or takeaways, use opinion_analysis.\n"
+        "- If unsure, use generic_news with low confidence.\n\n"
+        f"Allowed article_type values:\n{json.dumps(allowed_types)}\n\n"
+        "Output JSON format:\n"
+        "{\n"
+        '  "article_type": "transfer_rumor",\n'
+        '  "article_subtype": "unconfirmed_transfer_claim",\n'
+        '  "confidence": 0.91,\n'
+        '  "reason": "Short explanation of why this article type was chosen."\n'
+        "}\n\n"
+        f"Title: {title}\n"
+        f"URL: {url}\n\n"
+        f"Text:\n{clipped}\n"
+    )
+
+    try:
+        resp = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=prompt,
+        )
+
+        raw = (resp.text or "").strip()
+
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
+
+        data = json.loads(raw)
+
+        article_type = str(data.get("article_type", "generic_news")).strip()
+        article_subtype = str(data.get("article_subtype", "general")).strip()
+        reason = str(data.get("reason", "")).strip()
+
+        try:
+            confidence = float(data.get("confidence", 0.0))
+        except Exception:
+            confidence = 0.0
+
+        confidence = max(0.0, min(0.99, confidence))
+
+        if article_type not in allowed_types:
+            article_type = "generic_news"
+            confidence = min(confidence, 0.35)
+            reason = "AI returned an unsupported article type, so it was treated as generic."
+
+        return {
+            "enabled": True,
+            "article_type": article_type,
+            "article_type_label": ARTICLE_TYPE_LABELS.get(article_type, "Generic Sports News"),
+            "article_subtype": article_subtype,
+            "confidence": round(confidence, 2),
+            "reason": reason,
+        }
+
+    except Exception as e:
+        return {
+            "enabled": True,
+            "article_type": None,
+            "article_subtype": None,
+            "confidence": 0.0,
+            "reason": f"AI classifier failed: {type(e).__name__}: {str(e)[:140]}",
+        }
 
 # -----------------------------
 # endpoints
@@ -2204,6 +2437,430 @@ def stories(
     finally:
         conn.close()
 
+def detect_content_language(text: str) -> Dict[str, Any]:
+    cleaned = clean_html(text).strip()
+
+    if not cleaned:
+        return {
+            "detected_language": "unknown",
+            "languages": [],
+            "mixed_language": False,
+            "language_confidence": 0.0,
+        }
+
+    client = gemini_client()
+
+    if client is None:
+        return {
+            "detected_language": "unknown",
+            "languages": [],
+            "mixed_language": False,
+            "language_confidence": 0.0,
+        }
+
+    sample = cleaned[:3000]
+
+    if len(cleaned) > 6000:
+        sample += "\n\n[END SAMPLE]\n" + cleaned[-3000:]
+
+    prompt = (
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        "Detect the language or languages used in this sports content.\n"
+        "Recognize mixed-language and code-switched text such as Hinglish.\n"
+        "Do not treat player names, club names, or short foreign phrases as a separate language.\n\n"
+        "Output JSON format:\n"
+        "{\n"
+        '  "detected_language": "Hindi-English mixed",\n'
+        '  "languages": ["Hindi", "English"],\n'
+        '  "mixed_language": true,\n'
+        '  "language_confidence": 0.95\n'
+        "}\n\n"
+        f"Content:\n{sample}\n"
+    )
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+
+        raw = (response.text or "").strip()
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
+
+        data = json.loads(raw)
+
+        languages = data.get("languages", [])
+        if not isinstance(languages, list):
+            languages = [str(languages)]
+
+        try:
+            confidence = float(data.get("language_confidence", 0.0))
+        except Exception:
+            confidence = 0.0
+
+        return {
+            "detected_language": str(
+                data.get("detected_language", "unknown")
+            ),
+            "languages": [str(language) for language in languages],
+            "mixed_language": bool(data.get("mixed_language", False)),
+            "language_confidence": round(
+                max(0.0, min(1.0, confidence)),
+                2,
+            ),
+        }
+
+    except Exception as error:
+        return {
+            "detected_language": "unknown",
+            "languages": [],
+            "mixed_language": False,
+            "language_confidence": 0.0,
+            "error": f"{type(error).__name__}: {str(error)[:160]}",
+        }
+
+def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[str, Any]:
+    client = gemini_client()
+
+    if client is None:
+        return {
+            "claim": "AI video analysis is unavailable.",
+            "evidence_used": ["Gemini API key not available."],
+            "logic_check": "Cannot check logic without AI access.",
+            "hype_check": "Cannot check hype without AI access.",
+            "evidence_score": 0,
+            "logic_score": 0,
+            "verdict": "ai_unavailable",
+            "debug": {
+                "mode": "video",
+                "ai_enabled": False,
+            },
+        }
+
+    language_info = {
+        "detected_language": "unknown",
+        "languages": [],
+        "mixed_language": False,
+        "language_confidence": 0.0,
+    }
+    
+    transcript_data = prepare_video_transcript(transcript)
+    cleaned_transcript = transcript_data["cleaned_transcript"]
+
+    transcript_chunks = split_video_transcript(
+        cleaned_transcript,
+        chunk_size=4000,
+        overlap=400,
+    )
+
+    if not transcript_chunks:
+        clipped_transcript = ""
+    elif len(transcript_chunks) <= 3:
+        clipped_transcript = "\n\n".join(
+            (
+                f"[TRANSCRIPT CHUNK {index + 1} "
+                f"OF {len(transcript_chunks)}]\n{chunk}"
+            )
+            for index, chunk in enumerate(transcript_chunks)
+        )
+    else:
+        selected_indices = [
+            0,
+            len(transcript_chunks) // 2,
+            len(transcript_chunks) - 1,
+        ]
+
+        clipped_transcript = "\n\n".join(
+            (
+                f"[TRANSCRIPT CHUNK {index + 1} "
+                f"OF {len(transcript_chunks)}]\n"
+                f"{transcript_chunks[index]}"
+            )
+            for index in selected_indices
+        )
+
+    prompt = (
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        "Task: analyze a sports video transcript.\n\n"
+        "The video may be reporting news, discussing a rumor, presenting technical "
+        "analysis, giving an opinion, investigating a topic, or using engagement bait.\n"
+        "Do not assume that every video is a rumor or breaking-news report.\n\n"
+        "Detect the transcript's language or languages as part of this same analysis.\n"
+        "Set mixed_language to true when the speaker meaningfully switches languages.\n"
+        "Understand multilingual and code-switched speech in its original context.\n"
+        "Estimate transcript_confidence from 0.0 to 1.0 based on caption clarity.\n"
+        "Do not silently rewrite or assume uncertain words.\n"
+        "Add an uncertain_corrections item only when the video title, surrounding "
+        "sentences, or clear sports context strongly suggests a caption error.\n"
+        "Each correction must include original, suggested, reason, and confidence.\n"
+        "Use an empty uncertain_corrections list when no correction is justified.\n"
+        "Return the claim analysis in English for now.\n\n"
+        "Judge the video according to the type of content it actually contains.\n"
+        "Separate dramatic presentation style from the quality of the underlying "
+        "reasoning and evidence.\n"
+        "A sensational title or introduction alone does not make a video engagement bait.\n"
+        "You are not deciding absolute truth. You are evaluating the main claim, "
+        "supporting evidence, reasoning quality, and level of overstatement.\n\n"
+        "Output JSON format:\n"
+        "{\n"
+        '  "detected_language": "English",\n'
+        '  "languages": ["English"],\n'
+        '  "mixed_language": false,\n'
+        '  "language_confidence": 0.95,\n'
+        '  "transcript_confidence": 0.85,\n'
+        '  "uncertain_corrections": [\n'
+        '    {\n'
+        '      "original": "Possible caption error",\n'
+        '      "suggested": "Likely intended wording",\n'
+        '      "reason": "Why the surrounding context suggests this correction.",\n'
+        '      "confidence": 0.65\n'
+        '    }\n'
+        '  ],\n'
+        '  "content_type": "sports_analysis",\n'
+        '  "claim": "Main claim or argument made by the video.",\n'
+        '  "evidence_used": ["Evidence, examples, sources, or reasoning used."],\n'
+        '  "logic_check": "Whether the reasoning supports the main claim.",\n'
+        '  "hype_check": "Whether presentation is careful, dramatic, or misleading.",\n'
+        '  "evidence_score": 0,\n'
+        '  "logic_score": 0,\n'
+        '  "verdict": "well_supported_analysis"\n'
+        "}\n\n"
+        "First choose one content_type:\n"
+        "- confirmed_news\n"
+        "- sports_report\n"
+        "- rumor\n"
+        "- sports_analysis\n"
+        "- sports_opinion\n"
+        "- engagement_bait\n"
+        "- not_sports_content\n\n"
+
+        "Scoring rules:\n"
+        "- evidence_score measures the quality of support presented in the video, from 0 to 100.\n"
+        "- Evidence may include official statements, named reporting, statistics, technical details, historical examples, or clearly explained observations.\n"
+        "- Do not require official confirmation for analysis or opinion videos.\n"
+        "- logic_score measures whether the reasoning connects the evidence to the main claim, from 0 to 100.\n"
+        "- Score evidence and logic independently from title style, thumbnails, dramatic wording, or editing.\n"
+        "- A video may be dramatic while still presenting reasonable analysis.\n"
+        "- Use engagement_bait only when the video substantially misrepresents, fabricates, or fails to support its central claim.\n\n"
+
+        "Choose one verdict:\n"
+        "- confirmed\n"
+        "- well_supported_report\n"
+        "- well_supported_analysis\n"
+        "- reasonable_opinion\n"
+        "- plausible_rumor\n"
+        "- weakly_supported\n"
+        "- misleading\n"
+        "- engagement_bait\n"
+        "- not_sports_content\n\n"
+        f"Video title: {title}\n"
+        f"URL: {url}\n\n"
+        f"Transcript:\n{clipped_transcript}\n"
+    )
+
+    try:
+        resp = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=prompt,
+        )
+
+        raw = (resp.text or "").strip()
+        start = raw.find("{")
+        end = raw.rfind("}")
+
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
+
+        data = json.loads(raw)
+
+        languages = data.get("languages", [])
+        if not isinstance(languages, list):
+            languages = [str(languages)]
+
+        try:
+            language_confidence = float(
+                data.get("language_confidence", 0.0)
+            )
+        except Exception:
+            language_confidence = 0.0
+
+        language_info = {
+            "detected_language": str(
+                data.get("detected_language", "unknown")
+            ),
+            "languages": [str(language) for language in languages],
+            "mixed_language": bool(
+                data.get("mixed_language", False)
+            ),
+            "language_confidence": round(
+                max(0.0, min(1.0, language_confidence)),
+                2,
+            ),
+        }
+
+        try:
+            transcript_confidence = float(
+                data.get("transcript_confidence", 0.0)
+            )
+        except Exception:
+            transcript_confidence = 0.0
+
+        uncertain_corrections = data.get(
+            "uncertain_corrections",
+            [],
+        )
+
+        if not isinstance(uncertain_corrections, list):
+            uncertain_corrections = []
+
+        transcript_data["transcript_confidence"] = round(
+            max(0.0, min(1.0, transcript_confidence)),
+            2,
+        )
+        transcript_data["uncertain_corrections"] = (
+            uncertain_corrections
+        )
+
+        evidence_score = int(float(data.get("evidence_score", 0)))
+        logic_score = int(float(data.get("logic_score", 0)))
+
+        evidence_score = max(0, min(100, evidence_score))
+        logic_score = max(0, min(100, logic_score))
+
+        evidence_used = data.get("evidence_used", [])
+        if not isinstance(evidence_used, list):
+            evidence_used = [str(evidence_used)]
+
+        allowed_content_types = {
+            "confirmed_news",
+            "sports_report",
+            "rumor",
+            "sports_analysis",
+            "sports_opinion",
+            "engagement_bait",
+            "not_sports_content",
+        }
+
+        content_type = str(
+            data.get("content_type", "unknown")
+        ).strip().lower()
+
+        if content_type not in allowed_content_types:
+            content_type = "unknown"
+
+        allowed_verdicts = {
+            "confirmed",
+            "well_supported_report",
+            "well_supported_analysis",
+            "reasonable_opinion",
+            "plausible_rumor",
+            "weakly_supported",
+            "misleading",
+            "engagement_bait",
+            "not_sports_content",
+        }
+
+        verdict = str(
+            data.get("verdict", "weakly_supported")
+        ).strip().lower()
+
+        if verdict not in allowed_verdicts:
+            verdict = "weakly_supported"
+
+        if content_type == "unknown":
+            verdict_to_content_type = {
+                "confirmed": "confirmed_news",
+                "well_supported_report": "sports_report",
+                "well_supported_analysis": "sports_analysis",
+                "reasonable_opinion": "sports_opinion",
+                "plausible_rumor": "rumor",
+                "engagement_bait": "engagement_bait",
+                "not_sports_content": "not_sports_content",
+            }
+
+            content_type = verdict_to_content_type.get(
+                verdict,
+                "unknown",
+            )
+
+        return {
+            "content_type": content_type,
+            "claim": str(
+                data.get("claim", "No clear claim found.")
+            ),
+            "evidence_used": [str(x) for x in evidence_used],
+            "logic_check": str(data.get("logic_check", "")),
+            "hype_check": str(data.get("hype_check", "")),
+            "evidence_score": evidence_score,
+            "logic_score": logic_score,
+            "verdict": verdict,
+            "debug": {
+                "mode": "video",
+                "ai_enabled": True,
+                "transcript_raw_chars": len(
+                    transcript_data["raw_transcript"]
+                ),
+                "transcript_cleaned_chars": len(
+                    transcript_data["cleaned_transcript"]
+                ),
+                "transcript_confidence": transcript_data[
+                    "transcript_confidence"
+                ],
+                "uncertain_corrections": transcript_data[
+                    "uncertain_corrections"
+                ],
+                "language": language_info,
+                "transcript_chars": len(transcript),
+                "transcript_chars_sent": len(clipped_transcript),
+            },
+        }
+
+    except Exception as e:
+        return {
+            "claim": "AI video analysis failed.",
+            "evidence_used": [f"{type(e).__name__}: {str(e)[:160]}"],
+            "logic_check": "Could not complete logic check.",
+            "hype_check": "Could not complete hype check.",
+            "evidence_score": 0,
+            "logic_score": 0,
+            "verdict": "analysis_failed",
+            "debug": {
+                "mode": "video",
+                "ai_enabled": True,
+                "transcript_raw_chars": len(
+                    transcript_data["raw_transcript"]
+                ),
+                "transcript_cleaned_chars": len(
+                    transcript_data["cleaned_transcript"]
+                ),
+                "transcript_confidence": transcript_data[
+                    "transcript_confidence"
+                ],
+                "uncertain_corrections": transcript_data[
+                    "uncertain_corrections"
+                ],
+                "error": str(e)[:200],
+            },
+        }
+
+@app.post("/analyze/video", response_model=VideoAnalyzeResponse)
+def analyze_video(req: VideoAnalyzeRequest):
+    result = ai_video_claim_readout(req.title, req.transcript, req.url)
+
+    return VideoAnalyzeResponse(
+        claim=result.get("claim", ""),
+        evidence_used=result.get("evidence_used", []),
+        logic_check=result.get("logic_check", ""),
+        hype_check=result.get("hype_check", ""),
+        evidence_score=int(result.get("evidence_score", 0)),
+        logic_score=int(result.get("logic_score", 0)),
+        verdict=result.get("verdict", "unclear"),
+        debug=result.get("debug", {}),
+    )
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
@@ -2220,6 +2877,8 @@ def analyze(req: AnalyzeRequest):
 
     cleaned_text = clean_html(req.text)
     original_chars = len(cleaned_text)
+    language_info = detect_content_language(cleaned_text)
+    mark("language_detection_ms")
 
     cleaned_text = cleaned_text[:MAX_ANALYZE_CHARS]
     mark("clean_and_cap_ms")
@@ -2227,7 +2886,63 @@ def analyze(req: AnalyzeRequest):
     type_info = detect_article_type(req.title, cleaned_text, req.url)
     mark("article_type_ms")
 
-    tldr = gemini_tldr(req.title, cleaned_text, max_bullets=req.max_bullets)
+    ai_type_info = ai_detect_article_type(
+        req.title,
+        cleaned_text,
+        req.url,
+        language_info=language_info,
+    )
+    mark("ai_article_type_ms")
+
+    final_type_info = type_info
+
+    detected_language = str(
+        language_info.get("detected_language", "unknown")
+    ).strip().lower()
+
+    is_non_english_or_mixed = (
+        bool(language_info.get("mixed_language", False))
+        or detected_language not in {"english", "unknown"}
+    )
+
+    ai_type = ai_type_info.get("article_type")
+    ai_confidence = float(ai_type_info.get("confidence", 0.0) or 0.0)
+
+    rule_type = str(type_info.get("primary_type", "generic_news"))
+    rule_confidence = float(type_info.get("confidence", 0.0) or 0.0)
+
+    rule_is_weak_generic = (
+        rule_type == "generic_news"
+        and rule_confidence <= 0.35
+    )
+
+    if (
+        ai_type
+        and ai_confidence >= 0.80
+        and (
+            is_non_english_or_mixed
+            or rule_is_weak_generic
+        )
+    ):
+        final_type_info = {
+            "primary_type": ai_type,
+            "label": ai_type_info.get(
+                "article_type_label",
+                ARTICLE_TYPE_LABELS.get(ai_type, "Generic Sports News"),
+            ),
+            "subtype": ai_type_info.get("article_subtype", "general"),
+            "confidence": ai_confidence,
+            "signals": [
+                "High-confidence multilingual AI classification."
+            ],
+        }
+
+    tldr = gemini_tldr(
+        req.title,
+        cleaned_text,
+        max_bullets=req.max_bullets,
+        language_info=language_info,
+    )
     mark("tldr_ms")
 
     score = merit_score(req.title, cleaned_text, req.url, type_info)
@@ -2242,18 +2957,27 @@ def analyze(req: AnalyzeRequest):
         merit_score=int(score["total"]),
         badge=str(score["badge"]),
 
-        article_type=str(type_info.get("primary_type", "generic_news")),
-        article_type_label=str(type_info.get("label", "Generic Sports News")),
-        article_subtype=str(type_info.get("subtype", "general")),
-        type_confidence=float(type_info.get("confidence", 0.0)),
-        type_signals=type_info.get("signals", []),
+        article_type=str(final_type_info.get("primary_type", "generic_news")),
+        article_type_label=str(final_type_info.get("label", "Generic Sports News")),
+        article_subtype=str(final_type_info.get("subtype", "general")),
+        type_confidence=float(final_type_info.get("confidence", 0.0)),
+        type_signals=final_type_info.get("signals", []),
 
         reasons=score.get("reasons", []),
         debug={
+            "timings": timings_ms,
             "total_ms": total_ms,
-            "timings_ms": timings_ms,
-            "original_text_chars": original_chars,
-            "analyzed_text_chars": len(cleaned_text),
-            "max_analyze_chars": MAX_ANALYZE_CHARS,
+            "original_chars": original_chars,
+            "chars_sent": len(cleaned_text),
+            "language": language_info,
+
+            "rule_article_type": {
+                "article_type": type_info.get("primary_type"),
+                "article_type_label": type_info.get("label"),
+                "article_subtype": type_info.get("subtype"),
+                "confidence": type_info.get("confidence"),
+                "signals": type_info.get("signals", []),
+            },
+            "ai_article_type_shadow": ai_type_info,
         },
     )
