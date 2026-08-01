@@ -4,37 +4,19 @@ import {
   openSportabaseShell,
 } from "../ui/overlay-shell.js";
 
-if (!globalThis.__SPORTABASE_CONTENT_LOADED__) {
-  globalThis.__SPORTABASE_CONTENT_LOADED__ = true;
+const config =
+  globalThis.__SPORTABASE_BOOT_CONFIG__ || {};
 
-  console.log(
-    "[sportabase] Modular content bundle loaded."
-  );
+const isYouTubeVideo =
+  window.location.href.includes("youtube.com/watch") ||
+  document.querySelector("ytd-watch-flexy") !== null;
 
-  chrome.runtime.onMessage.addListener(
-    (message, _sender, sendResponse) => {
-      if (message?.type !== "SPORTABASE_OPEN") {
-        return;
-      }
+openSportabaseShell({
+  mode: isYouTubeVideo ? "video" : "article",
+  preferences: config.preferences || {},
+});
 
-      const isYouTubeVideo =
-        window.location.href.includes(
-          "youtube.com/watch"
-        ) ||
-        document.querySelector("ytd-watch-flexy") !== null;
-
-      openSportabaseShell({
-        mode: isYouTubeVideo ? "video" : "article",
-        preferences: message.config?.preferences || {},
-      });
-
-      sendResponse({
-        ok: true,
-        status: "modular-shell-open",
-        mode: isYouTubeVideo
-          ? "video"
-          : "article",
-      });
-    }
-  );
-}
+console.log(
+  "[sportabase] Modular shell opened:",
+  isYouTubeVideo ? "video" : "article"
+);

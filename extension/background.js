@@ -31,7 +31,26 @@ const DEFAULT_PREFERENCES = {
   sportabaseKeepOpenOnNavigation: false,
 };
 
-async function injectContentBundle(tabId) {
+async function openSportabase(tabId) {
+  const preferences = await chrome.storage.local.get(
+    DEFAULT_PREFERENCES
+  );
+
+  const config = {
+    api: API,
+    preferences,
+    ...CONFIG,
+  };
+
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (bootConfig) => {
+      globalThis.__SPORTABASE_BOOT_CONFIG__ =
+        bootConfig;
+    },
+    args: [config],
+  });
+
   await chrome.scripting.insertCSS({
     target: { tabId },
     files: ["dist/content.css"],
@@ -41,23 +60,11 @@ async function injectContentBundle(tabId) {
     target: { tabId },
     files: ["dist/content.js"],
   });
-}
 
-async function openSportabase(tabId) {
-  const preferences = await chrome.storage.local.get(
-    DEFAULT_PREFERENCES
-  );
-
-  await injectContentBundle(tabId);
-
-  return chrome.tabs.sendMessage(tabId, {
-    type: "SPORTABASE_OPEN",
-    config: {
-      api: API,
-      preferences,
-      ...CONFIG,
-    },
-  });
+  return {
+    ok: true,
+    status: "modular-shell-opened",
+  };
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
