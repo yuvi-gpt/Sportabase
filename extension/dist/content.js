@@ -22,6 +22,12 @@
     }
   });
 
+  // src/styles/loader.css
+  var init_loader = __esm({
+    "src/styles/loader.css"() {
+    }
+  });
+
   // src/ui/logo.js
   function getSportabaseLogoMarkup() {
     return `
@@ -1331,6 +1337,7 @@
   var require_index = __commonJS({
     "src/content/index.js"() {
       init_sportabase();
+      init_loader();
       init_overlay_shell();
       init_article_mode();
       init_video_mode();

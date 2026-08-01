@@ -1,5 +1,7 @@
 ﻿import "../styles/sportabase.css";
 
+import "../styles/loader.css";
+
 import {
   openSportabaseShell,
 } from "../ui/overlay-shell.js";
