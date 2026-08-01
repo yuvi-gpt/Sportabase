@@ -158,11 +158,90 @@ function getArticleTitle() {
   );
 }
 
+function findTitleAnchoredCandidate() {
+  const heading =
+    document.querySelector(
+      "article h1, [role='article'] h1, main h1, [role='main'] h1, h1"
+    );
+
+  if (!heading) return null;
+
+  let current = heading.parentElement;
+  let candidate = null;
+
+  for (
+    let depth = 0;
+    current &&
+    current !== document.body &&
+    depth < 10;
+    depth += 1
+  ) {
+    const text =
+      extractTextFromElement(current);
+
+    const paragraphCount =
+      current.querySelectorAll("p").length;
+
+    const isUsable =
+      text.length >= 450 &&
+      paragraphCount >= 3;
+
+    if (isUsable) {
+      if (
+        candidate &&
+        text.length >
+          candidate.text.length * 2.4
+      ) {
+        break;
+      }
+
+      candidate = {
+        element: current,
+        text,
+      };
+
+      if (
+        current.matches(
+          "article, [role='article']"
+        )
+      ) {
+        break;
+      }
+    }
+
+    current = current.parentElement;
+  }
+
+  return candidate;
+}
+
 export function extractArticlePage({
   maxCharacters = 6000,
 } = {}) {
   const candidates = [];
   const seenElements = new Set();
+
+  const titleAnchoredCandidate =
+    findTitleAnchoredCandidate();
+
+  if (titleAnchoredCandidate) {
+    seenElements.add(
+      titleAnchoredCandidate.element
+    );
+
+    candidates.push({
+      selector: "title-anchored",
+      element:
+        titleAnchoredCandidate.element,
+      text:
+        titleAnchoredCandidate.text,
+      score:
+        scoreCandidate(
+          titleAnchoredCandidate.element,
+          titleAnchoredCandidate.text
+        ) + 10000,
+    });
+  }
 
   for (const selector of ARTICLE_SELECTORS) {
     const elements =

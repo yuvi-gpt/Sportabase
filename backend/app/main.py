@@ -2062,8 +2062,6 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
 
     out: List[str] = []
     for s in ranked:
-        if len(s) > 230:
-            s = s[:227].rstrip() + "..."
         out.append(s)
 
         if len(out) >= max_bullets:
@@ -2134,9 +2132,6 @@ def gemini_tldr(
             if not b:
                 continue
 
-            words = b.split()
-            if len(words) > 28:
-                b = " ".join(words[:28]).rstrip(" ,;:") + "..."
 
             low = b.lower()
             if low not in [x.lower() for x in cleaned]:
