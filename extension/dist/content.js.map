@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../src/content/index.js"],
+  "sourcesContent": ["\uFEFFif (!globalThis.__SPORTABASE_CONTENT_LOADED__) {\n  globalThis.__SPORTABASE_CONTENT_LOADED__ = true;\n\n  console.log(\"[sportabase] Modular content bundle loaded.\");\n\n  chrome.runtime.onMessage.addListener(\n    (message, _sender, sendResponse) => {\n      if (message?.type !== \"SPORTABASE_OPEN\") {\n        return;\n      }\n\n      console.log(\n        \"[sportabase] Open request received:\",\n        message.config\n      );\n\n      sendResponse({\n        ok: true,\n        status: \"modular-content-ready\",\n      });\n    }\n  );\n}\r\n"],
+  "mappings": ";;;;;;;;;;;AAAA;AAAA;AAAC,UAAI,CAAC,WAAW,+BAA+B;AAC9C,mBAAW,gCAAgC;AAE3C,gBAAQ,IAAI,6CAA6C;AAEzD,eAAO,QAAQ,UAAU;AAAA,UACvB,CAAC,SAAS,SAAS,iBAAiB;AAClC,gBAAI,SAAS,SAAS,mBAAmB;AACvC;AAAA,YACF;AAEA,oBAAQ;AAAA,cACN;AAAA,cACA,QAAQ;AAAA,YACV;AAEA,yBAAa;AAAA,cACX,IAAI;AAAA,cACJ,QAAQ;AAAA,YACV,CAAC;AAAA,UACH;AAAA,QACF;AAAA,MACF;AAAA;AAAA;",
+  "names": []
+}
