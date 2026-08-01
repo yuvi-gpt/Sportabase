@@ -291,15 +291,38 @@ async function injectAndRun(tabId) {
           const sizeRatio = (widthRatio + heightRatio) / 2;
 
           // Calm when compact/top. Stronger when expanded or scrolled deeper.
-          const strength = clampNum(0.55 + scrollRatio * 0.45 + sizeRatio * 0.50, 0.55, 1.55);
+          const strength = clampNum(
+            0.3 + scrollRatio * 0.18 + sizeRatio * 0.22,
+            0.3,
+            0.7
+          );
 
-          overlay.style.setProperty("--sb-field-opacity", String(0.28 + strength * 0.30));
-          overlay.style.setProperty("--sb-ripple-opacity", String(0.06 + strength * 0.15));
-          overlay.style.setProperty("--sb-depth-opacity", String(0.12 + strength * 0.22));
-          overlay.style.setProperty("--sb-saturate", `${Math.round(115 + strength * 55)}%`);
-          overlay.style.setProperty("--sb-blur", `${Math.round(18 + strength * 7)}px`);
+          overlay.style.setProperty(
+            "--sb-field-opacity",
+            String(0.08 + strength * 0.14)
+          );
+
+          overlay.style.setProperty(
+            "--sb-ripple-opacity",
+            "0"
+          );
+
+          overlay.style.setProperty(
+            "--sb-depth-opacity",
+            String(0.03 + strength * 0.08)
+          );
+
+          overlay.style.setProperty(
+            "--sb-saturate",
+            `${Math.round(104 + strength * 18)}%`
+          );
+
+
+          overlay.style.setProperty(
+            "--sb-blur",
+            `${Math.round(24 + strength * 8)}px`
+          );
         }
-
         updateGradientIntensity();
 
         if (scrollBox) {
@@ -702,6 +725,37 @@ async function injectAndRun(tabId) {
               overscroll-behavior: contain;
             }
 
+            #sportabase-overlay #sportabase-drag-handle {
+              position: sticky;
+              top: 0;
+              z-index: 20;
+              min-height: 76px;
+              margin:
+                calc(-18px * var(--sb-density, 1))
+                calc(-18px * var(--sb-density, 1))
+                20px;
+              padding:
+                17px
+                calc(20px * var(--sb-density, 1));
+              align-items: center !important;
+              background: var(--sb-ui-panel);
+              border-bottom: 1px solid var(--sb-ui-divider);
+              box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+              backdrop-filter: blur(18px) saturate(135%);
+            }
+
+            #sportabase-overlay #sportabase-drag-handle::after {
+              content: "";
+              position: absolute;
+              left: calc(20px * var(--sb-density, 1));
+              right: calc(20px * var(--sb-density, 1));
+              bottom: -1px;
+              height: 2px;
+              border-radius: 999px;
+              background: var(--sb-color, var(--sb-ui-accent));
+              opacity: 0.7;
+            }
+
             #sportabase-overlay *::-webkit-scrollbar-track {
               background: transparent;
             }
@@ -875,7 +929,7 @@ async function injectAndRun(tabId) {
                 muted: "#62666d",
                 border: "rgba(15,23,42,0.13)",
                 divider: "rgba(15,23,42,0.10)",
-                shadow: "rgba(15,23,42,0.22)",
+                shadow: "rgba(15,23,42,0.16)",
               }
             : {
                 panel:
@@ -886,7 +940,7 @@ async function injectAndRun(tabId) {
                 muted: "#a2a2a8",
                 border: "rgba(255,255,255,0.11)",
                 divider: "rgba(255,255,255,0.08)",
-                shadow: "rgba(0,0,0,0.56)",
+                shadow: "rgba(0,0,0,0.42)",
               };
 
         overlay.dataset.sbAppearance =
@@ -983,7 +1037,7 @@ async function injectAndRun(tabId) {
           : `1px solid ${palette.border}`;
 
         overlay.style.boxShadow =
-          `0 24px 70px ${palette.shadow}`;
+          `0 18px 48px ${palette.shadow}`;
 
         const motionLevel =
           prefs?.sportabaseMotionLevel || "full";
@@ -1044,104 +1098,308 @@ async function injectAndRun(tabId) {
           inset:0;
           z-index:2147483646;
           display:none;
+          place-items:center;
+          padding:12px;
           overflow:hidden;
           border-radius:inherit;
         `;
 
         layer.innerHTML = `
+        <style>
+          #sportabase-settings-layer
+            > section
+            > div
+            > section:not(:last-child) {
+            padding:13px;
+            border:1px solid var(--sb-ui-border);
+            border-radius:14px;
+            background:var(--sb-ui-surface);
+          }
+
+          #sportabase-settings-layer
+            .sportabase-setting-row,
+          #sportabase-settings-layer
+            .sportabase-toggle-row {
+            min-height:42px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:16px;
+            margin-top:8px;
+            padding:9px 10px;
+            border:1px solid transparent;
+            border-radius:11px;
+            background:var(--sb-ui-raised);
+            color:var(--sb-ui-text);
+            font-size:12px;
+            font-weight:650;
+            line-height:1.35;
+            transition:
+              border-color 150ms ease,
+              background 150ms ease,
+              transform 150ms ease;
+          }
+
+          #sportabase-settings-layer
+            .sportabase-setting-row:hover,
+          #sportabase-settings-layer
+            .sportabase-toggle-row:hover {
+            border-color:var(--sb-ui-border);
+            background:var(--sb-ui-surface);
+          }
+
+          #sportabase-settings-layer
+            .sportabase-setting-row:focus-within,
+          #sportabase-settings-layer
+            .sportabase-toggle-row:focus-within {
+            border-color:var(--sb-color);
+          }
+
+          #sportabase-settings-layer
+            .sportabase-setting-row
+            > span,
+          #sportabase-settings-layer
+            .sportabase-toggle-row
+            > span {
+            min-width:0;
+            color:var(--sb-ui-text);
+          }
+
+          #sportabase-settings-layer select {
+            min-width:136px;
+            max-width:54%;
+            height:32px;
+            padding:0 9px;
+            border:1px solid var(--sb-ui-border);
+            border-radius:9px;
+            outline:none;
+            background:var(--sb-ui-panel);
+            color:var(--sb-ui-text);
+            font:inherit;
+            font-size:11.5px;
+            font-weight:650;
+            cursor:pointer;
+            transition:
+              border-color 150ms ease,
+              background 150ms ease;
+          }
+
+          #sportabase-settings-layer select:hover,
+          #sportabase-settings-layer select:focus {
+            border-color:var(--sb-color);
+            background:var(--sb-ui-surface);
+          }
+
+          #sportabase-settings-layer
+            input[type="checkbox"] {
+            appearance:none;
+            width:36px;
+            height:20px;
+            flex:0 0 auto;
+            margin:0;
+            border:1px solid var(--sb-ui-border);
+            border-radius:999px;
+            background:
+              radial-gradient(
+                circle at 10px 50%,
+                #ffffff 0 6px,
+                transparent 6.5px
+              ),
+              var(--sb-ui-border);
+            cursor:pointer;
+            transition:
+              background 170ms ease,
+              border-color 170ms ease,
+              box-shadow 170ms ease;
+          }
+
+          #sportabase-settings-layer
+            input[type="checkbox"]:checked {
+            border-color:var(--sb-color);
+            background:
+              radial-gradient(
+                circle at 25px 50%,
+                #ffffff 0 6px,
+                transparent 6.5px
+              ),
+              var(--sb-color);
+            box-shadow:0 0 12px var(--sb-soft-glow);
+          }
+
+          #sportabase-settings-layer
+            input[type="checkbox"]:focus-visible {
+            outline:2px solid var(--sb-color);
+            outline-offset:2px;
+          }
+
+          #sportabase-settings-layer
+            input[type="color"] {
+            width:38px !important;
+            height:28px !important;
+            padding:2px !important;
+            border:1px solid var(--sb-ui-border) !important;
+            border-radius:9px;
+            background:var(--sb-ui-panel) !important;
+            cursor:pointer;
+          }
+
+          #sportabase-settings-layer
+            input[type="color"]::-webkit-color-swatch-wrapper {
+            padding:0;
+          }
+
+          #sportabase-settings-layer
+            input[type="color"]::-webkit-color-swatch {
+            border:0;
+            border-radius:6px;
+          }
+
+          #sportabase-settings-close:hover {
+            transform:translateY(-1px);
+            border-color:var(--sb-color) !important;
+            background:var(--sb-ui-surface) !important;
+          }
+
+          #sportabase-settings-close:active {
+            transform:scale(0.94);
+          }
+        </style>
           <button
             id="sportabase-settings-backdrop"
             aria-label="Close settings"
             style="
               position:absolute;
               inset:0;
+              z-index:0;
               width:100%;
               height:100%;
               border:0;
-              background:rgba(0,0,0,0.58);
+              background:rgba(0,0,0,0.40);
               backdrop-filter:blur(4px);
               cursor:default;
             "
           ></button>
 
           <section
-            id="sportabase-settings-drawer"
             style="
-              position:absolute;
-              top:0;
-              right:0;
-              width:min(340px, 92%);
-              height:100%;
+              position:relative;
+              z-index:1;
+              width:min(430px, 100%);
+              height:min(620px, 100%);
               overflow-y:auto;
               padding:
-                calc(18px * var(--sb-density, 1));
+                0 calc(18px * var(--sb-density, 1));
               background:var(--sb-ui-panel);
               color:var(--sb-ui-text);
-              border-left:
-                1px solid var(--sb-ui-border);
-              box-shadow:
-                -22px 0 54px rgba(0,0,0,0.38);
+              border:1px solid var(--sb-ui-border);
+              border-radius:18px;
+              box-shadow:0 18px 48px var(--sb-ui-shadow);
+              scrollbar-gutter:stable;
+              overscroll-behavior:contain;
             "
           >
             <header
               style="
+                position:sticky;
+                top:0;
+                z-index:3;
                 display:flex;
                 align-items:center;
                 justify-content:space-between;
                 gap:14px;
-                padding-bottom:15px;
-                border-bottom:
-                  1px solid var(--sb-ui-divider);
+                margin:
+                  0 calc(-18px * var(--sb-density, 1));
+                padding:
+                  14px calc(18px * var(--sb-density, 1));
+                background:var(--sb-ui-panel);
+                border-bottom:1px solid var(--sb-ui-divider);
               "
             >
-              <div>
-                <div
-                  style="
-                    font-size:18px;
-                    font-weight:760;
-                    letter-spacing:-0.35px;
-                  "
-                >
-                  Settings
-                </div>
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:10px;
+                  min-width:0;
+                "
+              >
+                ${getSportabaseLogoMarkup({
+                  size: 32,
+                  accent: "var(--sb-color)",
+                  glow: "var(--sb-soft-glow)",
+                  fontSize: 11,
+                  radius: 10,
+                })}
 
-                <div
-                  style="
-                    margin-top:3px;
-                    color:var(--sb-ui-muted);
-                    font-size:12px;
-                  "
-                >
-                  Appearance and behaviour
+                <div style="min-width:0;">
+                  <div
+                    style="
+                      color:var(--sb-ui-text);
+                      font-size:16px;
+                      font-weight:800;
+                      line-height:1.15;
+                      letter-spacing:-0.3px;
+                    "
+                  >
+                    Settings
+                  </div>
+
+                  <div
+                    style="
+                      margin-top:3px;
+                      color:var(--sb-ui-muted);
+                      font-size:11px;
+                      font-weight:600;
+                      line-height:1.3;
+                    "
+                  >
+                    Sportabase preferences
+                  </div>
                 </div>
               </div>
 
               <button
                 id="sportabase-settings-close"
                 aria-label="Close settings"
+                title="Close settings"
                 style="
                   width:32px;
                   height:32px;
+                  flex:0 0 auto;
                   display:grid;
                   place-items:center;
-                  border-radius:50%;
-                  border:
-                    1px solid var(--sb-ui-border);
+                  padding:0;
+                  border-radius:10px;
+                  border:1px solid var(--sb-ui-border);
                   background:var(--sb-ui-raised);
                   color:var(--sb-ui-text);
                   cursor:pointer;
-                  font-size:17px;
+                  transition:
+                    transform 160ms ease,
+                    border-color 160ms ease,
+                    background 160ms ease;
                 "
               >
-                ×
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M6 6l12 12"></path>
+                  <path d="M18 6L6 18"></path>
+                </svg>
               </button>
             </header>
-
             <div
               style="
                 display:grid;
-                gap:22px;
-                padding-top:18px;
+                gap:14px;
+                padding:16px 0 18px;
               "
             >
               <section>
@@ -1352,7 +1610,14 @@ async function injectAndRun(tabId) {
 
               <section
                 style="
-                  padding-top:4px;
+                  position:sticky;
+                  bottom:0;
+                  z-index:3;
+                  margin:
+                    0 calc(-18px * var(--sb-density, 1)) -18px;
+                  padding:
+                    14px calc(18px * var(--sb-density, 1));
+                  background:var(--sb-ui-panel);
                   border-top:
                     1px solid var(--sb-ui-divider);
                 "
@@ -1474,13 +1739,163 @@ async function injectAndRun(tabId) {
           applySportabaseUiPreferences(overlay);
         }
 
+        let settingsTransitionToken = 0;
+
         function openSettings() {
           syncControls();
-          layer.style.display = "block";
+
+          settingsTransitionToken += 1;
+          const transitionToken = settingsTransitionToken;
+
+          const panel = layer.querySelector(":scope > section");
+          const backdrop = layer.querySelector(
+            "#sportabase-settings-backdrop"
+          );
+
+          const prefersReducedMotion =
+            window.matchMedia?.(
+              "(prefers-reduced-motion: reduce)"
+            )?.matches || false;
+
+          const motionLevel =
+            prefs?.sportabaseMotionLevel || "full";
+
+          layer.style.display = "grid";
+          layer.style.pointerEvents = "auto";
+
+          if (
+            prefersReducedMotion ||
+            motionLevel === "none"
+          ) {
+            return;
+          }
+
+          backdrop?.animate(
+            [
+              {
+                opacity: 0,
+              },
+              {
+                opacity: 1,
+              },
+            ],
+            {
+              duration:
+                motionLevel === "reduced" ? 120 : 190,
+              easing: "ease-out",
+              fill: "both",
+            }
+          );
+
+          const panelAnimation = panel?.animate(
+            [
+              {
+                opacity: 0,
+                transform: "translateY(10px) scale(0.975)",
+              },
+              {
+                opacity: 1,
+                transform: "translateY(0) scale(1)",
+              },
+            ],
+            {
+              duration:
+                motionLevel === "reduced" ? 150 : 240,
+              easing: "cubic-bezier(.2,.8,.2,1)",
+              fill: "both",
+            }
+          );
+
+          panelAnimation?.finished
+            .catch(() => {})
+            .then(() => {
+              if (transitionToken !== settingsTransitionToken) {
+                return;
+              }
+
+              panel?.getAnimations().forEach((animation) => {
+                animation.cancel();
+              });
+            });
         }
 
         function closeSettings() {
-          layer.style.display = "none";
+          if (layer.style.display === "none") return;
+
+          settingsTransitionToken += 1;
+          const transitionToken = settingsTransitionToken;
+
+          const panel = layer.querySelector(":scope > section");
+          const backdrop = layer.querySelector(
+            "#sportabase-settings-backdrop"
+          );
+
+          const prefersReducedMotion =
+            window.matchMedia?.(
+              "(prefers-reduced-motion: reduce)"
+            )?.matches || false;
+
+          const motionLevel =
+            prefs?.sportabaseMotionLevel || "full";
+
+          if (
+            prefersReducedMotion ||
+            motionLevel === "none"
+          ) {
+            layer.style.display = "none";
+            return;
+          }
+
+          layer.style.pointerEvents = "none";
+
+          const backdropAnimation = backdrop?.animate(
+            [
+              {
+                opacity: 1,
+              },
+              {
+                opacity: 0,
+              },
+            ],
+            {
+              duration:
+                motionLevel === "reduced" ? 90 : 150,
+              easing: "ease-in",
+              fill: "forwards",
+            }
+          );
+
+          const panelAnimation = panel?.animate(
+            [
+              {
+                opacity: 1,
+                transform: "translateY(0) scale(1)",
+              },
+              {
+                opacity: 0,
+                transform: "translateY(8px) scale(0.98)",
+              },
+            ],
+            {
+              duration:
+                motionLevel === "reduced" ? 110 : 180,
+              easing: "cubic-bezier(.4,0,1,1)",
+              fill: "forwards",
+            }
+          );
+
+          Promise.allSettled(
+            [backdropAnimation, panelAnimation]
+              .filter(Boolean)
+              .map((animation) => animation.finished)
+          ).then(() => {
+            if (transitionToken !== settingsTransitionToken) {
+              return;
+            }
+
+            layer.style.display = "none";
+            layer.style.pointerEvents = "auto";
+          });
         }
 
         overlay
@@ -1546,23 +1961,60 @@ async function injectAndRun(tabId) {
                 SIZE_PRESETS[mode] ||
                 SIZE_PRESETS.comfort;
 
-              overlay.style.width =
-                `${preset.width}px`;
+              const width = Math.min(
+                preset.width,
+                window.innerWidth - 16
+              );
 
-              overlay.style.height =
-                `${Math.min(
-                  preset.height,
-                  Math.floor(window.innerHeight * 0.9)
-                )}px`;
+              const height = Math.min(
+                preset.height,
+                window.innerHeight - 16
+              );
+
+              const currentRect =
+                overlay.getBoundingClientRect();
+
+              const left = Math.max(
+                8,
+                Math.min(
+                  currentRect.left,
+                  window.innerWidth - width - 8
+                )
+              );
+
+              const top = Math.max(
+                8,
+                Math.min(
+                  currentRect.top,
+                  window.innerHeight - height - 8
+                )
+              );
+
+              overlay.style.left = `${Math.round(left)}px`;
+              overlay.style.top = `${Math.round(top)}px`;
+              overlay.style.right = "auto";
+              overlay.style.width = `${Math.round(width)}px`;
+              overlay.style.height = `${Math.round(height)}px`;
 
               prefs.sportabaseSizeMode = mode;
               prefs.sportabaseCustomWidth = null;
               prefs.sportabaseCustomHeight = null;
 
+              const positionPrefs =
+                prefs.sportabaseRememberPosition === false
+                  ? {}
+                  : {
+                      sportabaseLeft: Math.round(left),
+                      sportabaseTop: Math.round(top),
+                    };
+
+              Object.assign(prefs, positionPrefs);
+
               saveOverlayPrefs({
                 sportabaseSizeMode: mode,
                 sportabaseCustomWidth: null,
                 sportabaseCustomHeight: null,
+                ...positionPrefs,
               });
             }
           );
@@ -1606,6 +2058,332 @@ async function injectAndRun(tabId) {
         };
       }
 
+      function getSportabaseLogoMarkup({
+        size = 34,
+        accent = "var(--sb-color)",
+        glow = "var(--sb-soft-glow)",
+        textColor = "#ffffff",
+        fontSize = 13,
+        radius = 10,
+        className = "",
+      } = {}) {
+        return `
+          <div
+            class="${className}"
+            style="
+              width:${size}px;
+              height:${size}px;
+              flex:0 0 auto;
+              display:grid;
+              place-items:center;
+              border-radius:${radius}px;
+              background:linear-gradient(
+                135deg,
+                ${accent} 0%,
+                color-mix(in srgb, ${accent} 72%, #ffffff 28%) 100%
+              );
+              color:${textColor};
+              font-size:${fontSize}px;
+              font-weight:900;
+              line-height:1;
+              letter-spacing:-0.9px;
+              box-shadow:
+                0 0 0 1px var(--sb-ui-border),
+                0 8px 20px ${glow};
+              position:relative;
+              overflow:hidden;
+            "
+            aria-hidden="true"
+          >
+            <div
+              style="
+                position:absolute;
+                inset:0;
+                background:
+                  radial-gradient(
+                    circle at 28% 24%,
+                    rgba(255,255,255,0.28),
+                    transparent 46%
+                  );
+                pointer-events:none;
+              "
+            ></div>
+
+            <span
+              style="
+                position:relative;
+                z-index:1;
+                font-family:Inter, system-ui, sans-serif;
+              "
+            >
+              SB
+            </span>
+          </div>
+        `;
+      }
+
+      function playSportabaseStartupAnimation(overlay) {
+        if (!overlay) return;
+
+        const prefersReducedMotion =
+          window.matchMedia?.(
+            "(prefers-reduced-motion: reduce)"
+          )?.matches || false;
+
+        const motionLevel =
+          prefs?.sportabaseMotionLevel || "full";
+
+        if (
+          prefersReducedMotion ||
+          motionLevel === "reduced"
+        ) {
+          return;
+        }
+
+        overlay.animate(
+          [
+            {
+              opacity: 0,
+              filter: "blur(7px)",
+            },
+            {
+              opacity: 1,
+              filter: "blur(0px)",
+            },
+          ],
+          {
+            duration: 320,
+            easing: "cubic-bezier(.2,.8,.2,1)",
+            fill: "both",
+          }
+        );
+
+        const brandMark = overlay.querySelector(
+          ".sportabase-brand-mark"
+        );
+
+        if (!brandMark) return;
+
+        brandMark.animate(
+          [
+            {
+              opacity: 0,
+              transform: "scale(0.72) rotate(-14deg)",
+            },
+            {
+              opacity: 1,
+              transform: "scale(1.08) rotate(3deg)",
+              offset: 0.72,
+            },
+            {
+              opacity: 1,
+              transform: "scale(1) rotate(0deg)",
+            },
+          ],
+          {
+            duration: 520,
+            delay: 80,
+            easing: "cubic-bezier(.2,.9,.25,1)",
+            fill: "both",
+          }
+        );
+      }
+
+      function installSportabaseButtonDynamics(overlay) {
+        if (!overlay) return;
+
+        const buttons = overlay.querySelectorAll(
+          ".sportabase-settings-button, " +
+            "#sportabase-close, " +
+            "#sportabase-video-close"
+        );
+
+        buttons.forEach((button) => {
+          button.addEventListener("mouseenter", () => {
+            button.style.transform = "translateY(-1px)";
+            button.style.borderColor = "var(--sb-color)";
+            button.style.background = "var(--sb-ui-surface)";
+          });
+
+          button.addEventListener("mouseleave", () => {
+            button.style.transform = "translateY(0)";
+            button.style.borderColor = "var(--sb-ui-border)";
+            button.style.background = "var(--sb-ui-raised)";
+          });
+
+          button.addEventListener("pointerdown", () => {
+            button.style.transform = "scale(0.94)";
+          });
+
+          button.addEventListener("pointerup", () => {
+            button.style.transform = "translateY(-1px)";
+          });
+
+          button.addEventListener("blur", () => {
+            button.style.transform = "translateY(0)";
+            button.style.borderColor = "var(--sb-ui-border)";
+            button.style.background = "var(--sb-ui-raised)";
+          });
+        });
+      }
+
+      function installSportabaseContentReveal(overlay) {
+        if (!overlay) return;
+
+        const prefersReducedMotion =
+          window.matchMedia?.(
+            "(prefers-reduced-motion: reduce)"
+          )?.matches || false;
+
+        const motionLevel =
+          prefs?.sportabaseMotionLevel || "full";
+
+        if (
+          prefersReducedMotion ||
+          motionLevel === "none"
+        ) {
+          return;
+        }
+
+        function revealElements(root) {
+          if (!root) return;
+
+          const elements = Array.from(
+            root.querySelectorAll(
+              ":scope > section, " +
+                ":scope > div > section"
+            )
+          ).filter(
+            (element) =>
+              !element.dataset.sportabaseRevealed
+          );
+
+          elements.forEach((element, index) => {
+            element.dataset.sportabaseRevealed = "true";
+
+            element.animate(
+              [
+                {
+                  opacity: 0,
+                  transform: "translateY(9px)",
+                },
+                {
+                  opacity: 1,
+                  transform: "translateY(0)",
+                },
+              ],
+              {
+                duration:
+                  motionLevel === "reduced" ? 180 : 320,
+                delay:
+                  motionLevel === "reduced"
+                    ? 0
+                    : Math.min(index * 55, 275),
+                easing: "cubic-bezier(.2,.8,.2,1)",
+                fill: "both",
+              }
+            );
+          });
+        }
+
+        const articleContent = overlay.querySelector(
+          ".sportabase-content-scroll"
+        );
+
+        if (articleContent) {
+          revealElements(articleContent);
+        }
+
+        const videoStatus = overlay.querySelector(
+          "#sportabase-video-status"
+        );
+
+        if (videoStatus) {
+          revealElements(videoStatus);
+
+          const observer = new MutationObserver(() => {
+            revealElements(videoStatus);
+          });
+
+          observer.observe(videoStatus, {
+            childList: true,
+            subtree: false,
+          });
+
+          overlay.addEventListener(
+            "sportabase-cleanup",
+            () => observer.disconnect(),
+            { once: true }
+          );
+        }
+      }
+
+      function closeSportabaseOverlay(
+        overlay,
+        cleanupCallbacks = []
+      ) {
+        if (!overlay) return;
+
+        cleanupCallbacks.forEach((cleanup) => {
+          try {
+            if (typeof cleanup === "function") {
+              cleanup();
+            }
+          } catch (_) {
+            // Ignore cleanup failures during closing.
+          }
+        });
+
+        overlay.dispatchEvent(
+          new CustomEvent("sportabase-cleanup")
+        );
+
+        const prefersReducedMotion =
+          window.matchMedia?.(
+            "(prefers-reduced-motion: reduce)"
+          )?.matches || false;
+
+        const motionLevel =
+          prefs?.sportabaseMotionLevel || "full";
+
+        if (
+          prefersReducedMotion ||
+          motionLevel === "none"
+        ) {
+          overlay.remove();
+          return;
+        }
+
+        overlay.style.pointerEvents = "none";
+
+        const animation = overlay.animate(
+          [
+            {
+              opacity: 1,
+              transform: "translateY(0) scale(1)",
+              filter: "blur(0px)",
+            },
+            {
+              opacity: 0,
+              transform: "translateY(-7px) scale(0.975)",
+              filter: "blur(4px)",
+            },
+          ],
+          {
+            duration:
+              motionLevel === "reduced" ? 120 : 190,
+            easing: "cubic-bezier(.4,0,1,1)",
+            fill: "forwards",
+          }
+        );
+
+        animation.finished
+          .catch(() => {})
+          .finally(() => {
+            overlay.remove();
+          });
+      }
+
       function showOverlay(data) {
         ensureSportabaseStyles();
 
@@ -1638,10 +2416,26 @@ async function injectAndRun(tabId) {
           : 0;
 
         const SIZE_PRESETS = {
-          compact: { label: "S", width: 360, height: 430 },
-          comfort: { label: "M", width: 430, height: 560 },
-          wide: { label: "L", width: 520, height: 620 },
-          debug: { label: "XL", width: 610, height: 720 },
+          compact: {
+            label: "Compact",
+            width: 440,
+            height: 560,
+          },
+          comfort: {
+            label: "Standard",
+            width: 520,
+            height: 680,
+          },
+          wide: {
+            label: "Wide",
+            width: 640,
+            height: 760,
+          },
+          debug: {
+            label: "Presentation",
+            width: 760,
+            height: 820,
+          },
         };
 
         const savedMode = prefs?.sportabaseSizeMode || "compact";
@@ -1715,7 +2509,7 @@ async function injectAndRun(tabId) {
         overlay.style.zIndex = "2147483647";
         overlay.style.borderRadius = "22px";
         overlay.style.border = `1px solid ${theme.border}`;
-        overlay.style.boxShadow = `0 24px 70px rgba(0,0,0,0.58), 0 0 42px ${theme.softGlow}`;
+        overlay.style.boxShadow = `0 18px 48px rgba(0,0,0,0.42), 0 0 24px ${theme.softGlow}`;
         overlay.style.fontFamily =
           "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
         overlay.style.color = "#fff";
@@ -1747,47 +2541,62 @@ async function injectAndRun(tabId) {
               color:var(--sb-ui-text);
             "
           >
-            <div id="sportabase-drag-handle" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-              <div>
-                <div
-                  style="
-                    font-weight:850;
-                    font-size:15px;
-                    letter-spacing:0.2px;
-                    display:flex;
-                    align-items:center;
-                    gap:8px;
-                  "
-                >
-                  <span
-                    style="
-                      width:9px;
-                      height:9px;
-                      border-radius:50%;
-                      background:${theme.color};
-                      box-shadow:0 0 16px ${theme.glow};
-                      display:inline-block;
-                    ">
-                  </span>
-                  Sportabase Readout
-                </div>
+            <div
+              id="sportabase-drag-handle"
+              style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:14px;
+                padding:4px 2px 16px;
+                border-bottom:1px solid var(--sb-ui-border);
+              "
+            >
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:11px;
+                  min-width:0;
+                "
+              >
+                ${getSportabaseLogoMarkup({
+                    size: 34,
+                    accent: theme.color,
+                    glow: theme.softGlow,
+                    fontSize: 12,
+                    radius: 10,
+                    className: "sportabase-brand-mark",
+                  })}
 
-                <div
-                  style="
-                    margin-top:8px;
-                    display:inline-flex;
-                    align-items:center;
-                    gap:6px;
-                    padding:5px 8px;
-                    border-radius:999px;
-                    background:rgba(0,0,0,0.30);
-                    border:1px solid rgba(255,255,255,0.12);
-                    color:${theme.textAccent};
-                    font-size:11.5px;
-                    font-weight:750;
-                  "
-                >
-                  ${articleTypeLabel} · ${articleSubtype} · ${typeConfidence}%
+                <div style="min-width:0;">
+                  <div
+                    style="
+                      color:var(--sb-ui-text);
+                      font-size:16px;
+                      font-weight:800;
+                      line-height:1.15;
+                      letter-spacing:-0.35px;
+                    "
+                  >
+                    Sportabase
+                  </div>
+
+                  <div
+                    style="
+                      margin-top:4px;
+                      color:var(--sb-ui-muted);
+                      font-size:11px;
+                      font-weight:600;
+                      line-height:1.3;
+                      letter-spacing:0.15px;
+                      white-space:nowrap;
+                      overflow:hidden;
+                      text-overflow:ellipsis;
+                    "
+                  >
+                    ARTICLE INTELLIGENCE · ${articleTypeLabel} · ${typeConfidence}%
+                  </div>
                 </div>
               </div>
 
@@ -1796,6 +2605,7 @@ async function injectAndRun(tabId) {
                   display:flex;
                   align-items:center;
                   gap:7px;
+                  flex:0 0 auto;
                 "
               >
                 <button
@@ -1803,27 +2613,37 @@ async function injectAndRun(tabId) {
                   aria-label="Open settings"
                   title="Settings"
                   style="
-                    width:34px;
-                    height:34px;
+                    width:32px;
+                    height:32px;
                     display:grid;
                     place-items:center;
-                    border-radius:50%;
+                    padding:0;
+                    border-radius:10px;
                     border:1px solid var(--sb-ui-border);
                     background:var(--sb-ui-raised);
                     color:var(--sb-ui-text);
                     cursor:pointer;
+                    transition:
+                      transform 160ms ease,
+                      border-color 160ms ease,
+                      background 160ms ease;
                   "
                 >
                   <svg
-                    width="16"
-                    height="16"
+                    width="15"
+                    height="15"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
                   >
-                    <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
-                    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V20.3h-3v-.09a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.02 15a1.7 1.7 0 0 0-1.55-1.03H5.4v-3h.07A1.7 1.7 0 0 0 7.02 9.94a1.7 1.7 0 0 0-.34-1.88L6.62 8l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.71 4.7v-.08h3v.08a1.7 1.7 0 0 0 1.03 1.58 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1.03h.08v3h-.08A1.7 1.7 0 0 0 19.4 15Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                      d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55v.09h-3v-.09a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.02 15a1.7 1.7 0 0 0-1.55-1.03H5.4v-3h.07A1.7 1.7 0 0 0 7.02 9.94a1.7 1.7 0 0 0-.34-1.88L6.62 8l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.71 4.7v-.08h3v.08a1.7 1.7 0 0 0 1.03 1.58 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8l-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.55 1.03h.08v3h-.08A1.7 1.7 0 0 0 19.4 15Z"
+                    ></path>
                   </svg>
                 </button>
 
@@ -1832,66 +2652,150 @@ async function injectAndRun(tabId) {
                   aria-label="Close Sportabase"
                   title="Close"
                   style="
-                    width:34px;
-                    height:34px;
+                    width:32px;
+                    height:32px;
                     display:grid;
                     place-items:center;
-                    border-radius:50%;
+                    padding:0;
+                    border-radius:10px;
                     border:1px solid var(--sb-ui-border);
                     background:var(--sb-ui-raised);
                     color:var(--sb-ui-text);
                     cursor:pointer;
-                    font-size:20px;
-                    line-height:1;
+                    transition:
+                      transform 160ms ease,
+                      border-color 160ms ease,
+                      background 160ms ease;
                   "
                 >
-                  ×
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12"></path>
+                    <path d="M18 6L6 18"></path>
+                  </svg>
                 </button>
               </div>
             </div>
 
-            <div
+            <section
               style="
-                margin-top:14px;
-                padding:13px;
-                border-radius:17px;
-                background:rgba(0,0,0,0.36);
-                border:1px solid rgba(255,255,255,0.10);
+                margin-top:4px;
+                padding:16px;
+                border-radius:16px;
+                background:var(--sb-ui-surface);
+                border:1px solid var(--sb-ui-border);
+                box-shadow:0 10px 30px var(--sb-ui-shadow);
               "
             >
               <div
                 style="
                   display:flex;
-                  align-items:center;
+                  align-items:flex-start;
                   justify-content:space-between;
-                  gap:12px;
+                  gap:18px;
                 "
               >
                 <div>
-                  <div style="font-size:12px;color:rgba(255,255,255,0.68);">
-                    Merit Score
+                  <div
+                    style="
+                      font-size:12px;
+                      font-weight:650;
+                      color:var(--sb-ui-muted);
+                      letter-spacing:-0.05px;
+                    "
+                  >
+                    Merit score
                   </div>
-                  <div style="font-size:32px;font-weight:900;line-height:1;margin-top:4px;">
-                    ${safeScore}<span style="font-size:15px;color:rgba(255,255,255,0.58);">/100</span>
+
+                  <div
+                    style="
+                      display:flex;
+                      align-items:baseline;
+                      gap:4px;
+                      margin-top:5px;
+                      color:var(--sb-ui-text);
+                    "
+                  >
+                    <span
+                      style="
+                        font-size:34px;
+                        font-weight:800;
+                        line-height:1;
+                        letter-spacing:-1.2px;
+                      "
+                    >
+                      ${safeScore}
+                    </span>
+
+                    <span
+                      style="
+                        font-size:13px;
+                        font-weight:600;
+                        color:var(--sb-ui-muted);
+                      "
+                    >
+                      /100
+                    </span>
                   </div>
                 </div>
 
                 <div
                   style="
-                    color:${theme.textAccent};
+                    max-width:180px;
+                    padding:7px 10px;
+                    border-radius:10px;
+                    background:var(--sb-ui-raised);
                     border:1px solid ${theme.border};
-                    background:rgba(0,0,0,0.28);
-                    box-shadow:0 0 18px ${theme.softGlow};
-                    padding:8px 10px;
-                    border-radius:999px;
-                    font-size:12px;
-                    font-weight:800;
-                    white-space:nowrap;
+                    color:var(--sb-ui-text);
+                    font-size:11.5px;
+                    font-weight:700;
+                    line-height:1.3;
+                    text-align:center;
                   "
                 >
                   ${badge}
                 </div>
               </div>
+
+              <div
+                style="
+                  margin-top:11px;
+                  max-width:460px;
+                  color:var(--sb-ui-muted);
+                  font-size:12px;
+                  line-height:1.45;
+                "
+              >
+                ${description}
+              </div>
+
+              <div
+                style="
+                  margin-top:14px;
+                  height:5px;
+                  overflow:hidden;
+                  border-radius:999px;
+                  background:var(--sb-ui-raised);
+                "
+              >
+                <div
+                  style="
+                    width:${safeScore}%;
+                    height:100%;
+                    border-radius:999px;
+                    background:${theme.color};
+                  "
+                ></div>
+              </div>
+            </section>
 
               <div
                 style="
@@ -1942,18 +2846,36 @@ async function injectAndRun(tabId) {
               </div>
             </div>
 
-            <div style="margin-top:14px;">
+            <section
+              style="
+                margin-top:20px;
+                padding:0 2px;
+              "
+            >
               <div
                 style="
-                  font-size:13px;
-                  font-weight:850;
-                  color:rgba(255,255,255,0.94);
-                  line-height:1.35;
+                  max-width:620px;
+                  color:var(--sb-ui-text);
+            <section
+              style="
+                margin-top:20px;
+                padding:0 2px;
+              "
+            >
+              <div
+                style="
+                  max-width:620px;
+                  color:var(--sb-ui-text);
+                  font-size:18px;
+                  font-weight:800;
+                  line-height:1.3;
+                  letter-spacing:-0.4px;
+                  overflow-wrap:anywhere;
                 "
               >
                 ${title}
               </div>
-            </div>
+            </section>
 
             <div style="margin-top:14px;">
               <div
@@ -2041,6 +2963,73 @@ async function injectAndRun(tabId) {
 
         document.body.appendChild(overlay);
 
+        playSportabaseStartupAnimation(overlay);
+        installSportabaseButtonDynamics(overlay);
+        installSportabaseContentReveal(overlay);
+
+        const articleContentScroll = overlay.querySelector(
+          ".sportabase-content-scroll"
+        );
+
+        const originalArticleLink = overlay.querySelector(
+          '.sportabase-content-scroll a[target="_blank"]'
+        );
+
+        if (originalArticleLink) {
+          const articleActionBar =
+            document.createElement("div");
+
+          articleActionBar.id =
+            "sportabase-article-action-bar";
+
+          articleActionBar.style.cssText = `
+            position:absolute;
+            left:0;
+            right:0;
+            bottom:0;
+            z-index:25;
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            min-height:68px;
+            padding:12px 18px;
+            background:var(--sb-ui-panel);
+            border-top:1px solid var(--sb-ui-divider);
+            box-shadow:0 -14px 32px rgba(0,0,0,0.16);
+            backdrop-filter:blur(18px) saturate(135%);
+          `;
+
+          Object.assign(
+            originalArticleLink.style,
+            {
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              minWidth: "140px",
+              padding: "10px 16px",
+              borderRadius: "10px",
+              background: "var(--sb-ui-raised)",
+              color: "var(--sb-ui-text)",
+              border: "1px solid var(--sb-ui-border)",
+              boxShadow: "none",
+              fontSize: "12.5px",
+              fontWeight: "750",
+              textDecoration: "none",
+            }
+          );
+
+          articleActionBar.appendChild(
+            originalArticleLink
+          );
+
+          overlay.appendChild(articleActionBar);
+
+          if (articleContentScroll) {
+            articleContentScroll.style.paddingBottom =
+              "88px";
+          }
+        }
+
         applySportabaseUiPreferences(overlay);
 
         installSportabaseSettingsDrawer(
@@ -2056,11 +3045,13 @@ async function injectAndRun(tabId) {
         );
 
         const btn = document.getElementById("sportabase-close");
+
         if (btn) {
           btn.onclick = () => {
-            cleanupGradientIntensity();
-            cleanupWindowControls();
-            overlay.remove();
+            closeSportabaseOverlay(overlay, [
+              cleanupGradientIntensity,
+              cleanupWindowControls,
+            ]);
           };
         }
       }
@@ -2072,10 +3063,26 @@ async function injectAndRun(tabId) {
         if (existing) existing.remove();
 
         const SIZE_PRESETS = {
-          compact: { label: "S", width: 360, height: 430 },
-          comfort: { label: "M", width: 430, height: 560 },
-          wide: { label: "L", width: 520, height: 620 },
-          debug: { label: "XL", width: 610, height: 720 },
+          compact: {
+            label: "Compact",
+            width: 440,
+            height: 560,
+          },
+          comfort: {
+            label: "Standard",
+            width: 520,
+            height: 680,
+          },
+          wide: {
+            label: "Wide",
+            width: 640,
+            height: 760,
+          },
+          debug: {
+            label: "Presentation",
+            width: 760,
+            height: 820,
+          },
         };
 
         const savedMode = prefs?.sportabaseSizeMode || "comfort";
@@ -2138,8 +3145,8 @@ async function injectAndRun(tabId) {
             `1px solid ${currentTheme.border}`;
 
           overlay.style.boxShadow =
-            `0 24px 70px rgba(0,0,0,0.58), ` +
-            `0 0 42px ${currentTheme.softGlow}`;
+            `0 18px 48px rgba(0,0,0,0.42), ` +
+            `0 0 24px ${currentTheme.softGlow}`;
 
           const analyzeButton = overlay.querySelector(
             "#sportabase-video-analyze"
@@ -2242,55 +3249,60 @@ async function injectAndRun(tabId) {
               id="sportabase-drag-handle"
               style="
                 display:flex;
+                align-items:center;
                 justify-content:space-between;
-                align-items:flex-start;
-                gap:12px;
+                gap:14px;
+                padding:2px 2px 14px;
+                border-bottom:1px solid var(--sb-ui-border);
               "
             >
-              <div>
-                <div
-                  style="
-                    display:flex;
-                    align-items:center;
-                    gap:8px;
-                    font-size:13px;
-                    font-weight:900;
-                    letter-spacing:0.2px;
-                    color:var(--sb-ui-text);
-                  "
-                >
-                  <span
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:13px;
+                  min-width:0;
+                "
+>
+                ${getSportabaseLogoMarkup({
+                  size: 42,
+                  accent: "var(--sb-color)",
+                  glow: "var(--sb-soft-glow)",
+                  fontSize: 12,
+                  radius: 14,
+                  className: "sportabase-brand-mark",
+                })}
+
+                <div style="min-width:0;">
+                  <div
                     style="
-                      width:9px;
-                      height:9px;
-                      border-radius:50%;
-                      background:var(--sb-color);
-                      box-shadow:0 0 8px var(--sb-soft-glow);
-                      display:inline-block;
+                      color:var(--sb-ui-text);
+                      font-size:18px;
+                      font-weight:820;
+                      line-height:1.05;
+                      letter-spacing:-0.4px;
                     "
-                  ></span>
+                  >
+                    Sportabase
+                  </div>
 
-                  Sportabase Video Readout
+                  <div
+                    id="sportabase-video-mode-label"
+                    style="
+                      margin-top:3px;
+                      color:var(--sb-ui-muted);
+                      font-size:10.5px;
+                      font-weight:700;
+                      line-height:1.25;
+                      letter-spacing:0.18px;
+                      white-space:nowrap;
+                      overflow:hidden;
+                      text-overflow:ellipsis;
+                    "
+                  >
+                    VIDEO INTELLIGENCE · YOUTUBE
+                  </div>
                 </div>
-
-                <div
-                  id="sportabase-video-mode-label"
-                  style="
-                    margin-top:4px;
-                    display:block;
-                    padding:0;
-                    background:transparent;
-                    border:none;
-                    color:var(--sb-ui-muted);
-                    font-size:11.5px;
-                    font-weight:600;
-                    letter-spacing:-0.05px;
-                  "
-                >
-                  YouTube · Video Mode
-                </div>
-
-
               </div>
 
               <div
@@ -2298,6 +3310,7 @@ async function injectAndRun(tabId) {
                   display:flex;
                   align-items:center;
                   gap:7px;
+                  flex:0 0 auto;
                 "
               >
                 <button
@@ -2305,15 +3318,20 @@ async function injectAndRun(tabId) {
                   aria-label="Open settings"
                   title="Settings"
                   style="
-                    width:30px;
-                    height:30px;
+                    width:32px;
+                    height:32px;
                     display:grid;
                     place-items:center;
-                    border-radius:50%;
+                    padding:0;
+                    border-radius:10px;
                     border:1px solid var(--sb-ui-border);
                     background:var(--sb-ui-raised);
                     color:var(--sb-ui-text);
                     cursor:pointer;
+                    transition:
+                      transform 160ms ease,
+                      border-color 160ms ease,
+                      background 160ms ease;
                   "
                 >
                   <svg
@@ -2323,29 +3341,17 @@ async function injectAndRun(tabId) {
                     fill="none"
                     stroke="currentColor"
                     stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
                   >
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path
-                      d="
-                        M19.4 15a1.7 1.7 0 0 0 .34 1.88
-                        l.06.06-2.12 2.12-.06-.06
-                        a1.7 1.7 0 0 0-1.88-.34
-                        1.7 1.7 0 0 0-1.03 1.55v.09h-3v-.09
-                        a1.7 1.7 0 0 0-1.03-1.55
-                        1.7 1.7 0 0 0-1.88.34l-.06.06
-                        -2.12-2.12.06-.06A1.7 1.7 0 0 0 7.02 15
-                        a1.7 1.7 0 0 0-1.55-1.03H5.4v-3h.07
-                        A1.7 1.7 0 0 0 7.02 9.94
-                        a1.7 1.7 0 0 0-.34-1.88L6.62 8
-                        l2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34
-                        A1.7 1.7 0 0 0 11.71 4.7v-.08h3v.08
-                        a1.7 1.7 0 0 0 1.03 1.58
-                        1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 8
-                        l-.06.06a1.7 1.7 0 0 0-.34 1.88
-                        1.7 1.7 0 0 0 1.55 1.03h.08v3h-.08
-                        A1.7 1.7 0 0 0 19.4 15Z
-                      "
-                    ></path>
+                    <path d="M4 7h10"></path>
+                    <path d="M18 7h2"></path>
+                    <circle cx="16" cy="7" r="2"></circle>
+
+                    <path d="M4 17h2"></path>
+                    <path d="M10 17h10"></path>
+                    <circle cx="8" cy="17" r="2"></circle>
                   </svg>
                 </button>
 
@@ -2354,94 +3360,373 @@ async function injectAndRun(tabId) {
                   aria-label="Close Sportabase"
                   title="Close"
                   style="
-                    width:34px;
-                    height:34px;
+                    width:32px;
+                    height:32px;
                     display:grid;
                     place-items:center;
-                    border-radius:50%;
+                    padding:0;
+                    border-radius:10px;
                     border:1px solid var(--sb-ui-border);
                     background:var(--sb-ui-raised);
                     color:var(--sb-ui-text);
                     cursor:pointer;
-                    font-size:18px;
-                    line-height:1;
+                    transition:
+                      transform 160ms ease,
+                      border-color 160ms ease,
+                      background 160ms ease;
                   "
                 >
-                  ×
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 6l12 12"></path>
+                    <path d="M18 6L6 18"></path>
+                  </svg>
                 </button>
               </div>
             </div>
 
             <div
+              id="sportabase-video-landing-shell"
               style="
-              margin-top:14px;
-              padding:14px;
-              border-radius:16px;
-              background:var(--sb-ui-surface);
-              border:1px solid var(--sb-ui-border);
-              box-shadow:0 10px 28px var(--sb-ui-shadow);
-            "
+                min-height:100%;
+                display:flex;
+                flex-direction:column;
+                justify-content:center;
+                gap:12px;
+                padding-bottom:18px;
+              "
+            >
+
+            <section
+              style="
+                margin-top:16px;
+                overflow:hidden;
+                border:1px solid var(--sb-ui-border);
+                border-radius:18px;
+                background:var(--sb-ui-surface);
+                box-shadow:0 10px 26px var(--sb-ui-shadow);
+              "
             >
               <div
                 style="
-                  font-size:12px;
-                  color:var(--sb-ui-muted);
+                  padding:16px;
+                  background:
+                    linear-gradient(
+                      145deg,
+                      color-mix(
+                        in srgb,
+                        var(--sb-color) 9%,
+                        transparent
+                      ),
+                      transparent 58%
+                    );
                 "
               >
-                Video detected
-              </div>
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    justify-content:space-between;
+                    gap:12px;
+                  "
+                >
+                  <div
+                    style="
+                      display:flex;
+                      align-items:center;
+                      gap:9px;
+                      min-width:0;
+                    "
+                  >
+                    <div
+                      style="
+                        width:34px;
+                        height:34px;
+                        flex:0 0 auto;
+                        display:grid;
+                        place-items:center;
+                        border-radius:10px;
+                        background:var(--sb-ui-raised);
+                        border:1px solid var(--sb-ui-border);
+                        color:var(--sb-color);
+                      "
+                    >
+                      <svg
+                        width="17"
+                        height="17"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect
+                          x="3"
+                          y="5"
+                          width="18"
+                          height="14"
+                          rx="3"
+                        ></rect>
+                        <path d="m10 9 5 3-5 3V9Z"></path>
+                      </svg>
+                    </div>
 
-              <div
-                style="
-                  margin-top:6px;
-                  font-size:13px;
-                  font-weight:750;
-                  color:var(--sb-ui-text);
-                  line-height:1.4;
-                  letter-spacing:-0.1px;
-                  display:-webkit-box;
-                  -webkit-box-orient:vertical;
-                  -webkit-line-clamp:2;
-                  overflow:hidden;
-                "
-              >
-                ${escapeHtml(videoTitle)}
-              </div>
+                    <div style="min-width:0;">
+                      <div
+                        style="
+                          color:var(--sb-ui-text);
+                          font-size:13px;
+                          font-weight:800;
+                          line-height:1.2;
+                          letter-spacing:-0.15px;
+                        "
+                      >
+                        Video ready
+                      </div>
 
-              <button
-                id="sportabase-video-analyze"
-                style="
-                  width:100%;
-                  margin-top:14px;
-                  padding:11px 14px;
-                  border:none;
-                  border-radius:12px;
-                  color:#071018;
-                  font-weight:900;
-                  cursor:pointer;
-                  box-shadow:0 0 18px var(--sb-soft-glow);
-                "
-              >
-                Analyze Video
-              </button>
-            </div>
+                      <div
+                        style="
+                          margin-top:3px;
+                          color:var(--sb-ui-muted);
+                          font-size:10.5px;
+                          font-weight:650;
+                          line-height:1.25;
+                        "
+                      >
+                        Transcript-based intelligence
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style="
+                      display:flex;
+                      align-items:center;
+                      gap:6px;
+                      flex:0 0 auto;
+                      padding:5px 8px;
+                      border-radius:999px;
+                      background:var(--sb-ui-raised);
+                      border:1px solid var(--sb-ui-border);
+                      color:var(--sb-ui-muted);
+                      font-size:9.5px;
+                      font-weight:750;
+                      letter-spacing:0.55px;
+                    "
+                  >
+                    <span
+                      style="
+                        width:6px;
+                        height:6px;
+                        border-radius:50%;
+                        background:var(--sb-color);
+                        box-shadow:0 0 8px var(--sb-soft-glow);
+                      "
+                    ></span>
+                    DETECTED
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    margin-top:15px;
+                    padding-top:14px;
+                    border-top:1px solid var(--sb-ui-divider);
+                  "
+                >
+                  <div
+                    style="
+                      color:var(--sb-ui-muted);
+                      font-size:10px;
+                      font-weight:750;
+                      letter-spacing:0.7px;
+                      text-transform:uppercase;
+                    "
+                  >
+                    Current video
+                  </div>
+
+                  <div
+                    style="
+                      margin-top:6px;
+                      color:var(--sb-ui-text);
+                      font-size:14px;
+                      font-weight:800;
+                      line-height:1.42;
+                      letter-spacing:-0.2px;
+                      display:-webkit-box;
+                      -webkit-box-orient:vertical;
+                      -webkit-line-clamp:2;
+                      overflow:hidden;
+                    "
+                  >
+                    ${escapeHtml(videoTitle)}
+                  </div>
+                </div>
+
+                <button
+                  id="sportabase-video-analyze"
+                  style="
+                    width:100%;
+                    min-height:42px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:8px;
+                    margin-top:16px;
+                    padding:10px 14px;
+                    border:1px solid
+                      color-mix(
+                        in srgb,
+                        var(--sb-color) 72%,
+                        white 28%
+                      );
+                    border-radius:12px;
+                    background:var(--sb-color);
+                    color:#ffffff;
+                    font-size:12.5px;
+                    font-weight:850;
+                    letter-spacing:-0.1px;
+                    cursor:pointer;
+                    box-shadow:0 8px 20px var(--sb-soft-glow);
+                    transition:
+                      transform 160ms ease,
+                      filter 160ms ease,
+                      box-shadow 160ms ease;
+                  "
+                >
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3v18"></path>
+                    <path d="m17 8-5-5-5 5"></path>
+                  </svg>
+
+                  Analyze video
+                </button>
+
+                <div
+                  style="
+                    display:grid;
+                    grid-template-columns:repeat(3, minmax(0, 1fr));
+                    gap:7px;
+                    margin-top:13px;
+                  "
+                >
+                  <div
+                    style="
+                      padding:8px 6px;
+                      border:1px solid var(--sb-ui-border);
+                      border-radius:10px;
+                      background:var(--sb-ui-raised);
+                      color:var(--sb-ui-muted);
+                      font-size:9.5px;
+                      font-weight:700;
+                      text-align:center;
+                    "
+                  >
+                    Transcript
+                  </div>
+
+                  <div
+                    style="
+                      padding:8px 6px;
+                      border:1px solid var(--sb-ui-border);
+                      border-radius:10px;
+                      background:var(--sb-ui-raised);
+                      color:var(--sb-ui-muted);
+                      font-size:9.5px;
+                      font-weight:700;
+                      text-align:center;
+                    "
+                  >
+                    Evidence
+                  </div>
+
+                  <div
+                    style="
+                      padding:8px 6px;
+                      border:1px solid var(--sb-ui-border);
+                      border-radius:10px;
+                      background:var(--sb-ui-raised);
+                      color:var(--sb-ui-muted);
+                      font-size:9.5px;
+                      font-weight:700;
+                      text-align:center;
+                    "
+                  >
+                    Logic
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <div
               id="sportabase-video-status"
               style="
-                margin-top:14px;
-                font-size:13px;
-                line-height:1.5;
+                display:flex;
+                align-items:flex-start;
+                gap:9px;
+                margin-top:11px;
+                padding:10px 11px;
+                border:1px solid var(--sb-ui-border);
+                border-radius:12px;
+                background:var(--sb-ui-raised);
                 color:var(--sb-ui-muted);
+                font-size:10.5px;
+                font-weight:600;
+                line-height:1.45;
               "
             >
-              Sportabase will locate the transcript automatically
-              and analyze the video.
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="var(--sb-color)"
+                stroke-width="1.9"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="flex:0 0 auto;margin-top:1px;"
+                aria-hidden="true"
+              >
+                <path
+                  d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"
+                ></path>
+                <path d="m9 12 2 2 4-4"></path>
+              </svg>
+
+              <span>
+                Sportabase will find the transcript automatically.
+                No manual transcript setup is required.
+              </span>
             </div>
           </div>
+        </div>
         `;
 
         document.body.appendChild(overlay);
+        playSportabaseStartupAnimation(overlay);
+        installSportabaseButtonDynamics(overlay);
+        installSportabaseContentReveal(overlay);
 
         applyVideoTheme(initialScore, "developing");
         applySportabaseUiPreferences(overlay);
@@ -2468,6 +3753,38 @@ async function injectAndRun(tabId) {
           "#sportabase-video-analyze"
         );
 
+        if (analyzeButton) {
+          analyzeButton.addEventListener("mouseenter", () => {
+            if (analyzeButton.disabled) return;
+
+            analyzeButton.style.transform = "translateY(-1px)";
+            analyzeButton.style.filter = "brightness(1.06)";
+            analyzeButton.style.boxShadow =
+              "0 11px 25px var(--sb-soft-glow)";
+          });
+
+          analyzeButton.addEventListener("mouseleave", () => {
+            if (analyzeButton.disabled) return;
+
+            analyzeButton.style.transform = "translateY(0)";
+            analyzeButton.style.filter = "none";
+            analyzeButton.style.boxShadow =
+              "0 8px 20px var(--sb-soft-glow)";
+          });
+
+          analyzeButton.addEventListener("pointerdown", () => {
+            if (analyzeButton.disabled) return;
+
+            analyzeButton.style.transform = "scale(0.985)";
+          });
+
+          analyzeButton.addEventListener("pointerup", () => {
+            if (analyzeButton.disabled) return;
+
+            analyzeButton.style.transform = "translateY(-1px)";
+          });
+        }
+
         const status = overlay.querySelector(
           "#sportabase-video-status"
         );
@@ -2476,10 +3793,58 @@ async function injectAndRun(tabId) {
           "#sportabase-video-mode-label"
         );
 
+        const contentScroll = overlay.querySelector(
+          ".sportabase-content-scroll"
+        );
+
+        const actionBar = document.createElement("div");
+        actionBar.id = "sportabase-video-action-bar";
+
+        actionBar.style.cssText = `
+          position:absolute;
+          left:0;
+          right:0;
+          bottom:0;
+          z-index:25;
+          display:flex;
+          align-items:center;
+          justify-content:flex-end;
+          min-height:68px;
+          padding:12px 18px;
+          background:var(--sb-ui-panel);
+          border-top:1px solid var(--sb-ui-divider);
+          box-shadow:0 -14px 32px rgba(0,0,0,0.16);
+          backdrop-filter:blur(18px) saturate(135%);
+        `;
+
+        if (analyzeButton) {
+          Object.assign(
+            analyzeButton.style,
+            {
+              width: "auto",
+              minWidth: "150px",
+              marginTop: "0",
+              padding: "10px 16px",
+              borderRadius: "10px",
+              fontSize: "12.5px",
+              fontWeight: "750",
+            }
+          );
+
+          actionBar.appendChild(analyzeButton);
+        }
+
+        if (contentScroll) {
+          contentScroll.style.paddingBottom = "88px";
+        }
+
+        overlay.appendChild(actionBar);
+
         closeButton.onclick = () => {
-          cleanupGradientIntensity();
-          cleanupWindowControls();
-          overlay.remove();
+          closeSportabaseOverlay(overlay, [
+            cleanupGradientIntensity,
+            cleanupWindowControls,
+          ]);
         };
 
         const wait = (milliseconds) =>
@@ -2577,8 +3942,18 @@ async function injectAndRun(tabId) {
           analyzeButton.style.cursor = "wait";
           analyzeButton.textContent = "Finding transcript...";
 
-          status.textContent =
-            "Opening and reading the YouTube transcript...";
+          status.innerHTML = buildSportabaseLoadingMarkup(
+            "Opening and reading the YouTube transcript...",
+            18,
+            "VIDEO INTELLIGENCE"
+          );
+
+          updateLoadingOverlay(
+            "Opening and reading the YouTube transcript...",
+            18
+          );
+
+          let videoLoadingTicker = null;
 
           try {
             const transcriptReady =
@@ -2610,8 +3985,49 @@ async function injectAndRun(tabId) {
 
             analyzeButton.textContent = "Analyzing video...";
 
-            status.textContent =
-              "Evaluating the claim, evidence, logic, and hype...";
+            const videoLoadingSteps = [
+              {
+                message: "Identifying the video's central claim...",
+                progress: 62,
+              },
+              {
+                message: "Tracing the supporting evidence...",
+                progress: 72,
+              },
+              {
+                message: "Testing the argument for gaps...",
+                progress: 82,
+              },
+              {
+                message: "Separating substance from presentation...",
+                progress: 90,
+              },
+              {
+                message: "Finalizing your video readout...",
+                progress: 94,
+              },
+            ];
+
+            let videoLoadingStepIndex = 0;
+
+            videoLoadingTicker = setInterval(() => {
+              const step =
+                videoLoadingSteps[videoLoadingStepIndex];
+
+              if (!step) return;
+
+              updateLoadingOverlay(
+                step.message,
+                step.progress
+              );
+
+              if (
+                videoLoadingStepIndex <
+                videoLoadingSteps.length - 1
+              ) {
+                videoLoadingStepIndex += 1;
+              }
+            }, 1900);
 
             const response = await fetchJsonWithTimeout(
               `${API}/analyze/video`,
@@ -2755,12 +4171,31 @@ async function injectAndRun(tabId) {
             status.innerHTML = `
               <section
                 style="
-                  padding:14px;
-                  border-radius:16px;
-                  background:var(--sb-ui-surface);
-                  border:1px solid var(--sb-ui-border);
-                  box-shadow:0 8px 22px var(--sb-ui-shadow);
-                "
+                  style="
+                    position:relative;
+                    overflow:hidden;
+                    padding:16px;
+                    border-radius:18px;
+                    background:
+                      linear-gradient(
+                        145deg,
+                        color-mix(
+                          in srgb,
+                          var(--sb-color) 10%,
+                          var(--sb-ui-surface)
+                        ),
+                        var(--sb-ui-surface) 58%
+                      );
+                    border:1px solid
+                      color-mix(
+                        in srgb,
+                        var(--sb-color) 28%,
+                        var(--sb-ui-border)
+                      );
+                    box-shadow:
+                      0 10px 26px var(--sb-ui-shadow),
+                      inset 0 1px 0 rgba(255,255,255,0.04);
+                  "
               >
                 <div
                   style="
@@ -2773,9 +4208,12 @@ async function injectAndRun(tabId) {
                   <div>
                     <div
                       style="
-                        font-size:12px;
-                        font-weight:600;
                         color:var(--sb-ui-muted);
+                        font-size:10.5px;
+                        font-weight:750;
+                        line-height:1.2;
+                        letter-spacing:0.7px;
+                        text-transform:uppercase;
                       "
                     >
                       Overall support
@@ -2792,10 +4230,12 @@ async function injectAndRun(tabId) {
                     >
                       <span
                         style="
-                          font-size:30px;
-                          font-weight:800;
-                          line-height:1;
-                          letter-spacing:-1px;
+                          color:var(--sb-ui-text);
+                          font-size:36px;
+                          font-weight:900;
+                          line-height:0.95;
+                          letter-spacing:-1.8px;
+                          text-shadow:0 5px 18px var(--sb-soft-glow);
                         "
                       >
                         ${supportScore}
@@ -2817,13 +4257,24 @@ async function injectAndRun(tabId) {
                     style="
                       max-width:175px;
                       padding:7px 10px;
-                      border-radius:10px;
-                      background:var(--sb-ui-raised);
-                      border:1px solid ${currentTheme.border};
+                      border-radius:999px;
+                      background:
+                        color-mix(
+                          in srgb,
+                          var(--sb-color) 10%,
+                          var(--sb-ui-raised)
+                        );
+                      border:1px solid
+                        color-mix(
+                          in srgb,
+                          var(--sb-color) 38%,
+                          var(--sb-ui-border)
+                        );
                       color:var(--sb-ui-text);
-                      font-size:11.5px;
-                      font-weight:700;
+                      font-size:10.5px;
+                      font-weight:750;
                       line-height:1.3;
+                      letter-spacing:0.15px;
                       text-align:center;
                     "
                   >
@@ -2991,12 +4442,13 @@ async function injectAndRun(tabId) {
                 </div>
               </div>
 
-              <section
-                style="
-                  margin-top:18px;
-                  padding-top:15px;
-                  border-top:1px solid var(--sb-ui-divider);
-                "
+              style="
+                margin-top:14px;
+                padding:13px;
+                border:1px solid var(--sb-ui-border);
+                border-radius:14px;
+                background:var(--sb-ui-raised);
+              "
               >
                 <div
                   style="
@@ -3011,11 +4463,11 @@ async function injectAndRun(tabId) {
 
                 <ul
                   style="
-                    margin:8px 0 0 17px;
+                    margin:9px 0 0 17px;
                     padding:0;
                     color:var(--sb-ui-muted);
-                    font-size:12.5px;
-                    line-height:1.5;
+                    font-size:12px;
+                    line-height:1.55;
                   "
                 >
                   ${evidenceItems}
@@ -3024,9 +4476,11 @@ async function injectAndRun(tabId) {
 
               <section
                 style="
-                  margin-top:17px;
-                  padding-top:15px;
-                  border-top:1px solid var(--sb-ui-divider);
+                  margin-top:10px;
+                  padding:13px;
+                  border:1px solid var(--sb-ui-border);
+                  border-radius:14px;
+                  background:var(--sb-ui-raised);
                 "
               >
                 <div
@@ -3042,10 +4496,10 @@ async function injectAndRun(tabId) {
 
                 <div
                   style="
-                    margin-top:7px;
+                    margin-top:8px;
                     color:var(--sb-ui-muted);
-                    font-size:12.5px;
-                    line-height:1.5;
+                    font-size:12px;
+                    line-height:1.55;
                   "
                 >
                   ${escapeHtml(
@@ -3059,9 +4513,20 @@ async function injectAndRun(tabId) {
 
               <section
                 style="
-                  margin-top:17px;
-                  padding:15px 0 8px;
-                  border-top:1px solid var(--sb-ui-divider);
+                  margin-top:10px;
+                  padding:13px;
+                  border:1px solid var(--sb-ui-border);
+                  border-radius:14px;
+                  background:
+                    linear-gradient(
+                      145deg,
+                      color-mix(
+                        in srgb,
+                        var(--sb-color) 6%,
+                        var(--sb-ui-raised)
+                      ),
+                      var(--sb-ui-raised)
+                    );
                 "
               >
                 <div
@@ -3077,10 +4542,10 @@ async function injectAndRun(tabId) {
 
                 <div
                   style="
-                    margin-top:7px;
+                    margin-top:8px;
                     color:var(--sb-ui-muted);
-                    font-size:12.5px;
-                    line-height:1.5;
+                    font-size:12px;
+                    line-height:1.55;
                   "
                 >
                   ${escapeHtml(
@@ -3093,25 +4558,50 @@ async function injectAndRun(tabId) {
               </section>
             `;
 
-            analyzeButton.textContent = "Reanalyze";
+            analyzeButton.innerHTML = `
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 6v5h-5"></path>
+                <path d="M4 18v-5h5"></path>
+                <path d="M18.5 9a7 7 0 0 0-11.7-2.6L4 9"></path>
+                <path d="M5.5 15a7 7 0 0 0 11.7 2.6L20 15"></path>
+              </svg>
+
+              Reanalyze video
+            `;
 
             Object.assign(
               analyzeButton.style,
               {
                 width: "auto",
                 minWidth: "0",
+                minHeight: "34px",
                 marginTop: "10px",
-                padding: "8px 12px",
+                padding: "8px 11px",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: "9px",
-                background: "var(--sb-ui-raised)",
+                gap: "7px",
+                borderRadius: "10px",
+                background:
+                  "color-mix(in srgb, var(--sb-color) 8%, var(--sb-ui-raised))",
                 color: "var(--sb-ui-text)",
-                border: "1px solid var(--sb-ui-border)",
+                border:
+                  "1px solid color-mix(in srgb, var(--sb-color) 34%, var(--sb-ui-border))",
                 boxShadow: "none",
-                fontSize: "12px",
-                fontWeight: "700",
+                fontSize: "11.5px",
+                fontWeight: "750",
+                letterSpacing: "-0.05px",
+                cursor: "pointer",
               }
             );
           } catch (error) {
@@ -3121,6 +4611,20 @@ async function injectAndRun(tabId) {
             );
 
             applyVideoTheme(10, "unverified");
+
+            const rawError = String(error?.message || error);
+
+            let friendlyError =
+              "Sportabase could not analyze this video right now. Please try again.";
+
+            if (
+              rawError.includes("503") ||
+              rawError.toLowerCase().includes("high demand") ||
+              rawError.toLowerCase().includes("unavailable")
+            ) {
+              friendlyError =
+                "The AI analysis service is temporarily busy. Please try again in a moment.";
+            }
 
             status.innerHTML = `
               <div
@@ -3152,15 +4656,18 @@ async function injectAndRun(tabId) {
                     overflow-wrap:anywhere;
                   "
                 >
-                  ${escapeHtml(
-                    String(error?.message || error)
-                  )}
+                  ${escapeHtml(friendlyError)}
                 </div>
               </div>
             `;
 
             analyzeButton.textContent = "Try Again";
           } finally {
+            if (videoLoadingTicker) {
+              clearInterval(videoLoadingTicker);
+              videoLoadingTicker = null;
+            }
+
             analyzeButton.disabled = false;
             analyzeButton.style.opacity = "1";
             analyzeButton.style.cursor = "pointer";
@@ -3172,100 +4679,552 @@ async function injectAndRun(tabId) {
         return `sportabase_scan_cache_ai_local_v1:${url}`;
       }
 
-      function showLoadingOverlay(message = "Reading this story...") {
-        const existingResult = document.getElementById("sportabase-overlay");
+      function buildSportabaseLoadingMarkup(
+        message = "Reading this story...",
+        progress = 15,
+        modeLabel = "ARTICLE INTELLIGENCE"
+      ) {
+        const numericProgress = Number(progress);
+
+        const safeProgress = Number.isFinite(numericProgress)
+          ? Math.max(5, Math.min(95, Math.round(numericProgress)))
+          : 15;
+
+        return `
+          <div
+            class="sportabase-loader-content"
+            style="
+              position:relative;
+              overflow:hidden;
+              padding:18px;
+              border-radius:18px;
+              background:var(--sb-ui-surface);
+              color:var(--sb-ui-text);
+            "
+          >
+            <div
+              aria-hidden="true"
+              style="
+                position:absolute;
+                inset:-80px auto auto -70px;
+                width:180px;
+                height:180px;
+                border-radius:50%;
+                background:var(--sb-color);
+                opacity:0.08;
+                filter:blur(38px);
+                pointer-events:none;
+              "
+            ></div>
+
+            <div
+              style="
+                position:relative;
+                display:flex;
+                align-items:center;
+                gap:13px;
+              "
+            >
+              <div
+                class="sportabase-loader-mark"
+                aria-hidden="true"
+                style="
+                  position:relative;
+                  width:46px;
+                  height:46px;
+                  flex:0 0 auto;
+                  display:grid;
+                  place-items:center;
+                "
+              >
+                <div
+                  class="sportabase-loader-orbit"
+                  style="
+                    position:absolute;
+                    inset:0;
+                    border-radius:14px;
+                    border:1px solid var(--sb-ui-border);
+                    border-top-color:var(--sb-color);
+                    border-right-color:var(--sb-color);
+                  "
+                ></div>
+
+                ${getSportabaseLogoMarkup({
+                  size: 34,
+                  accent: "var(--sb-color)",
+                  glow: "var(--sb-soft-glow)",
+                  fontSize: 11,
+                  radius: 10,
+                  className: "sportabase-loader-core",
+                })}
+
+              <div style="min-width:0;">
+                <div
+                  style="
+                    color:var(--sb-ui-text);
+                    font-size:16px;
+                    font-weight:800;
+                    line-height:1.15;
+                    letter-spacing:-0.35px;
+                  "
+                >
+                  Sportabase
+                </div>
+
+                <div
+                  style="
+                    margin-top:4px;
+                    color:var(--sb-ui-muted);
+                    font-size:10.5px;
+                    font-weight:700;
+                    line-height:1.3;
+                    letter-spacing:0.7px;
+                  "
+                >
+                  ${escapeHtml(modeLabel)}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style="
+                position:relative;
+                margin-top:18px;
+                padding-top:15px;
+                border-top:1px solid var(--sb-ui-border);
+              "
+            >
+              <div
+                id="sportabase-loading-message"
+                aria-live="polite"
+                style="
+                  color:var(--sb-ui-text);
+                  font-size:13px;
+                  font-weight:650;
+                  line-height:1.45;
+                  overflow-wrap:anywhere;
+                "
+              >
+                ${escapeHtml(message)}
+              </div>
+
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  justify-content:space-between;
+                  gap:12px;
+                  margin-top:12px;
+                "
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    gap:6px;
+                    color:var(--sb-ui-muted);
+                    font-size:10.5px;
+                    font-weight:700;
+                    letter-spacing:0.55px;
+                  "
+                >
+                  <span class="sportabase-loader-dot"></span>
+                  ANALYZING
+                </div>
+
+                <div
+                  id="sportabase-loading-progress"
+                  style="
+                    color:var(--sb-ui-muted);
+                    font-size:11px;
+                    font-weight:750;
+                    font-variant-numeric:tabular-nums;
+                  "
+                >
+                  Stage 1 of 3
+                </div>
+              </div>
+
+              <div
+                id="sportabase-loading-track"
+                role="progressbar"
+                aria-label="Sportabase analysis progress"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="${safeProgress}"
+                style="
+                  margin-top:8px;
+                  height:7px;
+                  overflow:hidden;
+                  border-radius:999px;
+                  background:var(--sb-ui-raised);
+                  border:1px solid var(--sb-ui-border);
+                "
+              >
+                <div
+                  id="sportabase-loading-bar"
+                  style="
+                    width:${safeProgress}%;
+                    height:100%;
+                    border-radius:999px;
+                    background:
+                      linear-gradient(
+                        90deg,
+                        var(--sb-color),
+                        rgba(255,255,255,0.94),
+                        var(--sb-color)
+                      );
+                    background-size:220% 100%;
+                    animation:
+                      sportabase-loading-shimmer 1.8s linear infinite;
+                    transition:width 500ms ease;
+                  "
+                ></div>
+              </div>
+
+              <div
+                class="sportabase-loading-stages"
+                style="
+                  display:grid;
+                  grid-template-columns:repeat(3, minmax(0, 1fr));
+                  gap:7px;
+                  margin-top:13px;
+                "
+              >
+                <div
+                  id="sportabase-loading-stage-read"
+                  class="sportabase-loading-stage"
+                >
+                  <span class="sportabase-loading-stage-dot"></span>
+                  Read
+                </div>
+
+                <div
+                  id="sportabase-loading-stage-evaluate"
+                  class="sportabase-loading-stage"
+                >
+                  <span class="sportabase-loading-stage-dot"></span>
+                  Evaluate
+                </div>
+
+                <div
+                  id="sportabase-loading-stage-distill"
+                  class="sportabase-loading-stage"
+                >
+                  <span class="sportabase-loading-stage-dot"></span>
+                  Distill
+                </div>
+              </div>
+            </div>
+
+            <style>
+              @keyframes sportabase-loader-enter {
+                from {
+                  opacity:0;
+                  transform:translateY(-8px) scale(0.975);
+                }
+
+                to {
+                  opacity:1;
+                  transform:translateY(0) scale(1);
+                }
+              }
+
+              @keyframes sportabase-loader-orbit {
+                from {
+                  transform:rotate(0deg);
+                }
+
+                to {
+                  transform:rotate(360deg);
+                }
+              }
+
+              @keyframes sportabase-loader-core {
+                0%, 100% {
+                  transform:scale(1);
+                }
+
+                50% {
+                  transform:scale(0.93);
+                }
+              }
+
+              @keyframes sportabase-loader-dot {
+                0%, 100% {
+                  opacity:0.35;
+                  transform:scale(0.78);
+                }
+
+                50% {
+                  opacity:1;
+                  transform:scale(1);
+                }
+              }
+
+              @keyframes sportabase-loading-shimmer {
+                from {
+                  background-position:220% 50%;
+                }
+
+                to {
+                  background-position:-20% 50%;
+                }
+              }
+
+              #sportabase-loading-overlay {
+                animation:
+                  sportabase-loader-enter 260ms cubic-bezier(.2,.8,.2,1)
+                  both;
+              }
+
+              .sportabase-loader-orbit {
+                animation:
+                  sportabase-loader-orbit 1.7s linear infinite;
+              }
+
+              .sportabase-loader-core {
+                animation:
+                  sportabase-loader-core 1.7s ease-in-out infinite;
+              }
+
+              .sportabase-loader-dot {
+                width:6px;
+                height:6px;
+                display:inline-block;
+                border-radius:50%;
+                background:var(--sb-color);
+                box-shadow:0 0 9px var(--sb-soft-glow);
+                animation:
+                  sportabase-loader-dot 1.25s ease-in-out infinite;
+              }
+
+              .sportabase-loading-stage {
+                min-height:30px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                gap:6px;
+                padding:6px 8px;
+                border:1px solid var(--sb-ui-border);
+                border-radius:9px;
+                background:var(--sb-ui-raised);
+                color:var(--sb-ui-muted);
+                font-size:9.5px;
+                font-weight:700;
+                letter-spacing:0.2px;
+                transition:
+                  color 220ms ease,
+                  border-color 220ms ease,
+                  background 220ms ease,
+                  transform 220ms ease;
+              }
+
+              .sportabase-loading-stage-dot {
+                width:5px;
+                height:5px;
+                flex:0 0 auto;
+                border-radius:50%;
+                background:var(--sb-ui-border);
+                transition:
+                  background 220ms ease,
+                  box-shadow 220ms ease,
+                  transform 220ms ease;
+              }
+
+              .sportabase-loading-stage.is-active {
+                color:var(--sb-ui-text);
+                border-color:var(--sb-color);
+                background:
+                  color-mix(
+                    in srgb,
+                    var(--sb-color) 9%,
+                    var(--sb-ui-raised)
+                  );
+                transform:translateY(-1px);
+              }
+
+              .sportabase-loading-stage.is-active
+                .sportabase-loading-stage-dot {
+                background:var(--sb-color);
+                box-shadow:0 0 10px var(--sb-soft-glow);
+                animation:
+                  sportabase-loader-dot 1.15s ease-in-out infinite;
+              }
+
+              .sportabase-loading-stage.is-complete {
+                color:var(--sb-ui-text);
+                border-color:
+                  color-mix(
+                    in srgb,
+                    var(--sb-color) 35%,
+                    var(--sb-ui-border)
+                  );
+              }
+
+              .sportabase-loading-stage.is-complete
+                .sportabase-loading-stage-dot {
+                background:var(--sb-color);
+                box-shadow:0 0 7px var(--sb-soft-glow);
+              }
+
+              @media (prefers-reduced-motion: reduce) {
+                #sportabase-loading-overlay,
+                .sportabase-loader-orbit,
+                .sportabase-loader-core,
+                .sportabase-loader-dot,
+                #sportabase-loading-bar {
+                  animation:none !important;
+                }
+              }
+            </style>
+          </div>
+        `;
+      }
+
+      function showLoadingOverlay(
+        message = "Reading this story...",
+        progress = 15
+      ) {
+        const existingResult =
+          document.getElementById("sportabase-overlay");
+
         if (existingResult) existingResult.remove();
 
-        const existingLoading = document.getElementById("sportabase-loading-overlay");
+        const existingLoading =
+          document.getElementById("sportabase-loading-overlay");
+
         if (existingLoading) existingLoading.remove();
 
         const overlay = document.createElement("div");
         overlay.id = "sportabase-loading-overlay";
+        overlay.setAttribute("role", "status");
+        overlay.setAttribute("aria-live", "polite");
+
+        overlay.style.setProperty(
+          "--sb-color",
+          prefs?.sportabaseAccentMode === "custom"
+            ? prefs?.sportabaseAccentColor || "#2563eb"
+            : "#2563eb"
+        );
+
+        overlay.style.setProperty(
+          "--sb-soft-glow",
+          "rgba(37, 99, 235, 0.24)"
+        );
 
         overlay.style.position = "fixed";
         overlay.style.top = "18px";
         overlay.style.right = "18px";
-        overlay.style.width = "340px";
+        overlay.style.width = "360px";
+        overlay.style.maxWidth = "calc(100vw - 36px)";
         overlay.style.zIndex = "2147483647";
-        overlay.style.borderRadius = "22px";
-        overlay.style.padding = "16px";
-        overlay.style.background = "rgba(2, 4, 10, 0.96)";
-        overlay.style.color = "#fff";
-        overlay.style.border = "1px solid rgba(255,255,255,0.14)";
-        overlay.style.boxShadow = "0 24px 70px rgba(0,0,0,0.58)";
+        overlay.style.borderRadius = "20px";
+        overlay.style.padding = "0";
+        overlay.style.overflow = "hidden";
+        overlay.style.background = "var(--sb-ui-surface)";
+        overlay.style.border = "1px solid var(--sb-ui-border)";
+        overlay.style.boxShadow =
+          "0 24px 65px var(--sb-ui-shadow)";
         overlay.style.fontFamily =
           "Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
 
-        overlay.innerHTML = `
-          <div style="font-weight:900;font-size:15px;">
-            Sportabase is reading
-          </div>
-
-          <div
-            id="sportabase-loading-message"
-            style="
-              margin-top:8px;
-              font-size:12.5px;
-              color:rgba(255,255,255,0.74);
-              line-height:1.4;
-            "
-          >
-            ${escapeHtml(message)}
-          </div>
-
-          <div
-            style="
-              margin-top:14px;
-              height:8px;
-              border-radius:999px;
-              background:rgba(255,255,255,0.10);
-              overflow:hidden;
-            "
-          >
-            <div
-              id="sportabase-loading-bar"
-              style="
-                height:100%;
-                width:20%;
-                border-radius:999px;
-                background:linear-gradient(
-                  90deg,
-                  #2563eb,
-                  #a855f7,
-                  #14b8a6,
-                  #2563eb
-                );
-                background-size:300% 100%;
-                animation:sportabase-loading-shimmer 2s linear infinite;
-                transition:width 0.5s ease;
-              "
-            ></div>
-          </div>
-
-          <style>
-            @keyframes sportabase-loading-shimmer {
-              0% {
-                background-position: 0% 50%;
-              }
-
-              100% {
-                background-position: 300% 50%;
-              }
-            }
-          </style>
-        `;
+        overlay.innerHTML = buildSportabaseLoadingMarkup(
+          message,
+          progress,
+          "ARTICLE INTELLIGENCE"
+        );
 
         document.body.appendChild(overlay);
+        applySportabaseUiPreferences(overlay);
+        updateLoadingOverlay(message, progress);
+
       }
 
       function updateLoadingOverlay(message, progress = null) {
-        const messageEl = document.getElementById("sportabase-loading-message");
-        if (messageEl) messageEl.textContent = message;
+        const messageEl = document.getElementById(
+          "sportabase-loading-message"
+        );
 
-        const barEl = document.getElementById("sportabase-loading-bar");
-        if (barEl && progress !== null) {
-          const safeProgress = Math.max(5, Math.min(95, Number(progress)));
+        if (messageEl && message !== null) {
+          messageEl.textContent = String(message);
+        }
+
+        if (progress === null) return;
+
+        const numericProgress = Number(progress);
+
+        if (!Number.isFinite(numericProgress)) return;
+
+        const safeProgress = Math.max(
+          5,
+          Math.min(95, Math.round(numericProgress))
+        );
+
+        const barEl = document.getElementById(
+          "sportabase-loading-bar"
+        );
+
+        if (barEl) {
           barEl.style.width = `${safeProgress}%`;
+        }
+
+        const progressEl = document.getElementById(
+          "sportabase-loading-progress"
+        );
+
+        if (progressEl) {
+          const stageNumber =
+            safeProgress < 48
+              ? 1
+              : safeProgress < 78
+                ? 2
+                : 3;
+
+          progressEl.textContent =
+            `Stage ${stageNumber} of 3`;
+        }
+
+        const trackEl = document.getElementById(
+          "sportabase-loading-track"
+        );
+
+        const readStage = document.getElementById(
+          "sportabase-loading-stage-read"
+        );
+
+        const evaluateStage = document.getElementById(
+          "sportabase-loading-stage-evaluate"
+        );
+
+        const distillStage = document.getElementById(
+          "sportabase-loading-stage-distill"
+        );
+
+        const stages = [
+          readStage,
+          evaluateStage,
+          distillStage,
+        ].filter(Boolean);
+
+        stages.forEach((stage) => {
+          stage.classList.remove(
+            "is-active",
+            "is-complete"
+          );
+        });
+
+        if (safeProgress < 48) {
+          readStage?.classList.add("is-active");
+        } else {
+          readStage?.classList.add("is-complete");
+
+          if (safeProgress < 78) {
+            evaluateStage?.classList.add("is-active");
+          } else {
+            evaluateStage?.classList.add("is-complete");
+            distillStage?.classList.add("is-active");
+          }
         }
       }
 
@@ -3276,50 +5235,51 @@ async function injectAndRun(tabId) {
 
       function startLoadingTicker() {
         const steps = [
-          { message: "Reading the story...", progress: 35 },
-          { message: "Pulling out the key details...", progress: 48 },
-          { message: "Checking how solid this report looks...", progress: 60 },
-          { message: "Writing the short version...", progress: 72 },
-          { message: "Weighing the evidence...", progress: 84 },
-          { message: "Getting your readout ready...", progress: 92 },
+          {
+            message: "Extracting the main story...",
+            progress: 32,
+          },
+          {
+            message: "Separating reporting from filler...",
+            progress: 44,
+          },
+          {
+            message: "Evaluating claims and evidence...",
+            progress: 58,
+          },
+          {
+            message: "Checking context and certainty...",
+            progress: 70,
+          },
+          {
+            message: "Distilling the key takeaways...",
+            progress: 84,
+          },
+          {
+            message: "Finalizing your Sportabase readout...",
+            progress: 93,
+          },
         ];
 
         let index = 0;
 
-        updateLoadingOverlay(steps[0].message, steps[0].progress);
+        updateLoadingOverlay(
+          steps[index].message,
+          steps[index].progress
+        );
 
         return setInterval(() => {
-          index = Math.min(index + 1, steps.length - 1);
-
-          updateLoadingOverlay(
-            steps[index].message,
-            steps[index].progress
-          );
-        }, 2500);
-      }
-
-      async function getCachedScan(url) {
-        try {
-          if (!chrome?.storage?.local) return null;
-
-          const key = cacheKeyForUrl(url);
-          const result = await chrome.storage.local.get(key);
-          const cached = result[key];
-
-          if (!cached?.data || !cached?.savedAt) return null;
-
-          const ageMs = Date.now() - Number(cached.savedAt);
-
-          if (!Number.isFinite(ageMs) || ageMs > CACHE_TTL_MS) {
-            await chrome.storage.local.remove(key);
-            return null;
+          if (index < steps.length - 1) {
+            index += 1;
           }
 
-          return cached.data;
-        } catch (e) {
-          log("cache read failed:", e);
-          return null;
-        }
+          const step = steps[index];
+
+          updateLoadingOverlay(
+            step.message,
+            step.progress
+          );
+        }, 1900);
       }
 
       async function setCachedScan(url, data) {
