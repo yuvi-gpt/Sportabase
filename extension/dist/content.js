@@ -1475,6 +1475,13 @@
       window.setTimeout(resolve, milliseconds);
     });
   }
+  function waitForNextPaint() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(resolve);
+      });
+    });
+  }
   function clampScore(value) {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) {
@@ -2071,13 +2078,15 @@
         message: "Reading the article and removing page noise\u2026",
         progress: 18
       });
+      const loaderStartedAt = performance.now();
       try {
+        await waitForNextPaint();
         loader.update({
           message: "Article text found. Preparing the intelligence pass\u2026",
-          progress: 38
+          progress: 28
         });
-        await wait(180);
-        let smoothProgress = 38;
+        await wait(320);
+        let smoothProgress = 28;
         let loadingStepIndex = 0;
         loader.update({
           message: ANALYSIS_STEPS[loadingStepIndex].message,
@@ -2099,7 +2108,7 @@
             message: ANALYSIS_STEPS[loadingStepIndex].message,
             progress: smoothProgress
           });
-        }, 420);
+        }, 520);
         const apiBase = String(
           config.api || "http://127.0.0.1:8000"
         ).replace(/\/+$/, "");
@@ -2121,7 +2130,17 @@
           progress: 95
         });
         const validatedResponse = validateArticleResponse(response);
-        await wait(380);
+        const loaderElapsed = performance.now() - loaderStartedAt;
+        const remainingLoaderTime = Math.max(
+          0,
+          MINIMUM_LOADER_DURATION - loaderElapsed
+        );
+        await wait(remainingLoaderTime);
+        loader.update({
+          message: "Analysis complete. Opening your intelligence brief\u2026",
+          progress: 95
+        });
+        await wait(420);
         renderResults(
           validatedResponse,
           article
@@ -2136,7 +2155,7 @@
     }
     renderLanding();
   }
-  var ANALYSIS_STEPS;
+  var ANALYSIS_STEPS, MINIMUM_LOADER_DURATION;
   var init_article_mode2 = __esm({
     "src/content/article-mode.js"() {
       init_article_extractor();
@@ -2164,6 +2183,7 @@
           progress: 93
         }
       ];
+      MINIMUM_LOADER_DURATION = 3e3;
     }
   });
 

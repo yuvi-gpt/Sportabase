@@ -43,9 +43,19 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+const MINIMUM_LOADER_DURATION = 3000;
+
 function wait(milliseconds) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, milliseconds);
+  });
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(resolve);
+    });
   });
 }
 
@@ -844,16 +854,20 @@ export function openArticleMode({
         progress: 18,
       });
 
+    const loaderStartedAt =
+      performance.now();
+
     try {
+      await waitForNextPaint();
       loader.update({
         message:
           "Article text found. Preparing the intelligence pass…",
-        progress: 38,
+        progress: 28,
       });
 
-      await wait(180);
+      await wait(320);
 
-      let smoothProgress = 38;
+      let smoothProgress = 28;
       let loadingStepIndex = 0;
 
       loader.update({
@@ -900,7 +914,7 @@ export function openArticleMode({
               ].message,
             progress: smoothProgress,
           });
-        }, 420);
+        }, 520);
 
       const apiBase = String(
         config.api ||
@@ -931,7 +945,26 @@ export function openArticleMode({
       const validatedResponse =
         validateArticleResponse(response);
 
-      await wait(380);
+      const loaderElapsed =
+        performance.now() -
+        loaderStartedAt;
+
+      const remainingLoaderTime =
+        Math.max(
+          0,
+          MINIMUM_LOADER_DURATION -
+            loaderElapsed
+        );
+
+      await wait(remainingLoaderTime);
+
+      loader.update({
+        message:
+          "Analysis complete. Opening your intelligence brief…",
+        progress: 95,
+      });
+
+      await wait(420);
 
       renderResults(
         validatedResponse,
