@@ -795,9 +795,7 @@
     preferences = {}
   } = {}) {
     document.getElementById(OVERLAY_ID)?.remove();
-    const isVideo = mode === "video";
-    const modeLabel = isVideo ? "VIDEO INTELLIGENCE \xB7 YOUTUBE" : "ARTICLE INTELLIGENCE";
-    const pageTitle = isVideo ? document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") : document.title;
+    const modeLabel = mode === "video" ? "VIDEO INTELLIGENCE \xB7 YOUTUBE" : "ARTICLE INTELLIGENCE";
     const overlay = document.createElement("aside");
     overlay.id = OVERLAY_ID;
     overlay.className = "sb-overlay";
@@ -815,7 +813,10 @@
             Sportabase
           </div>
 
-          <div class="sb-brand-mode">
+          <div
+            class="sb-brand-mode"
+            data-sb-mode-label
+          >
             ${modeLabel}
           </div>
         </div>
@@ -871,57 +872,10 @@
       </div>
     </header>
 
-    <main class="sb-content">
-      <section class="sb-welcome-card">
-        <div class="sb-status-row">
-          <div class="sb-status-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.9"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 3v18"></path>
-              <path d="m17 8-5-5-5 5"></path>
-            </svg>
-          </div>
-
-          <div>
-            <div class="sb-card-eyebrow">
-              NEW ARCHITECTURE
-            </div>
-
-            <h2 class="sb-card-title">
-              Modular shell online
-            </h2>
-          </div>
-
-          <div class="sb-ready-pill">
-            <span></span>
-            READY
-          </div>
-        </div>
-
-        <div class="sb-page-context">
-          <div class="sb-context-label">
-            Current ${isVideo ? "video" : "page"}
-          </div>
-
-          <div class="sb-context-title">
-            ${escapeHtml(pageTitle || "Untitled")}
-          </div>
-        </div>
-
-        <p class="sb-card-description">
-          The legacy interface has been disconnected.
-          Sportabase is now running from the new modular
-          content bundle.
-        </p>
-      </section>
-    </main>
+    <main
+      class="sb-content"
+      data-sb-content
+    ></main>
   `;
     const mountTarget = document.body || document.documentElement;
     mountTarget.appendChild(overlay);
@@ -943,10 +897,24 @@
     requestAnimationFrame(() => {
       overlay.classList.add("sb-is-open");
     });
-    return overlay;
-  }
-  function escapeHtml(value) {
-    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    const content = overlay.querySelector(
+      "[data-sb-content]"
+    );
+    const modeLabelElement = overlay.querySelector(
+      "[data-sb-mode-label]"
+    );
+    return {
+      overlay,
+      content,
+      close() {
+        closeSportabaseShell(overlay);
+      },
+      setModeLabel(value) {
+        if (modeLabelElement) {
+          modeLabelElement.textContent = String(value || "");
+        }
+      }
+    };
   }
   var OVERLAY_ID;
   var init_overlay_shell = __esm({
@@ -959,19 +927,436 @@
     }
   });
 
+  // src/content/article-mode.js
+  function openArticleMode({
+    shell
+  } = {}) {
+    if (!shell?.content) return;
+    shell.setModeLabel(
+      "ARTICLE INTELLIGENCE"
+    );
+    shell.content.innerHTML = `
+    <section class="sb-welcome-card">
+      <div class="sb-card-eyebrow">
+        ARTICLE MODE
+      </div>
+
+      <h2 class="sb-card-title">
+        Article migration is next
+      </h2>
+
+      <p class="sb-card-description">
+        The modular article extractor and analysis
+        screen will be connected after Video Mode.
+      </p>
+    </section>
+  `;
+  }
+  var init_article_mode = __esm({
+    "src/content/article-mode.js"() {
+    }
+  });
+
+  // src/content/youtube-transcript.js
+  function wait(milliseconds) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+  function getTranscriptElements() {
+    for (const selector of TRANSCRIPT_SELECTORS) {
+      const elements = Array.from(
+        document.querySelectorAll(selector)
+      ).filter((element) => {
+        return element.textContent?.trim();
+      });
+      if (elements.length) {
+        return elements;
+      }
+    }
+    return [];
+  }
+  function findTranscriptButton() {
+    const directButton = document.querySelector(
+      [
+        "ytd-video-description-transcript-section-renderer button",
+        'button[aria-label*="transcript" i]',
+        'button[title*="transcript" i]'
+      ].join(", ")
+    );
+    if (directButton) {
+      return directButton;
+    }
+    return Array.from(
+      document.querySelectorAll(
+        [
+          "button",
+          "tp-yt-paper-button",
+          "ytd-button-renderer button",
+          "yt-button-shape button"
+        ].join(", ")
+      )
+    ).find((element) => {
+      const searchableText = [
+        element.textContent,
+        element.getAttribute("aria-label"),
+        element.getAttribute("title")
+      ].filter(Boolean).join(" ").trim().toLowerCase();
+      return searchableText.includes("show transcript") || searchableText === "transcript";
+    });
+  }
+  async function expandVideoDescription() {
+    const metadata = document.querySelector(
+      "ytd-watch-metadata"
+    );
+    const expandButton = metadata?.querySelector(
+      [
+        "#expand",
+        "tp-yt-paper-button#expand",
+        "ytd-text-inline-expander #expand"
+      ].join(", ")
+    );
+    if (!expandButton) return;
+    expandButton.click();
+    await wait(400);
+  }
+  async function extractYouTubeTranscript({
+    timeoutMs = 8e3
+  } = {}) {
+    let transcriptElements = getTranscriptElements();
+    if (!transcriptElements.length) {
+      let transcriptButton = findTranscriptButton();
+      if (!transcriptButton) {
+        await expandVideoDescription();
+        transcriptButton = findTranscriptButton();
+      }
+      if (!transcriptButton) {
+        throw new Error(
+          "No transcript button was found. Captions may be unavailable for this video."
+        );
+      }
+      transcriptButton.click();
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeoutMs) {
+        transcriptElements = getTranscriptElements();
+        if (transcriptElements.length) {
+          break;
+        }
+        await wait(250);
+      }
+    }
+    const segments = transcriptElements.map((element) => {
+      return element.textContent?.replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
+    const transcript = segments.join(" ").trim();
+    if (!transcript) {
+      throw new Error(
+        "The transcript panel opened, but no transcript text was found."
+      );
+    }
+    return {
+      transcript,
+      segmentCount: segments.length,
+      characterCount: transcript.length
+    };
+  }
+  var TRANSCRIPT_SELECTORS;
+  var init_youtube_transcript = __esm({
+    "src/content/youtube-transcript.js"() {
+      TRANSCRIPT_SELECTORS = [
+        'transcript-segment-view-model span[role="text"]',
+        "ytd-transcript-segment-renderer .segment-text",
+        "ytd-transcript-segment-renderer yt-formatted-string"
+      ];
+    }
+  });
+
+  // src/content/video-mode.js
+  function escapeHtml(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function getVideoTitle() {
+    return document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") || "YouTube video";
+  }
+  function getAnalyzeButtonMarkup(label) {
+    return `
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v18"></path>
+      <path d="m17 8-5-5-5 5"></path>
+    </svg>
+
+    <span>${escapeHtml(label)}</span>
+  `;
+  }
+  function openVideoMode({
+    shell
+  } = {}) {
+    if (!shell?.content) return;
+    shell.setModeLabel(
+      "VIDEO INTELLIGENCE \xB7 YOUTUBE"
+    );
+    const videoTitle = getVideoTitle();
+    shell.content.innerHTML = `
+    <div class="sb-video-layout">
+      <section class="sb-video-card">
+        <div class="sb-video-card-header">
+          <div class="sb-video-ready-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect
+                x="3"
+                y="5"
+                width="18"
+                height="14"
+                rx="3"
+              ></rect>
+
+              <path d="m10 9 5 3-5 3V9Z"></path>
+            </svg>
+          </div>
+
+          <div class="sb-video-heading">
+            <div class="sb-video-eyebrow">
+              VIDEO READY
+            </div>
+
+            <h2>Transcript-based intelligence</h2>
+          </div>
+
+          <div class="sb-video-detected-pill">
+            <span></span>
+            DETECTED
+          </div>
+        </div>
+
+        <div class="sb-video-context">
+          <div class="sb-video-context-label">
+            Current video
+          </div>
+
+          <div class="sb-video-title">
+            ${escapeHtml(videoTitle)}
+          </div>
+        </div>
+
+        <button
+          class="sb-primary-button"
+          type="button"
+          data-sb-video-analyze
+        >
+          ${getAnalyzeButtonMarkup("Analyze video")}
+        </button>
+
+        <div class="sb-video-feature-grid">
+          <div>
+            <span>01</span>
+            Transcript
+          </div>
+
+          <div>
+            <span>02</span>
+            Evidence
+          </div>
+
+          <div>
+            <span>03</span>
+            Logic
+          </div>
+        </div>
+      </section>
+
+      <div
+        class="sb-video-status"
+        data-sb-video-status
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.9"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"
+          ></path>
+
+          <path d="m9 12 2 2 4-4"></path>
+        </svg>
+
+        <span>
+          Sportabase will locate the YouTube
+          transcript automatically.
+        </span>
+      </div>
+    </div>
+  `;
+    const analyzeButton = shell.content.querySelector(
+      "[data-sb-video-analyze]"
+    );
+    const status = shell.content.querySelector(
+      "[data-sb-video-status]"
+    );
+    analyzeButton?.addEventListener(
+      "click",
+      async () => {
+        analyzeButton.disabled = true;
+        analyzeButton.classList.add(
+          "sb-button-loading"
+        );
+        analyzeButton.innerHTML = `
+        <span class="sb-button-spinner"></span>
+        <span>Finding transcript...</span>
+      `;
+        status.className = "sb-video-status sb-video-status-loading";
+        status.innerHTML = `
+        <span class="sb-status-pulse"></span>
+
+        <span>
+          Opening and reading the YouTube transcript\u2026
+        </span>
+      `;
+        try {
+          const transcriptResult = await extractYouTubeTranscript();
+          status.className = "sb-video-status sb-video-status-success";
+          status.innerHTML = `
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+
+          <div>
+            <strong>Transcript found</strong>
+
+            <span>
+              ${transcriptResult.segmentCount}
+              segments \xB7
+              ${transcriptResult.characterCount.toLocaleString()}
+              characters
+            </span>
+          </div>
+        `;
+          analyzeButton.classList.remove(
+            "sb-button-loading"
+          );
+          analyzeButton.innerHTML = `
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M20 6 9 17l-5-5"></path>
+          </svg>
+
+          <span>Transcript ready</span>
+        `;
+          console.log(
+            "[sportabase] Transcript extracted:",
+            transcriptResult
+          );
+        } catch (error) {
+          console.error(
+            "[sportabase] Transcript extraction failed:",
+            error
+          );
+          status.className = "sb-video-status sb-video-status-error";
+          status.innerHTML = `
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 8v5"></path>
+            <path d="M12 16h.01"></path>
+          </svg>
+
+          <div>
+            <strong>Transcript unavailable</strong>
+
+            <span>
+              ${escapeHtml(
+            error?.message || "The transcript could not be read."
+          )}
+            </span>
+          </div>
+        `;
+          analyzeButton.disabled = false;
+          analyzeButton.classList.remove(
+            "sb-button-loading"
+          );
+          analyzeButton.innerHTML = getAnalyzeButtonMarkup("Try again");
+        }
+      }
+    );
+  }
+  var init_video_mode = __esm({
+    "src/content/video-mode.js"() {
+      init_youtube_transcript();
+    }
+  });
+
   // src/content/index.js
   var require_index = __commonJS({
     "src/content/index.js"() {
       init_sportabase();
       init_overlay_shell();
+      init_article_mode();
+      init_video_mode();
       var config = globalThis.__SPORTABASE_BOOT_CONFIG__ || {};
-      var isYouTubeVideo = window.location.href.includes("youtube.com/watch") || document.querySelector("ytd-watch-flexy") !== null;
-      openSportabaseShell({
+      var isYouTubeVideo = window.location.href.includes(
+        "youtube.com/watch"
+      ) || document.querySelector(
+        "ytd-watch-flexy"
+      ) !== null;
+      var shell = openSportabaseShell({
         mode: isYouTubeVideo ? "video" : "article",
         preferences: config.preferences || {}
       });
+      if (isYouTubeVideo) {
+        openVideoMode({
+          shell,
+          config
+        });
+      } else {
+        openArticleMode({
+          shell,
+          config
+        });
+      }
       console.log(
-        "[sportabase] Modular shell opened:",
+        "[sportabase] Modular mode opened:",
         isYouTubeVideo ? "video" : "article"
       );
     }

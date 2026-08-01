@@ -1,5 +1,6 @@
-﻿import { getSportabaseLogoMarkup } from "./logo.js";
-
+﻿import {
+  getSportabaseLogoMarkup,
+} from "./logo.js";
 
 import {
   applyPreferences,
@@ -16,7 +17,10 @@ import {
 const OVERLAY_ID = "sportabase-root";
 
 function closeSportabaseShell(overlay) {
-  if (!overlay || overlay.dataset.closing === "true") {
+  if (
+    !overlay ||
+    overlay.dataset.closing === "true"
+  ) {
     return;
   }
 
@@ -33,25 +37,21 @@ export function openSportabaseShell({
   mode = "article",
   preferences = {},
 } = {}) {
-  document.getElementById(OVERLAY_ID)?.remove();
+  document
+    .getElementById(OVERLAY_ID)
+    ?.remove();
 
-  const isVideo = mode === "video";
+  const modeLabel =
+    mode === "video"
+      ? "VIDEO INTELLIGENCE · YOUTUBE"
+      : "ARTICLE INTELLIGENCE";
 
-  const modeLabel = isVideo
-    ? "VIDEO INTELLIGENCE · YOUTUBE"
-    : "ARTICLE INTELLIGENCE";
-
-  const pageTitle = isVideo
-    ? document
-        .querySelector("h1 yt-formatted-string")
-        ?.textContent?.trim() ||
-      document.title.replace(" - YouTube", "")
-    : document.title;
-
-  const overlay = document.createElement("aside");
+  const overlay =
+    document.createElement("aside");
 
   overlay.id = OVERLAY_ID;
   overlay.className = "sb-overlay";
+
   overlay.setAttribute(
     "aria-label",
     "Sportabase intelligence panel"
@@ -67,7 +67,10 @@ export function openSportabaseShell({
             Sportabase
           </div>
 
-          <div class="sb-brand-mode">
+          <div
+            class="sb-brand-mode"
+            data-sb-mode-label
+          >
             ${modeLabel}
           </div>
         </div>
@@ -123,68 +126,23 @@ export function openSportabaseShell({
       </div>
     </header>
 
-    <main class="sb-content">
-      <section class="sb-welcome-card">
-        <div class="sb-status-row">
-          <div class="sb-status-icon">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.9"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 3v18"></path>
-              <path d="m17 8-5-5-5 5"></path>
-            </svg>
-          </div>
-
-          <div>
-            <div class="sb-card-eyebrow">
-              NEW ARCHITECTURE
-            </div>
-
-            <h2 class="sb-card-title">
-              Modular shell online
-            </h2>
-          </div>
-
-          <div class="sb-ready-pill">
-            <span></span>
-            READY
-          </div>
-        </div>
-
-        <div class="sb-page-context">
-          <div class="sb-context-label">
-            Current ${isVideo ? "video" : "page"}
-          </div>
-
-          <div class="sb-context-title">
-            ${escapeHtml(pageTitle || "Untitled")}
-          </div>
-        </div>
-
-        <p class="sb-card-description">
-          The legacy interface has been disconnected.
-          Sportabase is now running from the new modular
-          content bundle.
-        </p>
-      </section>
-    </main>
+    <main
+      class="sb-content"
+      data-sb-content
+    ></main>
   `;
 
   const mountTarget =
-    document.body || document.documentElement;
+    document.body ||
+    document.documentElement;
 
   mountTarget.appendChild(overlay);
 
-  const resolvedPreferences = applyPreferences(
-    overlay,
-    preferences
-  );
+  const resolvedPreferences =
+    applyPreferences(
+      overlay,
+      preferences
+    );
 
   installSettingsDrawer({
     overlay,
@@ -206,14 +164,28 @@ export function openSportabaseShell({
     overlay.classList.add("sb-is-open");
   });
 
-  return overlay;
-}
+  const content = overlay.querySelector(
+    "[data-sb-content]"
+  );
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+  const modeLabelElement =
+    overlay.querySelector(
+      "[data-sb-mode-label]"
+    );
+
+  return {
+    overlay,
+    content,
+
+    close() {
+      closeSportabaseShell(overlay);
+    },
+
+    setModeLabel(value) {
+      if (modeLabelElement) {
+        modeLabelElement.textContent =
+          String(value || "");
+      }
+    },
+  };
 }
