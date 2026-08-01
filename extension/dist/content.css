@@ -28,12 +28,12 @@
   background:
     radial-gradient(
       circle at 100% 0%,
-      rgba(124, 58, 237, 0.14),
+      color-mix(in srgb, var(--sb-accent) 14%, transparent),
       transparent 38%),
     linear-gradient(
       180deg,
-      #121214 0%,
-      #0c0c0e 100%);
+      var(--sb-panel-top) 0%,
+      var(--sb-panel-bottom) 100%);
   color: var(--sb-text);
   box-shadow: 0 24px 70px var(--sb-shadow), 0 0 30px rgba(124, 58, 237, 0.12);
   font-family:
@@ -66,7 +66,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 16px 18px;
-  background: rgba(16, 16, 18, 0.92);
+  background: var(--sb-header-background);
   border-bottom: 1px solid var(--sb-divider);
   backdrop-filter: blur(18px) saturate(135%);
 }
@@ -161,7 +161,7 @@
 }
 #sportabase-root .sb-icon-button:hover {
   border-color: var(--sb-accent);
-  background: #2a2a2f;
+  background: var(--sb-surface);
   transform: translateY(-1px);
 }
 #sportabase-root .sb-icon-button:active {
@@ -272,6 +272,18 @@
   font-size: 12px;
   font-weight: 580;
   line-height: 1.55;
+}
+#sportabase-root.sb-high-contrast {
+  border-width: 2px;
+  border-color: var(--sb-text);
+}
+#sportabase-root[data-sb-glow=off] {
+  box-shadow: 0 24px 70px var(--sb-shadow);
+}
+#sportabase-root[data-sb-motion=none],
+#sportabase-root[data-sb-motion=none] * {
+  animation: none !important;
+  transition: none !important;
 }
 @media (max-width: 520px) {
   #sportabase-root {

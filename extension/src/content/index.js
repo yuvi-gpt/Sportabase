@@ -25,6 +25,7 @@ if (!globalThis.__SPORTABASE_CONTENT_LOADED__) {
 
       openSportabaseShell({
         mode: isYouTubeVideo ? "video" : "article",
+        preferences: message.config?.preferences || {},
       });
 
       sendResponse({

@@ -1,5 +1,11 @@
 ﻿import { getSportabaseLogoMarkup } from "./logo.js";
 
+
+import {
+  applyPreferences,
+} from "./preferences.js";
+
+
 const OVERLAY_ID = "sportabase-root";
 
 function closeSportabaseShell(overlay) {
@@ -18,6 +24,7 @@ function closeSportabaseShell(overlay) {
 
 export function openSportabaseShell({
   mode = "article",
+  preferences = {},
 } = {}) {
   document.getElementById(OVERLAY_ID)?.remove();
 
@@ -134,6 +141,8 @@ export function openSportabaseShell({
   `;
 
   document.documentElement.appendChild(overlay);
+
+  applyPreferences(overlay, preferences);
 
   overlay
     .querySelector("[data-sb-close]")
