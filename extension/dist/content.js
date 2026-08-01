@@ -2110,7 +2110,7 @@
           });
         }, 520);
         const apiBase = String(
-          config.api || "http://127.0.0.1:8000"
+          config.api || "https://sportabase-api.onrender.com"
         ).replace(/\/+$/, "");
         const response = await postJson(
           `${apiBase}/analyze`,
@@ -2899,7 +2899,7 @@
           );
         }, 1900);
         const apiBase = String(
-          config.api || "http://127.0.0.1:8000"
+          config.api || "https://sportabase-api.onrender.com"
         ).replace(/\/+$/, "");
         const response = await postJson(
           `${apiBase}/analyze/video`,
