@@ -34,6 +34,12 @@
     }
   });
 
+  // src/styles/article-mode.css
+  var init_article_mode = __esm({
+    "src/styles/article-mode.css"() {
+    }
+  });
+
   // src/ui/logo.js
   function getSportabaseLogoMarkup() {
     return `
@@ -939,146 +945,172 @@
     }
   });
 
-  // src/content/article-mode.js
-  function openArticleMode({
-    shell
-  } = {}) {
-    if (!shell?.content) return;
-    shell.setModeLabel(
-      "ARTICLE INTELLIGENCE"
-    );
-    shell.content.innerHTML = `
-    <section class="sb-welcome-card">
-      <div class="sb-card-eyebrow">
-        ARTICLE MODE
-      </div>
-
-      <h2 class="sb-card-title">
-        Article migration is next
-      </h2>
-
-      <p class="sb-card-description">
-        The modular article extractor and analysis
-        screen will be connected after Video Mode.
-      </p>
-    </section>
-  `;
+  // src/content/article-extractor.js
+  function normalizeText(value) {
+    return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
-  var init_article_mode = __esm({
-    "src/content/article-mode.js"() {
+  function extractTextFromElement(element) {
+    if (!element) return "";
+    const clone = element.cloneNode(true);
+    for (const selector of NOISE_SELECTORS) {
+      clone.querySelectorAll(selector).forEach((node) => node.remove());
     }
-  });
-
-  // src/content/youtube-transcript.js
-  function wait(milliseconds) {
-    return new Promise((resolve) => {
-      window.setTimeout(resolve, milliseconds);
-    });
-  }
-  function getTranscriptElements() {
-    for (const selector of TRANSCRIPT_SELECTORS) {
-      const elements = Array.from(
-        document.querySelectorAll(selector)
-      ).filter((element) => {
-        return element.textContent?.trim();
-      });
-      if (elements.length) {
-        return elements;
-      }
-    }
-    return [];
-  }
-  function findTranscriptButton() {
-    const directButton = document.querySelector(
-      [
-        "ytd-video-description-transcript-section-renderer button",
-        'button[aria-label*="transcript" i]',
-        'button[title*="transcript" i]'
-      ].join(", ")
-    );
-    if (directButton) {
-      return directButton;
-    }
-    return Array.from(
-      document.querySelectorAll(
-        [
-          "button",
-          "tp-yt-paper-button",
-          "ytd-button-renderer button",
-          "yt-button-shape button"
-        ].join(", ")
+    const paragraphs = Array.from(
+      clone.querySelectorAll(
+        "p, h2, h3, blockquote, li"
       )
-    ).find((element) => {
-      const searchableText = [
-        element.textContent,
-        element.getAttribute("aria-label"),
-        element.getAttribute("title")
-      ].filter(Boolean).join(" ").trim().toLowerCase();
-      return searchableText.includes("show transcript") || searchableText === "transcript";
-    });
-  }
-  async function expandVideoDescription() {
-    const metadata = document.querySelector(
-      "ytd-watch-metadata"
-    );
-    const expandButton = metadata?.querySelector(
-      [
-        "#expand",
-        "tp-yt-paper-button#expand",
-        "ytd-text-inline-expander #expand"
-      ].join(", ")
-    );
-    if (!expandButton) return;
-    expandButton.click();
-    await wait(400);
-  }
-  async function extractYouTubeTranscript({
-    timeoutMs = 8e3
-  } = {}) {
-    let transcriptElements = getTranscriptElements();
-    if (!transcriptElements.length) {
-      let transcriptButton = findTranscriptButton();
-      if (!transcriptButton) {
-        await expandVideoDescription();
-        transcriptButton = findTranscriptButton();
-      }
-      if (!transcriptButton) {
-        throw new Error(
-          "No transcript button was found. Captions may be unavailable for this video."
-        );
-      }
-      transcriptButton.click();
-      const startedAt = Date.now();
-      while (Date.now() - startedAt < timeoutMs) {
-        transcriptElements = getTranscriptElements();
-        if (transcriptElements.length) {
-          break;
-        }
-        await wait(250);
-      }
-    }
-    const segments = transcriptElements.map((element) => {
-      return element.textContent?.replace(/\s+/g, " ").trim();
-    }).filter(Boolean);
-    const transcript = segments.join(" ").trim();
-    if (!transcript) {
-      throw new Error(
-        "The transcript panel opened, but no transcript text was found."
+    ).map(
+      (node) => normalizeText(node.innerText || node.textContent)
+    ).filter((text) => text.length >= 25);
+    if (paragraphs.length >= 3) {
+      return normalizeText(
+        paragraphs.join("\n\n")
       );
     }
+    return normalizeText(
+      clone.innerText || clone.textContent
+    );
+  }
+  function scoreCandidate(element, text) {
+    if (!text) return -Infinity;
+    const paragraphCount = element.querySelectorAll("p").length;
+    const headingCount = element.querySelectorAll("h1, h2, h3").length;
+    const linkTextLength = Array.from(
+      element.querySelectorAll("a")
+    ).reduce(
+      (total, link) => total + normalizeText(
+        link.innerText || link.textContent
+      ).length,
+      0
+    );
+    const linkDensity = text.length > 0 ? linkTextLength / text.length : 1;
+    return text.length + paragraphCount * 140 + headingCount * 45 - linkDensity * 1200;
+  }
+  function getArticleTitle() {
+    const candidates = [
+      document.querySelector(
+        'meta[property="og:title"]'
+      )?.getAttribute("content"),
+      document.querySelector(
+        'meta[name="twitter:title"]'
+      )?.getAttribute("content"),
+      document.querySelector("article h1")?.textContent,
+      document.querySelector("main h1")?.textContent,
+      document.querySelector("h1")?.textContent,
+      document.title
+    ];
+    return candidates.map(normalizeText).find(Boolean) || "Untitled sports article";
+  }
+  function extractArticlePage({
+    maxCharacters = 6e3
+  } = {}) {
+    const candidates = [];
+    const seenElements = /* @__PURE__ */ new Set();
+    for (const selector of ARTICLE_SELECTORS) {
+      const elements = document.querySelectorAll(selector);
+      for (const element of elements) {
+        if (!element || seenElements.has(element)) {
+          continue;
+        }
+        seenElements.add(element);
+        const text2 = extractTextFromElement(element);
+        if (text2.length < 200) continue;
+        candidates.push({
+          selector,
+          element,
+          text: text2,
+          score: scoreCandidate(
+            element,
+            text2
+          )
+        });
+      }
+    }
+    if (!candidates.length && document.body) {
+      const fallbackText = extractTextFromElement(document.body);
+      if (fallbackText.length >= 200) {
+        candidates.push({
+          selector: "body",
+          element: document.body,
+          text: fallbackText,
+          score: scoreCandidate(
+            document.body,
+            fallbackText
+          )
+        });
+      }
+    }
+    candidates.sort(
+      (left, right) => right.score - left.score
+    );
+    const bestCandidate = candidates[0] || null;
+    const fullText = bestCandidate?.text || "";
+    const safeLimit = Math.max(
+      1e3,
+      Number(maxCharacters) || 6e3
+    );
+    const text = fullText.slice(0, safeLimit).trim();
     return {
-      transcript,
-      segmentCount: segments.length,
-      characterCount: transcript.length
+      title: getArticleTitle(),
+      url: window.location.href,
+      hostname: window.location.hostname,
+      text,
+      fullCharacterCount: fullText.length,
+      characterCount: text.length,
+      paragraphCount: text ? text.split(/\n{2,}/).length : 0,
+      selector: bestCandidate?.selector || null
     };
   }
-  var TRANSCRIPT_SELECTORS;
-  var init_youtube_transcript = __esm({
-    "src/content/youtube-transcript.js"() {
-      TRANSCRIPT_SELECTORS = [
-        'transcript-segment-view-model span[role="text"]',
-        "ytd-transcript-segment-renderer .segment-text",
-        "ytd-transcript-segment-renderer yt-formatted-string"
+  var ARTICLE_SELECTORS, NOISE_SELECTORS;
+  var init_article_extractor = __esm({
+    "src/content/article-extractor.js"() {
+      ARTICLE_SELECTORS = [
+        "article",
+        "main article",
+        "[role='main'] article",
+        "main",
+        "section article",
+        "div[data-testid='Body']",
+        "div[data-testid='article-body']",
+        ".Story__Body",
+        ".story__body",
+        ".article-body",
+        ".article__body",
+        ".RichTextContainer",
+        ".Article__Content",
+        ".article__content",
+        "[data-module='ArticleBody']"
+      ];
+      NOISE_SELECTORS = [
+        "script",
+        "style",
+        "noscript",
+        "svg",
+        "canvas",
+        "iframe",
+        "nav",
+        "footer",
+        "aside",
+        "form",
+        "button",
+        "input",
+        "textarea",
+        "select",
+        "[aria-hidden='true']",
+        "[hidden]",
+        "[role='navigation']",
+        "[role='banner']",
+        "[role='complementary']",
+        ".advertisement",
+        ".advert",
+        ".ads",
+        ".ad",
+        ".social-share",
+        ".share-tools",
+        ".newsletter",
+        ".related-content",
+        ".recommended-content",
+        ".comments"
       ];
     }
   });
@@ -1390,11 +1422,11 @@
     }
   });
 
-  // src/content/video-mode.js
+  // src/content/article-mode.js
   function escapeHtml2(value) {
     return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
   }
-  function wait2(milliseconds) {
+  function wait(milliseconds) {
     return new Promise((resolve) => {
       window.setTimeout(resolve, milliseconds);
     });
@@ -1411,15 +1443,12 @@
   }
   function humanizeLabel(value) {
     const normalized = String(
-      value || "Video analysis"
+      value || "Article analysis"
     ).trim().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
     return normalized.replace(
       /\b\w/g,
       (character) => character.toUpperCase()
     );
-  }
-  function getVideoTitle() {
-    return document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") || "YouTube video";
   }
   function getScoreColor(score) {
     if (score < 35) return "#ef4444";
@@ -1428,6 +1457,102 @@
     if (score < 80) return "#8b5cf6";
     if (score < 90) return "#14b8a6";
     return "#22c55e";
+  }
+  function normalizeStringList(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => {
+        if (item && typeof item === "object") {
+          return String(
+            item.text || item.summary || item.point || item.claim || item.label || ""
+          ).trim();
+        }
+        return String(item || "").trim();
+      }).filter(Boolean);
+    }
+    if (typeof value === "string") {
+      return value.split(/\n+|•|\u2022/).map(
+        (item) => item.replace(/^[-*]\s*/, "").trim()
+      ).filter(Boolean);
+    }
+    return [];
+  }
+  function getSummaryItems(data) {
+    const candidates = [
+      data.tldr,
+      data.tl_dr,
+      data.summary_bullets,
+      data.bullets,
+      data.key_points,
+      data.summary
+    ];
+    for (const candidate of candidates) {
+      const items = normalizeStringList(candidate);
+      if (items.length) {
+        return items.slice(0, 5);
+      }
+    }
+    return [
+      "No summary bullets were returned."
+    ];
+  }
+  function getTags(data) {
+    const candidates = [
+      data.tags,
+      data.entities,
+      data.topics,
+      data.teams
+    ];
+    for (const candidate of candidates) {
+      const tags = normalizeStringList(candidate);
+      if (tags.length) {
+        return tags.slice(0, 8);
+      }
+    }
+    return [];
+  }
+  function getMeritScore(data) {
+    return clampScore(
+      data.merit_score ?? data.score ?? data.overall_score ?? data.substance_score ?? 0
+    );
+  }
+  function getReason(data) {
+    return String(
+      data.reason || data.merit_reason || data.score_reason || data.explanation || data.why_it_matters || "No scoring explanation was returned."
+    ).trim();
+  }
+  function getArticleType(data) {
+    return humanizeLabel(
+      data.article_type || data.content_type || data.category || data.story_type || "Article analysis"
+    );
+  }
+  function validateArticleResponse(data) {
+    if (!data || typeof data !== "object") {
+      throw new SportabaseApiError(
+        "Sportabase returned an empty article analysis."
+      );
+    }
+    const status = String(
+      data.status || ""
+    ).toLowerCase();
+    const verdict = String(
+      data.verdict || ""
+    ).toLowerCase();
+    if (status === "analysis_failed" || verdict === "analysis_failed") {
+      throw new SportabaseApiError(
+        String(
+          data.debug?.error || data.error || data.message || "The AI analysis could not be completed."
+        )
+      );
+    }
+    return data;
+  }
+  function getFriendlyErrorMessage(error) {
+    if (error instanceof SportabaseApiError) {
+      return error.message;
+    }
+    return String(
+      error?.message || error || ""
+    ).trim() || "Sportabase could not analyze this article right now.";
   }
   function getAnalyzeButtonMarkup(label) {
     return `
@@ -1445,6 +1570,694 @@
     </svg>
 
     <span>${escapeHtml2(label)}</span>
+  `;
+  }
+  function openArticleMode({
+    shell,
+    config = {}
+  } = {}) {
+    if (!shell?.content) return;
+    let analysisRunning = false;
+    let loadingTicker = null;
+    const baseAccent = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent").trim() || "#7c3aed";
+    const baseAccentBright = getComputedStyle(shell.overlay).getPropertyValue(
+      "--sb-accent-bright"
+    ).trim() || baseAccent;
+    function applyResultAccent(color) {
+      shell.overlay.style.setProperty(
+        "--sb-accent",
+        color
+      );
+      shell.overlay.style.setProperty(
+        "--sb-accent-bright",
+        color
+      );
+      shell.overlay.style.setProperty(
+        "--sb-score-color",
+        color
+      );
+      shell.overlay.style.setProperty(
+        "--sb-analysis-accent",
+        color
+      );
+      shell.overlay.classList.add(
+        "sb-has-analysis-accent"
+      );
+    }
+    function clearResultAccent() {
+      shell.overlay.style.setProperty(
+        "--sb-accent",
+        baseAccent
+      );
+      shell.overlay.style.setProperty(
+        "--sb-accent-bright",
+        baseAccentBright
+      );
+      shell.overlay.style.removeProperty(
+        "--sb-score-color"
+      );
+      shell.overlay.style.removeProperty(
+        "--sb-analysis-accent"
+      );
+      shell.overlay.classList.remove(
+        "sb-has-analysis-accent"
+      );
+    }
+    function stopLoadingTicker() {
+      if (!loadingTicker) return;
+      window.clearInterval(
+        loadingTicker
+      );
+      loadingTicker = null;
+    }
+    function getCurrentArticle() {
+      const configuredLimit = Number(
+        config.maxAnalyzeChars || config.max_analyze_chars || 6e3
+      );
+      return extractArticlePage({
+        maxCharacters: Number.isFinite(configuredLimit) ? configuredLimit : 6e3
+      });
+    }
+    function renderLanding() {
+      stopLoadingTicker();
+      clearResultAccent();
+      analysisRunning = false;
+      const article = getCurrentArticle();
+      const articleDetected = article.characterCount >= 300;
+      shell.setModeLabel(
+        articleDetected ? "ARTICLE INTELLIGENCE \xB7 READY" : "ARTICLE INTELLIGENCE \xB7 LIMITED"
+      );
+      shell.content.innerHTML = `
+      <div class="sb-article-layout">
+        <section class="sb-article-card">
+          <div class="sb-article-card-header">
+            <div class="sb-article-ready-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M6 3h9l4 4v14H6z"
+                ></path>
+
+                <path d="M14 3v5h5"></path>
+                <path d="M9 13h6"></path>
+                <path d="M9 17h6"></path>
+              </svg>
+            </div>
+
+            <div class="sb-article-heading">
+              <div class="sb-article-eyebrow">
+                ${articleDetected ? "ARTICLE READY" : "LIMITED TEXT"}
+              </div>
+
+              <h2>
+                Evidence-first article intelligence
+              </h2>
+            </div>
+
+            <div class="sb-article-detected-pill">
+              <span></span>
+
+              ${articleDetected ? "DETECTED" : "CHECK PAGE"}
+            </div>
+          </div>
+
+          <div class="sb-article-context">
+            <div class="sb-article-context-label">
+              Current story
+            </div>
+
+            <div class="sb-article-title">
+              ${escapeHtml2(article.title)}
+            </div>
+
+            <div class="sb-article-source">
+              ${escapeHtml2(article.hostname)}
+              \xB7
+              ${article.characterCount.toLocaleString()}
+              characters
+            </div>
+          </div>
+
+          <button
+            class="sb-primary-button"
+            type="button"
+            data-sb-article-analyze
+            ${articleDetected ? "" : "disabled"}
+          >
+            ${getAnalyzeButtonMarkup(
+        articleDetected ? "Analyze article" : "Article text unavailable"
+      )}
+          </button>
+
+          <div class="sb-article-feature-grid">
+            <div>
+              <span>01</span>
+              Summary
+            </div>
+
+            <div>
+              <span>02</span>
+              Merit
+            </div>
+
+            <div>
+              <span>03</span>
+              Evidence
+            </div>
+          </div>
+        </section>
+
+        <div class="sb-article-status">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.9"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"
+            ></path>
+
+            <path d="m9 12 2 2 4-4"></path>
+          </svg>
+
+          <span>
+            ${articleDetected ? "Sportabase found readable article text on this page." : "Open the full article page, then refresh and try again."}
+          </span>
+        </div>
+      </div>
+    `;
+      if (articleDetected) {
+        shell.content.querySelector(
+          "[data-sb-article-analyze]"
+        )?.addEventListener(
+          "click",
+          runAnalysis
+        );
+      }
+    }
+    function renderError(error) {
+      stopLoadingTicker();
+      clearResultAccent();
+      analysisRunning = false;
+      shell.setModeLabel(
+        "ARTICLE INTELLIGENCE \xB7 UNAVAILABLE"
+      );
+      shell.content.innerHTML = `
+      <div class="sb-article-state-layout">
+        <section class="sb-article-error-card">
+          <div class="sb-article-state-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+              ></circle>
+
+              <path d="M12 8v5"></path>
+              <path d="M12 16h.01"></path>
+            </svg>
+          </div>
+
+          <div class="sb-article-state-eyebrow">
+            ANALYSIS UNAVAILABLE
+          </div>
+
+          <h2>
+            Sportabase could not finish this readout
+          </h2>
+
+          <p>
+            ${escapeHtml2(
+        getFriendlyErrorMessage(error)
+      )}
+          </p>
+
+          <button
+            class="sb-primary-button"
+            type="button"
+            data-sb-article-retry
+          >
+            ${getAnalyzeButtonMarkup(
+        "Try again"
+      )}
+          </button>
+
+          <button
+            class="sb-secondary-button"
+            type="button"
+            data-sb-article-back
+          >
+            Return to article overview
+          </button>
+        </section>
+      </div>
+    `;
+      shell.content.querySelector(
+        "[data-sb-article-retry]"
+      )?.addEventListener(
+        "click",
+        runAnalysis
+      );
+      shell.content.querySelector(
+        "[data-sb-article-back]"
+      )?.addEventListener(
+        "click",
+        renderLanding
+      );
+    }
+    function renderResults(data, article) {
+      stopLoadingTicker();
+      analysisRunning = false;
+      const meritScore = getMeritScore(data);
+      const scoreColor = getScoreColor(meritScore);
+      const articleType = getArticleType(data);
+      const summaryItems = getSummaryItems(data);
+      const tags = getTags(data);
+      const summaryMarkup = summaryItems.map(
+        (item) => `
+            <li>
+              ${escapeHtml2(item)}
+            </li>
+          `
+      ).join("");
+      const tagsMarkup = tags.length ? `
+            <div class="sb-article-tags">
+              ${tags.map(
+        (tag) => `
+                    <span>
+                      ${escapeHtml2(tag)}
+                    </span>
+                  `
+      ).join("")}
+            </div>
+          ` : "";
+      applyResultAccent(scoreColor);
+      shell.setModeLabel(
+        `ARTICLE INTELLIGENCE \xB7 ${articleType.toUpperCase()}`
+      );
+      shell.content.innerHTML = `
+      <div class="sb-article-results">
+        <section class="sb-article-score-card">
+          <div class="sb-article-score-top">
+            <div>
+              <div class="sb-article-result-eyebrow">
+                MERIT SCORE
+              </div>
+
+              <div class="sb-article-score">
+                <strong>
+                  ${meritScore}
+                </strong>
+
+                <span>/100</span>
+              </div>
+            </div>
+
+            <div class="sb-article-type-pill">
+              ${escapeHtml2(articleType)}
+            </div>
+          </div>
+
+          <div class="sb-article-score-track">
+            <div
+              style="width:${meritScore}%;"
+            ></div>
+          </div>
+
+          <div class="sb-article-analysis-meta">
+            ${article.characterCount.toLocaleString()}
+            characters analyzed \xB7
+            ${article.paragraphCount}
+            content blocks
+          </div>
+        </section>
+
+        <section class="sb-article-summary-card">
+          <div class="sb-article-section-label">
+            TL;DR
+          </div>
+
+          <ul>
+            ${summaryMarkup}
+          </ul>
+        </section>
+
+        <section class="sb-article-reason-card">
+          <div class="sb-article-section-label">
+            Why it scored this way
+          </div>
+
+          <p>
+            ${escapeHtml2(getReason(data))}
+          </p>
+        </section>
+
+        ${tagsMarkup}
+
+        <section class="sb-article-source-card">
+          <div class="sb-article-section-label">
+            Analyzed story
+          </div>
+
+          <div class="sb-article-source-title">
+            ${escapeHtml2(article.title)}
+          </div>
+
+          <div class="sb-article-source-domain">
+            ${escapeHtml2(article.hostname)}
+          </div>
+        </section>
+
+        <div class="sb-article-result-actions">
+          <button
+            class="sb-secondary-button"
+            type="button"
+            data-sb-article-overview
+          >
+            Article overview
+          </button>
+
+          <button
+            class="sb-primary-button"
+            type="button"
+            data-sb-article-reanalyze
+          >
+            ${getAnalyzeButtonMarkup(
+        "Analyze again"
+      )}
+          </button>
+        </div>
+      </div>
+    `;
+      shell.content.querySelector(
+        "[data-sb-article-overview]"
+      )?.addEventListener(
+        "click",
+        renderLanding
+      );
+      shell.content.querySelector(
+        "[data-sb-article-reanalyze]"
+      )?.addEventListener(
+        "click",
+        runAnalysis
+      );
+    }
+    async function runAnalysis() {
+      if (analysisRunning) return;
+      analysisRunning = true;
+      stopLoadingTicker();
+      clearResultAccent();
+      const article = getCurrentArticle();
+      if (article.characterCount < 300) {
+        renderError(
+          new SportabaseApiError(
+            "Sportabase could not find enough readable article text on this page."
+          )
+        );
+        return;
+      }
+      shell.setModeLabel(
+        "ARTICLE INTELLIGENCE \xB7 ANALYZING"
+      );
+      const loader = createAnalysisLoader({
+        container: shell.content,
+        modeLabel: "ARTICLE INTELLIGENCE",
+        message: "Reading the article and removing page noise\u2026",
+        progress: 18
+      });
+      try {
+        loader.update({
+          message: "Article text found. Preparing the intelligence pass\u2026",
+          progress: 38
+        });
+        await wait(320);
+        let loadingStepIndex = 0;
+        loader.update(
+          ANALYSIS_STEPS[loadingStepIndex]
+        );
+        loadingTicker = window.setInterval(() => {
+          if (loadingStepIndex < ANALYSIS_STEPS.length - 1) {
+            loadingStepIndex += 1;
+          }
+          loader.update(
+            ANALYSIS_STEPS[loadingStepIndex]
+          );
+        }, 1900);
+        const apiBase = String(
+          config.api || "http://127.0.0.1:8000"
+        ).replace(/\/+$/, "");
+        const response = await postJson(
+          `${apiBase}/analyze`,
+          {
+            title: article.title,
+            url: article.url,
+            text: article.text,
+            max_bullets: 3
+          },
+          {
+            timeoutMs: 12e4
+          }
+        );
+        stopLoadingTicker();
+        loader.update({
+          message: "Finalizing your Sportabase article brief\u2026",
+          progress: 95
+        });
+        const validatedResponse = validateArticleResponse(response);
+        await wait(380);
+        renderResults(
+          validatedResponse,
+          article
+        );
+      } catch (error) {
+        console.error(
+          "[sportabase] Article analysis failed:",
+          error
+        );
+        renderError(error);
+      }
+    }
+    renderLanding();
+  }
+  var ANALYSIS_STEPS;
+  var init_article_mode2 = __esm({
+    "src/content/article-mode.js"() {
+      init_article_extractor();
+      init_api();
+      init_loader2();
+      ANALYSIS_STEPS = [
+        {
+          message: "Identifying the article's central story\u2026",
+          progress: 50
+        },
+        {
+          message: "Separating reporting from filler\u2026",
+          progress: 62
+        },
+        {
+          message: "Evaluating evidence and sourcing\u2026",
+          progress: 74
+        },
+        {
+          message: "Scoring substance and credibility\u2026",
+          progress: 86
+        },
+        {
+          message: "Distilling the final intelligence brief\u2026",
+          progress: 93
+        }
+      ];
+    }
+  });
+
+  // src/content/youtube-transcript.js
+  function wait2(milliseconds) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+  function getTranscriptElements() {
+    for (const selector of TRANSCRIPT_SELECTORS) {
+      const elements = Array.from(
+        document.querySelectorAll(selector)
+      ).filter((element) => {
+        return element.textContent?.trim();
+      });
+      if (elements.length) {
+        return elements;
+      }
+    }
+    return [];
+  }
+  function findTranscriptButton() {
+    const directButton = document.querySelector(
+      [
+        "ytd-video-description-transcript-section-renderer button",
+        'button[aria-label*="transcript" i]',
+        'button[title*="transcript" i]'
+      ].join(", ")
+    );
+    if (directButton) {
+      return directButton;
+    }
+    return Array.from(
+      document.querySelectorAll(
+        [
+          "button",
+          "tp-yt-paper-button",
+          "ytd-button-renderer button",
+          "yt-button-shape button"
+        ].join(", ")
+      )
+    ).find((element) => {
+      const searchableText = [
+        element.textContent,
+        element.getAttribute("aria-label"),
+        element.getAttribute("title")
+      ].filter(Boolean).join(" ").trim().toLowerCase();
+      return searchableText.includes("show transcript") || searchableText === "transcript";
+    });
+  }
+  async function expandVideoDescription() {
+    const metadata = document.querySelector(
+      "ytd-watch-metadata"
+    );
+    const expandButton = metadata?.querySelector(
+      [
+        "#expand",
+        "tp-yt-paper-button#expand",
+        "ytd-text-inline-expander #expand"
+      ].join(", ")
+    );
+    if (!expandButton) return;
+    expandButton.click();
+    await wait2(400);
+  }
+  async function extractYouTubeTranscript({
+    timeoutMs = 8e3
+  } = {}) {
+    let transcriptElements = getTranscriptElements();
+    if (!transcriptElements.length) {
+      let transcriptButton = findTranscriptButton();
+      if (!transcriptButton) {
+        await expandVideoDescription();
+        transcriptButton = findTranscriptButton();
+      }
+      if (!transcriptButton) {
+        throw new Error(
+          "No transcript button was found. Captions may be unavailable for this video."
+        );
+      }
+      transcriptButton.click();
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeoutMs) {
+        transcriptElements = getTranscriptElements();
+        if (transcriptElements.length) {
+          break;
+        }
+        await wait2(250);
+      }
+    }
+    const segments = transcriptElements.map((element) => {
+      return element.textContent?.replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
+    const transcript = segments.join(" ").trim();
+    if (!transcript) {
+      throw new Error(
+        "The transcript panel opened, but no transcript text was found."
+      );
+    }
+    return {
+      transcript,
+      segmentCount: segments.length,
+      characterCount: transcript.length
+    };
+  }
+  var TRANSCRIPT_SELECTORS;
+  var init_youtube_transcript = __esm({
+    "src/content/youtube-transcript.js"() {
+      TRANSCRIPT_SELECTORS = [
+        'transcript-segment-view-model span[role="text"]',
+        "ytd-transcript-segment-renderer .segment-text",
+        "ytd-transcript-segment-renderer yt-formatted-string"
+      ];
+    }
+  });
+
+  // src/content/video-mode.js
+  function escapeHtml3(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function wait3(milliseconds) {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+  function clampScore2(value) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return 0;
+    }
+    return Math.max(
+      0,
+      Math.min(100, Math.round(numericValue))
+    );
+  }
+  function humanizeLabel2(value) {
+    const normalized = String(
+      value || "Video analysis"
+    ).trim().replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ");
+    return normalized.replace(
+      /\b\w/g,
+      (character) => character.toUpperCase()
+    );
+  }
+  function getVideoTitle() {
+    return document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") || "YouTube video";
+  }
+  function getScoreColor2(score) {
+    if (score < 35) return "#ef4444";
+    if (score < 50) return "#f59e0b";
+    if (score < 65) return "#3b82f6";
+    if (score < 80) return "#8b5cf6";
+    if (score < 90) return "#14b8a6";
+    return "#22c55e";
+  }
+  function getAnalyzeButtonMarkup2(label) {
+    return `
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3v18"></path>
+      <path d="m17 8-5-5-5 5"></path>
+    </svg>
+
+    <span>${escapeHtml3(label)}</span>
   `;
   }
   function validateVideoResponse(data) {
@@ -1469,7 +2282,7 @@
     }
     return data;
   }
-  function getFriendlyErrorMessage(error) {
+  function getFriendlyErrorMessage2(error) {
     if (error instanceof SportabaseApiError) {
       return error.message;
     }
@@ -1600,7 +2413,7 @@
             </div>
 
             <div class="sb-video-title">
-              ${escapeHtml2(videoTitle)}
+              ${escapeHtml3(videoTitle)}
             </div>
           </div>
 
@@ -1609,7 +2422,7 @@
             type="button"
             data-sb-video-analyze
           >
-            ${getAnalyzeButtonMarkup(
+            ${getAnalyzeButtonMarkup2(
         "Analyze video"
       )}
           </button>
@@ -1667,7 +2480,7 @@
       stopLoadingTicker();
       analysisRunning = false;
       clearResultAccent();
-      const friendlyMessage = getFriendlyErrorMessage(error);
+      const friendlyMessage = getFriendlyErrorMessage2(error);
       shell.setModeLabel(
         "VIDEO INTELLIGENCE \xB7 UNAVAILABLE"
       );
@@ -1704,7 +2517,7 @@
           </h2>
 
           <p>
-            ${escapeHtml2(friendlyMessage)}
+            ${escapeHtml3(friendlyMessage)}
           </p>
 
           <button
@@ -1762,22 +2575,22 @@
     function renderResults(data, transcriptResult) {
       stopLoadingTicker();
       analysisRunning = false;
-      const evidenceScore = clampScore(data.evidence_score);
-      const logicScore = clampScore(data.logic_score);
+      const evidenceScore = clampScore2(data.evidence_score);
+      const logicScore = clampScore2(data.logic_score);
       const supportScore = Math.round(
         (evidenceScore + logicScore) / 2
       );
-      const scoreColor = getScoreColor(supportScore);
-      const verdictLabel = humanizeLabel(
+      const scoreColor = getScoreColor2(supportScore);
+      const verdictLabel = humanizeLabel2(
         data.verdict || "Assessment complete"
       );
-      const contentTypeLabel = humanizeLabel(
+      const contentTypeLabel = humanizeLabel2(
         data.content_type || "Video analysis"
       );
       const evidenceItems = Array.isArray(data.evidence_used) && data.evidence_used.length ? data.evidence_used.map(
         (item) => `
                 <li>
-                  ${escapeHtml2(item)}
+                  ${escapeHtml3(item)}
                 </li>
               `
       ).join("") : `
@@ -1809,7 +2622,7 @@
             </div>
 
             <div class="sb-result-verdict">
-              ${escapeHtml2(verdictLabel)}
+              ${escapeHtml3(verdictLabel)}
             </div>
           </div>
 
@@ -1835,7 +2648,7 @@
           </div>
 
           <p>
-            ${escapeHtml2(
+            ${escapeHtml3(
         data.claim || "No clear central claim was returned."
       )}
           </p>
@@ -1879,7 +2692,7 @@
           </div>
 
           <p>
-            ${escapeHtml2(
+            ${escapeHtml3(
         data.logic_check || "No logic assessment was returned."
       )}
           </p>
@@ -1896,7 +2709,7 @@
           </div>
 
           <p>
-            ${escapeHtml2(
+            ${escapeHtml3(
         data.hype_check || "No presentation assessment was returned."
       )}
           </p>
@@ -1974,17 +2787,17 @@
           message: "Transcript found. Preparing the video analysis\u2026",
           progress: 38
         });
-        await wait2(320);
+        await wait3(320);
         let loadingStepIndex = 0;
         loader.update(
-          ANALYSIS_STEPS[loadingStepIndex]
+          ANALYSIS_STEPS2[loadingStepIndex]
         );
         loadingTicker = window.setInterval(() => {
-          if (loadingStepIndex < ANALYSIS_STEPS.length - 1) {
+          if (loadingStepIndex < ANALYSIS_STEPS2.length - 1) {
             loadingStepIndex += 1;
           }
           loader.update(
-            ANALYSIS_STEPS[loadingStepIndex]
+            ANALYSIS_STEPS2[loadingStepIndex]
           );
         }, 1900);
         const apiBase = String(
@@ -2007,7 +2820,7 @@
           progress: 95
         });
         const validatedResponse = validateVideoResponse(response);
-        await wait2(380);
+        await wait3(380);
         renderResults(
           validatedResponse,
           transcriptResult
@@ -2022,13 +2835,13 @@
     }
     renderLanding();
   }
-  var ANALYSIS_STEPS;
+  var ANALYSIS_STEPS2;
   var init_video_mode = __esm({
     "src/content/video-mode.js"() {
       init_youtube_transcript();
       init_api();
       init_loader2();
-      ANALYSIS_STEPS = [
+      ANALYSIS_STEPS2 = [
         {
           message: "Identifying the video's central claim\u2026",
           progress: 52
@@ -2059,8 +2872,9 @@
       init_sportabase();
       init_loader();
       init_video_results();
-      init_overlay_shell();
       init_article_mode();
+      init_overlay_shell();
+      init_article_mode2();
       init_video_mode();
       var config = globalThis.__SPORTABASE_BOOT_CONFIG__ || {};
       var isYouTubeVideo = window.location.href.includes(
