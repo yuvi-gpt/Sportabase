@@ -9,6 +9,10 @@ import {
   installSettingsDrawer,
 } from "./settings.js";
 
+import {
+  installWindowControls,
+} from "./window-controls.js";
+
 const OVERLAY_ID = "sportabase-root";
 
 function closeSportabaseShell(overlay) {
@@ -183,6 +187,11 @@ export function openSportabaseShell({
   );
 
   installSettingsDrawer({
+    overlay,
+    preferences: resolvedPreferences,
+  });
+
+  installWindowControls({
     overlay,
     preferences: resolvedPreferences,
   });

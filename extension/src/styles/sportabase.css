@@ -681,6 +681,113 @@
   text-align: center;
 }
 
+#sportabase-root .sb-header,
+#sportabase-root .sb-settings-header {
+  cursor: grab;
+  touch-action: none;
+}
+
+#sportabase-root.sb-is-dragging .sb-header,
+#sportabase-root.sb-is-dragging
+  .sb-settings-header {
+  cursor: grabbing;
+}
+
+#sportabase-root.sb-is-dragging,
+#sportabase-root.sb-is-resizing {
+  user-select: none;
+}
+
+.sb-window-interaction-active,
+.sb-window-interaction-active * {
+  cursor: inherit;
+  user-select: none !important;
+}
+
+#sportabase-root .sb-resize-handle {
+  position: absolute;
+  z-index: 120;
+
+  background: transparent;
+  touch-action: none;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="n"] {
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 9px;
+  cursor: ns-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="s"] {
+  bottom: 0;
+  left: 18px;
+  right: 18px;
+  height: 9px;
+  cursor: ns-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="e"] {
+  top: 18px;
+  right: 0;
+  bottom: 18px;
+  width: 9px;
+  cursor: ew-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="w"] {
+  top: 18px;
+  left: 0;
+  bottom: 18px;
+  width: 9px;
+  cursor: ew-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="ne"],
+#sportabase-root
+  .sb-resize-handle[data-direction="nw"],
+#sportabase-root
+  .sb-resize-handle[data-direction="se"],
+#sportabase-root
+  .sb-resize-handle[data-direction="sw"] {
+  width: 18px;
+  height: 18px;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="ne"] {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="nw"] {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="se"] {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="sw"] {
+  left: 0;
+  bottom: 0;
+  cursor: nesw-resize;
+}
+
 @media (max-width: 520px) {
   #sportabase-root {
     top: 8px;

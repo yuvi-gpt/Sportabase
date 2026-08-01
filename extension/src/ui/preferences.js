@@ -8,6 +8,10 @@
   sportabaseTextScale: "medium",
   sportabaseDensity: "comfortable",
   sportabaseSizeMode: "comfort",
+  sportabaseCustomWidth: null,
+  sportabaseCustomHeight: null,
+  sportabaseLeft: null,
+  sportabaseTop: null,
   sportabaseRememberPosition: true,
 };
 
