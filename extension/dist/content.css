@@ -847,6 +847,40 @@
     transform: scale(1);
   }
 }
+#sportabase-root.sb-has-analysis-accent {
+  border-color: color-mix(in srgb, var(--sb-analysis-accent) 48%, var(--sb-border));
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--sb-analysis-accent) 14%, transparent), 0 0 0 1px color-mix(in srgb, var(--sb-analysis-accent) 10%, transparent);
+}
+#sportabase-root.sb-has-analysis-accent .sb-header {
+  position: relative;
+}
+#sportabase-root.sb-has-analysis-accent .sb-header::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--sb-analysis-accent) 72%, white 28%),
+      var(--sb-analysis-accent));
+  box-shadow: 0 0 16px color-mix(in srgb, var(--sb-analysis-accent) 42%, transparent);
+}
+#sportabase-root.sb-has-analysis-accent .sb-logo {
+  border-color: color-mix(in srgb, var(--sb-analysis-accent) 52%, white 12%);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--sb-analysis-accent) 72%, white 28%),
+      var(--sb-analysis-accent));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--sb-analysis-accent) 38%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+#sportabase-root.sb-has-analysis-accent .sb-logo span {
+  color: #ffffff;
+}
 
 /* src/styles/loader.css */
 #sportabase-root .sb-analysis-loader {

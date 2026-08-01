@@ -1494,6 +1494,48 @@
     shell.setModeLabel(
       "VIDEO INTELLIGENCE \xB7 YOUTUBE"
     );
+    const baseAccent = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent").trim() || "#7c3aed";
+    const baseAccentBright = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent-bright").trim() || baseAccent;
+    function applyResultAccent(color) {
+      shell.overlay.style.setProperty(
+        "--sb-accent",
+        color
+      );
+      shell.overlay.style.setProperty(
+        "--sb-accent-bright",
+        color
+      );
+      shell.overlay.style.setProperty(
+        "--sb-score-color",
+        color
+      );
+      shell.overlay.style.setProperty(
+        "--sb-analysis-accent",
+        color
+      );
+      shell.overlay.classList.add(
+        "sb-has-analysis-accent"
+      );
+    }
+    function clearResultAccent() {
+      shell.overlay.style.setProperty(
+        "--sb-accent",
+        baseAccent
+      );
+      shell.overlay.style.setProperty(
+        "--sb-accent-bright",
+        baseAccentBright
+      );
+      shell.overlay.style.removeProperty(
+        "--sb-score-color"
+      );
+      shell.overlay.style.removeProperty(
+        "--sb-analysis-accent"
+      );
+      shell.overlay.classList.remove(
+        "sb-has-analysis-accent"
+      );
+    }
     function stopLoadingTicker() {
       if (!loadingTicker) return;
       window.clearInterval(
@@ -1504,6 +1546,7 @@
     function renderLanding() {
       stopLoadingTicker();
       analysisRunning = false;
+      clearResultAccent();
       shell.setModeLabel(
         "VIDEO INTELLIGENCE \xB7 YOUTUBE"
       );
@@ -1623,6 +1666,7 @@
     function renderError(error) {
       stopLoadingTicker();
       analysisRunning = false;
+      clearResultAccent();
       const friendlyMessage = getFriendlyErrorMessage(error);
       shell.setModeLabel(
         "VIDEO INTELLIGENCE \xB7 UNAVAILABLE"
@@ -1742,10 +1786,7 @@
               were returned.
             </li>
           `;
-      shell.overlay.style.setProperty(
-        "--sb-score-color",
-        scoreColor
-      );
+      applyResultAccent(scoreColor);
       shell.setModeLabel(
         `VIDEO INTELLIGENCE \xB7 ${contentTypeLabel.toUpperCase()}`
       );
