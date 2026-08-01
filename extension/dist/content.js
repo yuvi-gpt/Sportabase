@@ -1515,10 +1515,25 @@
       data.merit_score ?? data.score ?? data.overall_score ?? data.substance_score ?? 0
     );
   }
-  function getReason(data) {
-    return String(
-      data.reason || data.merit_reason || data.score_reason || data.explanation || data.why_it_matters || "No scoring explanation was returned."
-    ).trim();
+  function getReasonItems(data) {
+    const candidates = [
+      data.reasons,
+      data.reason,
+      data.merit_reasons,
+      data.merit_reason,
+      data.score_reason,
+      data.explanation,
+      data.why_it_matters
+    ];
+    for (const candidate of candidates) {
+      const items = normalizeStringList(candidate);
+      if (items.length) {
+        return items.slice(0, 9);
+      }
+    }
+    return [
+      "No scoring explanation was returned."
+    ];
   }
   function getArticleType(data) {
     return humanizeLabel(
@@ -1852,7 +1867,15 @@
       const articleType = getArticleType(data);
       const summaryItems = getSummaryItems(data);
       const tags = getTags(data);
+      const reasonItems = getReasonItems(data);
       const summaryMarkup = summaryItems.map(
+        (item) => `
+            <li>
+              ${escapeHtml2(item)}
+            </li>
+          `
+      ).join("");
+      const reasonMarkup = reasonItems.map(
         (item) => `
             <li>
               ${escapeHtml2(item)}
@@ -1926,9 +1949,9 @@
             Why it scored this way
           </div>
 
-          <p>
-            ${escapeHtml2(getReason(data))}
-          </p>
+          <ul>
+            ${reasonMarkup}
+          </ul>
         </section>
 
         ${tagsMarkup}
@@ -2009,19 +2032,30 @@
           message: "Article text found. Preparing the intelligence pass\u2026",
           progress: 38
         });
-        await wait(320);
+        await wait(180);
+        let smoothProgress = 38;
         let loadingStepIndex = 0;
-        loader.update(
-          ANALYSIS_STEPS[loadingStepIndex]
-        );
+        loader.update({
+          message: ANALYSIS_STEPS[loadingStepIndex].message,
+          progress: smoothProgress
+        });
         loadingTicker = window.setInterval(() => {
-          if (loadingStepIndex < ANALYSIS_STEPS.length - 1) {
+          if (smoothProgress >= 92) {
+            return;
+          }
+          const increment = smoothProgress < 58 ? 3 : smoothProgress < 78 ? 2 : 1;
+          smoothProgress = Math.min(
+            92,
+            smoothProgress + increment
+          );
+          while (loadingStepIndex < ANALYSIS_STEPS.length - 1 && smoothProgress >= ANALYSIS_STEPS[loadingStepIndex + 1].progress) {
             loadingStepIndex += 1;
           }
-          loader.update(
-            ANALYSIS_STEPS[loadingStepIndex]
-          );
-        }, 1900);
+          loader.update({
+            message: ANALYSIS_STEPS[loadingStepIndex].message,
+            progress: smoothProgress
+          });
+        }, 420);
         const apiBase = String(
           config.api || "http://127.0.0.1:8000"
         ).replace(/\/+$/, "");
@@ -2031,7 +2065,7 @@
             title: article.title,
             url: article.url,
             text: article.text,
-            max_bullets: 3
+            max_bullets: 4
           },
           {
             timeoutMs: 12e4

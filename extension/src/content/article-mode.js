@@ -178,15 +178,29 @@ function getMeritScore(data) {
   );
 }
 
-function getReason(data) {
-  return String(
-    data.reason ||
-    data.merit_reason ||
-    data.score_reason ||
-    data.explanation ||
-    data.why_it_matters ||
-    "No scoring explanation was returned."
-  ).trim();
+function getReasonItems(data) {
+  const candidates = [
+    data.reasons,
+    data.reason,
+    data.merit_reasons,
+    data.merit_reason,
+    data.score_reason,
+    data.explanation,
+    data.why_it_matters,
+  ];
+
+  for (const candidate of candidates) {
+    const items =
+      normalizeStringList(candidate);
+
+    if (items.length) {
+      return items.slice(0, 9);
+    }
+  }
+
+  return [
+    "No scoring explanation was returned.",
+  ];
 }
 
 function getArticleType(data) {
@@ -633,8 +647,22 @@ export function openArticleMode({
     const tags =
       getTags(data);
 
+    const reasonItems =
+      getReasonItems(data);
+
     const summaryMarkup =
       summaryItems
+        .map(
+          (item) => `
+            <li>
+              ${escapeHtml(item)}
+            </li>
+          `
+        )
+        .join("");
+
+    const reasonMarkup =
+      reasonItems
         .map(
           (item) => `
             <li>
@@ -719,9 +747,9 @@ export function openArticleMode({
             Why it scored this way
           </div>
 
-          <p>
-            ${escapeHtml(getReason(data))}
-          </p>
+          <ul>
+            ${reasonMarkup}
+          </ul>
         </section>
 
         ${tagsMarkup}
@@ -823,29 +851,56 @@ export function openArticleMode({
         progress: 38,
       });
 
-      await wait(320);
+      await wait(180);
 
+      let smoothProgress = 38;
       let loadingStepIndex = 0;
 
-      loader.update(
-        ANALYSIS_STEPS[loadingStepIndex]
-      );
+      loader.update({
+        message:
+          ANALYSIS_STEPS[
+            loadingStepIndex
+          ].message,
+        progress: smoothProgress,
+      });
 
       loadingTicker =
         window.setInterval(() => {
-          if (
+          if (smoothProgress >= 92) {
+            return;
+          }
+
+          const increment =
+            smoothProgress < 58
+              ? 3
+              : smoothProgress < 78
+                ? 2
+                : 1;
+
+          smoothProgress = Math.min(
+            92,
+            smoothProgress + increment
+          );
+
+          while (
             loadingStepIndex <
-            ANALYSIS_STEPS.length - 1
+              ANALYSIS_STEPS.length - 1 &&
+            smoothProgress >=
+              ANALYSIS_STEPS[
+                loadingStepIndex + 1
+              ].progress
           ) {
             loadingStepIndex += 1;
           }
 
-          loader.update(
-            ANALYSIS_STEPS[
-              loadingStepIndex
-            ]
-          );
-        }, 1900);
+          loader.update({
+            message:
+              ANALYSIS_STEPS[
+                loadingStepIndex
+              ].message,
+            progress: smoothProgress,
+          });
+        }, 420);
 
       const apiBase = String(
         config.api ||
@@ -858,7 +913,7 @@ export function openArticleMode({
           title: article.title,
           url: article.url,
           text: article.text,
-          max_bullets: 3,
+          max_bullets: 4,
         },
         {
           timeoutMs: 120000,

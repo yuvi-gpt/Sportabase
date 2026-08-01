@@ -1920,4 +1920,18 @@
     width: 100%;
   }
 }
+#sportabase-root .sb-article-reason-card ul {
+  margin: 10px 0 0 17px;
+  padding: 0;
+  color: var(--sb-muted);
+  font-size: 11px;
+  font-weight: 560;
+  line-height: 1.55;
+}
+#sportabase-root .sb-article-reason-card li + li {
+  margin-top: 7px;
+}
+#sportabase-root .sb-article-reason-card li::marker {
+  color: var( --sb-score-color, var(--sb-accent) );
+}
 /*# sourceMappingURL=content.css.map */

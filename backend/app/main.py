@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import re
@@ -365,11 +365,11 @@ ARTICLE_TYPE_LABELS = {
 
 def _has_scoreline(text: str) -> bool:
     patterns = [
-        r"\b\d+\s*[-–]\s*\d+\b",          # 2-1, 1–0
+        r"\b\d+\s*[-â€“]\s*\d+\b",          # 2-1, 1â€“0
         r"\b\d+\s+to\s+\d+\b",           # 2 to 1
-        r"\bwon\s+\d+\s*[-–]\s*\d+\b",
-        r"\blost\s+\d+\s*[-–]\s*\d+\b",
-        r"\bdrew\s+\d+\s*[-–]\s*\d+\b",
+        r"\bwon\s+\d+\s*[-â€“]\s*\d+\b",
+        r"\blost\s+\d+\s*[-â€“]\s*\d+\b",
+        r"\bdrew\s+\d+\s*[-â€“]\s*\d+\b",
     ]
     return any(re.search(p, text, re.IGNORECASE) for p in patterns)
 
@@ -1265,7 +1265,7 @@ HEDGE_WORDS = [
 
 
 OFFICIAL_WORDS = [
-    # strict official confirmation only — do NOT include plain "official"
+    # strict official confirmation only â€” do NOT include plain "official"
     "officially confirmed",
     "officially announced",
     "confirmed by the club",
@@ -1663,7 +1663,7 @@ def merit_score(
 
     word_count = max(len(body_original.split()), 1)
     nums = len(re.findall(r"\b\d+([.,]\d+)?\b", body_original))
-    quotes = body_original.count('"') + body_original.count("“") + body_original.count("”")
+    quotes = body_original.count('"') + body_original.count("â€œ") + body_original.count("â€")
     proper_nouns = len(re.findall(r"\b[A-Z][a-z]{2,}\b", body_original))
 
     hedge_hits = signal_hits(HEDGE_WORDS, body)
@@ -2019,7 +2019,7 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
     def sent_score(s: str) -> float:
         lower = s.lower()
         nums = len(re.findall(r"\b\d+([.,]\d+)?\b", s))
-        quotes = s.count('"') + s.count("“") + s.count("”")
+        quotes = s.count('"') + s.count("â€œ") + s.count("â€")
         evidence = len(signal_hits(EVIDENCE_WORDS, lower))
         impact = len(signal_hits(IMPACT_WORDS, lower))
         official = len(signal_hits(OFFICIAL_WORDS, lower))
@@ -2094,14 +2094,14 @@ def gemini_tldr(
         "Return the TL;DR bullets in English for now.\n\n"
         "Rules:\n"
         "- Each bullet must be one sentence.\n"
-        "- Each bullet must be under 26 words.\n"
+        "- Each bullet should be approximately 25 to 35 words, with one complete and specific insight.\n"
         "- Prioritize concrete facts: who, what, when, why it matters.\n"
         "- Remove site boilerplate, ads, newsletter text, captions, and navigation text.\n"
         "- Do not invent facts not present in the text.\n"
         "- Do not mention that this is an article.\n"
         "- Do not repeat the title as a bullet.\n"
         "- If the text is mostly opinion, summarize the claim as opinion, not fact.\n\n"
-        'Output format: {"bullets": ["...", "...", "..."]}\n\n'
+        'Output format: {"bullets": ["bullet 1", "bullet 2", "..."]}\n\n'
         f"Title: {title}\n\n"
         f"Text:\n{clipped}\n"
     )
