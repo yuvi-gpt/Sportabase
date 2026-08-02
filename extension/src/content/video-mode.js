@@ -515,12 +515,24 @@ export function openVideoMode({
     const scoreColor =
       getScoreColor(supportScore);
 
+    const uiLabels =
+      data.ui_labels &&
+      typeof data.ui_labels === "object"
+        ? data.ui_labels
+        : {};
+
     const verdictLabel =
+      String(
+        data.localized_verdict || ""
+      ).trim() ||
       humanizeLabel(
         data.verdict || "Assessment complete"
       );
 
     const contentTypeLabel =
+      String(
+        data.localized_content_type || ""
+      ).trim() ||
       humanizeLabel(
         data.content_type ||
         "Video analysis"
@@ -592,7 +604,10 @@ export function openVideoMode({
 
         <section class="sb-result-claim-card">
           <div class="sb-result-section-label">
-            Main claim
+            ${escapeHtml(
+              uiLabels.main_claim ||
+              "Main claim"
+            )}
           </div>
 
           <p>
@@ -627,7 +642,10 @@ export function openVideoMode({
 
         <section class="sb-result-detail-card">
           <div class="sb-result-section-label">
-            Evidence used
+            ${escapeHtml(
+              uiLabels.evidence_used ||
+              "Evidence used"
+            )}
           </div>
 
           <ul>
@@ -637,7 +655,10 @@ export function openVideoMode({
 
         <section class="sb-result-detail-card">
           <div class="sb-result-section-label">
-            Logic check
+            ${escapeHtml(
+              uiLabels.logic_check ||
+              "Logic check"
+            )}
           </div>
 
           <p>
@@ -655,7 +676,10 @@ export function openVideoMode({
           "
         >
           <div class="sb-result-section-label">
-            Hype check
+            ${escapeHtml(
+              uiLabels.hype_check ||
+              "Hype check"
+            )}
           </div>
 
           <p>
@@ -701,7 +725,7 @@ export function openVideoMode({
               ></path>
             </svg>
 
-            <span>Analyze again</span>
+            <span>${escapeHtml(uiLabels.analyze_again || "Analyze again")}</span>
           </button>
         </div>
       </div>
@@ -782,7 +806,7 @@ export function openVideoMode({
 
       const apiBase = String(
         config.api ||
-        "http://127.0.0.1:8000"
+        "https://sportabase-api.onrender.com"
       ).replace(/\/+$/, "");
 
       const response = await postJson(

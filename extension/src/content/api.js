@@ -1,4 +1,4 @@
-﻿export class SportabaseApiError extends Error {
+export class SportabaseApiError extends Error {
   constructor(
     message,
     {
@@ -13,6 +13,45 @@
     this.details = details;
   }
 }
+
+async function getSportabaseClientId() {
+  const storageKey = "sportabaseClientId";
+
+  try {
+    const stored =
+      await chrome.storage.local.get(storageKey);
+
+    const existing = String(
+      stored?.[storageKey] || ""
+    ).trim();
+
+    if (existing) {
+      return existing;
+    }
+
+    const clientId =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : [
+            Date.now().toString(36),
+            Math.random().toString(36).slice(2),
+          ].join("-");
+
+    await chrome.storage.local.set({
+      [storageKey]: clientId,
+    });
+
+    return clientId;
+  } catch (error) {
+    console.warn(
+      "[sportabase] Client ID unavailable:",
+      error
+    );
+
+    return "anonymous";
+  }
+}
+
 
 export async function postJson(
   url,
@@ -29,11 +68,15 @@ export async function postJson(
   );
 
   try {
+    const clientId =
+      await getSportabaseClientId();
+
     const response = await fetch(url, {
       method: "POST",
 
       headers: {
         "Content-Type": "application/json",
+        "X-Sportabase-Client-ID": clientId,
       },
 
       body: JSON.stringify(payload),

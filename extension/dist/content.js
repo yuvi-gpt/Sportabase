@@ -1437,6 +1437,32 @@
   });
 
   // src/content/api.js
+  async function getSportabaseClientId() {
+    const storageKey = "sportabaseClientId";
+    try {
+      const stored = await chrome.storage.local.get(storageKey);
+      const existing = String(
+        stored?.[storageKey] || ""
+      ).trim();
+      if (existing) {
+        return existing;
+      }
+      const clientId = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : [
+        Date.now().toString(36),
+        Math.random().toString(36).slice(2)
+      ].join("-");
+      await chrome.storage.local.set({
+        [storageKey]: clientId
+      });
+      return clientId;
+    } catch (error) {
+      console.warn(
+        "[sportabase] Client ID unavailable:",
+        error
+      );
+      return "anonymous";
+    }
+  }
   async function postJson(url, payload, {
     timeoutMs = 12e4
   } = {}) {
@@ -1446,10 +1472,12 @@
       timeoutMs
     );
     try {
+      const clientId = await getSportabaseClientId();
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "X-Sportabase-Client-ID": clientId
         },
         body: JSON.stringify(payload),
         signal: controller.signal
@@ -2562,7 +2590,7 @@
           });
         }, 520);
         const apiBase = String(
-          config.api || "http://127.0.0.1:8000"
+          config.api || "https://sportabase-api.onrender.com"
         ).replace(/\/+$/, "");
         const response = await postJson(
           `${apiBase}/analyze`,
@@ -3148,10 +3176,15 @@
         (evidenceScore + logicScore) / 2
       );
       const scoreColor = getScoreColor2(supportScore);
-      const verdictLabel = humanizeLabel2(
+      const uiLabels = data.ui_labels && typeof data.ui_labels === "object" ? data.ui_labels : {};
+      const verdictLabel = String(
+        data.localized_verdict || ""
+      ).trim() || humanizeLabel2(
         data.verdict || "Assessment complete"
       );
-      const contentTypeLabel = humanizeLabel2(
+      const contentTypeLabel = String(
+        data.localized_content_type || ""
+      ).trim() || humanizeLabel2(
         data.content_type || "Video analysis"
       );
       const evidenceItems = Array.isArray(data.evidence_used) && data.evidence_used.length ? data.evidence_used.map(
@@ -3211,7 +3244,9 @@
 
         <section class="sb-result-claim-card">
           <div class="sb-result-section-label">
-            Main claim
+            ${escapeHtml3(
+        uiLabels.main_claim || "Main claim"
+      )}
           </div>
 
           <p>
@@ -3245,7 +3280,9 @@
 
         <section class="sb-result-detail-card">
           <div class="sb-result-section-label">
-            Evidence used
+            ${escapeHtml3(
+        uiLabels.evidence_used || "Evidence used"
+      )}
           </div>
 
           <ul>
@@ -3255,7 +3292,9 @@
 
         <section class="sb-result-detail-card">
           <div class="sb-result-section-label">
-            Logic check
+            ${escapeHtml3(
+        uiLabels.logic_check || "Logic check"
+      )}
           </div>
 
           <p>
@@ -3272,7 +3311,9 @@
           "
         >
           <div class="sb-result-section-label">
-            Hype check
+            ${escapeHtml3(
+        uiLabels.hype_check || "Hype check"
+      )}
           </div>
 
           <p>
@@ -3317,7 +3358,7 @@
               ></path>
             </svg>
 
-            <span>Analyze again</span>
+            <span>${escapeHtml3(uiLabels.analyze_again || "Analyze again")}</span>
           </button>
         </div>
       </div>
@@ -3368,7 +3409,7 @@
           );
         }, 1900);
         const apiBase = String(
-          config.api || "http://127.0.0.1:8000"
+          config.api || "https://sportabase-api.onrender.com"
         ).replace(/\/+$/, "");
         const response = await postJson(
           `${apiBase}/analyze/video`,

@@ -1172,7 +1172,7 @@ export function openArticleMode({
 
       const apiBase = String(
         config.api ||
-        "http://127.0.0.1:8000"
+        "https://sportabase-api.onrender.com"
       ).replace(/\/+$/, "");
 
       const response = await postJson(
