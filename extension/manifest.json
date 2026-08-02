@@ -1,29 +1,31 @@
-﻿{
-  "name": "Sportabase Summarizer (Local)",
-  "version": "0.1.0",
+{
+  "name": "Sportabase",
+  "version": "0.2.0",
   "manifest_version": 3,
-  "permissions": ["activeTab", "scripting", "storage"],
-"host_permissions": [
-  "https://www.youtube.com/*",
-  "https://sportabase-api.onrender.com/*",
-  "http://127.0.0.1:8000/*",
-  "http://localhost:8000/*"
-],
-  
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://sportabase-api.onrender.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "icons": {
-  "16": "icons/icon16.png",
-  "48": "icons/icon48.png",
-  "128": "icons/icon128.png"
-},
-"action": {
-  "default_title": "Sportabase",
-  "default_icon": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
-}
+  },
+  "action": {
+    "default_title": "Sportabase",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "description": "AI-powered intelligence for sports articles and videos, including summaries, credibility signals, and multilingual analysis."
 }
