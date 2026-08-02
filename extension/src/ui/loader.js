@@ -1,4 +1,4 @@
-﻿function escapeHtml(value) {
+function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -10,14 +10,20 @@
 function getStageIndex(progress) {
   if (progress < 42) return 0;
   if (progress < 76) return 1;
+
   return 2;
 }
 
 export function createAnalysisLoader({
   container,
   modeLabel = "VIDEO INTELLIGENCE",
-  message = "Preparing the analysis…",
+  message = "Preparing the analysis\u2026",
   progress = 12,
+
+  neutral = false,
+  sourceTitle = "",
+  sourceDomain = "",
+  languageCode = "",
 } = {}) {
   if (!container) {
     return {
@@ -25,6 +31,71 @@ export function createAnalysisLoader({
       destroy() {},
     };
   }
+
+  const neutralMode =
+    Boolean(neutral);
+
+  const safeTitle =
+    String(
+      sourceTitle ||
+      message ||
+      ""
+    ).trim();
+
+  const safeDomain =
+    String(
+      sourceDomain ||
+      modeLabel ||
+      ""
+    ).trim();
+
+  const safeLanguageCode =
+    String(
+      languageCode ||
+      "SB"
+    )
+      .trim()
+      .slice(0, 5)
+      .toUpperCase();
+
+  const visibleModeLabel =
+    neutralMode && safeDomain
+      ? safeDomain
+      : modeLabel;
+
+  const visibleMessage =
+    neutralMode && safeTitle
+      ? safeTitle
+      : message;
+
+  const liveLabel =
+    neutralMode
+      ? safeLanguageCode
+      : "LIVE";
+
+  const analyzingLabel =
+    neutralMode
+      ? safeDomain
+      : "ANALYZING";
+
+  const firstStageCount =
+    neutralMode
+      ? `${Math.round(progress)}%`
+      : "Stage 1 of 3";
+
+  const stageLabels =
+    neutralMode
+      ? ["1", "2", "3"]
+      : [
+          "Read",
+          "Evaluate",
+          "Distill",
+        ];
+
+  const progressAriaLabel =
+    neutralMode && safeTitle
+      ? safeTitle
+      : "Sportabase analysis progress";
 
   container.innerHTML = `
     <div class="sb-analysis-loader">
@@ -56,13 +127,18 @@ export function createAnalysisLoader({
             </div>
 
             <div class="sb-loader-mode">
-              ${escapeHtml(modeLabel)}
+              ${escapeHtml(
+                visibleModeLabel
+              )}
             </div>
           </div>
 
           <div class="sb-loader-live-pill">
             <span></span>
-            LIVE
+
+            ${escapeHtml(
+              liveLabel
+            )}
           </div>
         </div>
 
@@ -71,27 +147,36 @@ export function createAnalysisLoader({
             class="sb-loader-message"
             data-sb-loader-message
           >
-            ${escapeHtml(message)}
+            ${escapeHtml(
+              visibleMessage
+            )}
           </div>
 
           <div class="sb-loader-progress-row">
             <div class="sb-loader-analyzing">
               <span></span>
-              ANALYZING
+
+              ${escapeHtml(
+                analyzingLabel
+              )}
             </div>
 
             <div
               class="sb-loader-stage-count"
               data-sb-loader-stage-count
             >
-              Stage 1 of 3
+              ${escapeHtml(
+                firstStageCount
+              )}
             </div>
           </div>
 
           <div
             class="sb-loader-track"
             role="progressbar"
-            aria-label="Sportabase analysis progress"
+            aria-label="${escapeHtml(
+              progressAriaLabel
+            )}"
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow="${progress}"
@@ -105,29 +190,25 @@ export function createAnalysisLoader({
           </div>
 
           <div class="sb-loader-stages">
-            <div
-              class="sb-loader-stage"
-              data-sb-loader-stage="0"
-            >
-              <span></span>
-              Read
-            </div>
+            ${stageLabels
+              .map(
+                (
+                  stageLabel,
+                  index
+                ) => `
+                  <div
+                    class="sb-loader-stage"
+                    data-sb-loader-stage="${index}"
+                  >
+                    <span></span>
 
-            <div
-              class="sb-loader-stage"
-              data-sb-loader-stage="1"
-            >
-              <span></span>
-              Evaluate
-            </div>
-
-            <div
-              class="sb-loader-stage"
-              data-sb-loader-stage="2"
-            >
-              <span></span>
-              Distill
-            </div>
+                    ${escapeHtml(
+                      stageLabel
+                    )}
+                  </div>
+                `
+              )
+              .join("")}
           </div>
         </div>
       </section>
@@ -154,11 +235,12 @@ export function createAnalysisLoader({
       "[data-sb-loader-stage-count]"
     );
 
-  const stageElements = Array.from(
-    container.querySelectorAll(
-      "[data-sb-loader-stage]"
-    )
-  );
+  const stageElements =
+    Array.from(
+      container.querySelectorAll(
+        "[data-sb-loader-stage]"
+      )
+    );
 
   function update({
     message: nextMessage,
@@ -168,17 +250,27 @@ export function createAnalysisLoader({
       Number(nextProgress);
 
     const safeProgress =
-      Number.isFinite(numericProgress)
+      Number.isFinite(
+        numericProgress
+      )
         ? Math.max(
             5,
             Math.min(
               95,
-              Math.round(numericProgress)
+              Math.round(
+                numericProgress
+              )
             )
           )
         : 12;
 
+    /*
+     * Article Mode keeps the original
+     * source-language headline visible
+     * throughout the loading experience.
+     */
     if (
+      !neutralMode &&
       nextMessage !== undefined &&
       messageElement
     ) {
@@ -199,15 +291,26 @@ export function createAnalysisLoader({
     }
 
     const activeStage =
-      getStageIndex(safeProgress);
+      getStageIndex(
+        safeProgress
+      );
 
     if (stageCountElement) {
       stageCountElement.textContent =
-        `Stage ${activeStage + 1} of 3`;
+        neutralMode
+          ? `${safeProgress}%`
+          : (
+              `Stage ${
+                activeStage + 1
+              } of 3`
+            );
     }
 
     stageElements.forEach(
-      (stageElement, index) => {
+      (
+        stageElement,
+        index
+      ) => {
         stageElement.classList.remove(
           "sb-loader-stage-active",
           "sb-loader-stage-complete"

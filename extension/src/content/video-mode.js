@@ -1,4 +1,4 @@
-﻿import {
+import {
   extractYouTubeTranscript,
 } from "./youtube-transcript.js";
 
@@ -782,7 +782,7 @@ export function openVideoMode({
 
       const apiBase = String(
         config.api ||
-        "https://sportabase-api.onrender.com"
+        "http://127.0.0.1:8000"
       ).replace(/\/+$/, "");
 
       const response = await postJson(

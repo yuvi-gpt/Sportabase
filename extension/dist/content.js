@@ -949,42 +949,186 @@
   function normalizeText(value) {
     return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
-  function extractTextFromElement(element) {
-    if (!element) return "";
-    const clone = element.cloneNode(true);
-    for (const selector of NOISE_SELECTORS) {
-      clone.querySelectorAll(selector).forEach((node) => node.remove());
-    }
-    const paragraphs = Array.from(
-      clone.querySelectorAll(
-        "p, h2, h3, blockquote, li"
-      )
-    ).map(
-      (node) => normalizeText(node.innerText || node.textContent)
-    ).filter((text) => text.length >= 25);
-    if (paragraphs.length >= 3) {
-      return normalizeText(
-        paragraphs.join("\n\n")
-      );
-    }
+  function getNodeText(node) {
     return normalizeText(
-      clone.innerText || clone.textContent
+      node?.innerText || node?.textContent || ""
     );
   }
-  function scoreCandidate(element, text) {
-    if (!text) return -Infinity;
-    const paragraphCount = element.querySelectorAll("p").length;
-    const headingCount = element.querySelectorAll("h1, h2, h3").length;
+  function getLinkDensity(element, text) {
+    if (!element || !text) return 1;
     const linkTextLength = Array.from(
       element.querySelectorAll("a")
     ).reduce(
-      (total, link) => total + normalizeText(
-        link.innerText || link.textContent
-      ).length,
+      (total, link) => total + getNodeText(link).length,
       0
     );
-    const linkDensity = text.length > 0 ? linkTextLength / text.length : 1;
-    return text.length + paragraphCount * 140 + headingCount * 45 - linkDensity * 1200;
+    return Math.min(
+      1,
+      linkTextLength / Math.max(1, text.length)
+    );
+  }
+  function countMatches(text, pattern) {
+    return (String(text || "").match(pattern) || []).length;
+  }
+  function looksLikeFeedDump(text) {
+    const dateHits = countMatches(
+      text,
+      /\b\d{1,2}\s+[A-Za-z?-?]{3,10}\s+\d{4}\b/gi
+    );
+    const timeHits = countMatches(
+      text,
+      /\b\d{1,2}:\d{2}\b/g
+    );
+    const pipeHits = countMatches(
+      text,
+      /\|/g
+    );
+    return dateHits >= 2 || timeHits >= 4 || timeHits >= 2 && pipeHits >= 2;
+  }
+  function looksPromotional(text) {
+    const matches = PROMOTIONAL_PATTERNS.filter(
+      (pattern) => pattern.test(text)
+    ).length;
+    return matches >= 2 || matches >= 1 && text.length <= 260;
+  }
+  function looksLikeBoilerplate(text) {
+    return text.length <= 240 && BOILERPLATE_PATTERNS.some(
+      (pattern) => pattern.test(text)
+    );
+  }
+  function isUsefulContentBlock(node, text) {
+    if (!text) return false;
+    const tagName = String(node.tagName || "").toLowerCase();
+    const minimumLength = tagName === "h2" || tagName === "h3" ? 30 : 45;
+    if (text.length < minimumLength) {
+      return false;
+    }
+    if (looksLikeFeedDump(text)) {
+      return false;
+    }
+    if (looksPromotional(text)) {
+      return false;
+    }
+    if (looksLikeBoilerplate(text)) {
+      return false;
+    }
+    const linkDensity = getLinkDensity(node, text);
+    if (linkDensity >= 0.65 && text.length < 500) {
+      return false;
+    }
+    return true;
+  }
+  function cloneAndClean(element) {
+    const clone = element.cloneNode(true);
+    for (const selector of NOISE_SELECTORS) {
+      clone.querySelectorAll(selector).forEach(
+        (node) => node.remove()
+      );
+    }
+    clone.querySelectorAll(
+      "[class], [id]"
+    ).forEach((node) => {
+      const signature = [
+        node.getAttribute("class"),
+        node.getAttribute("id")
+      ].filter(Boolean).join(" ");
+      if (NOISE_TOKEN_PATTERN.test(
+        signature
+      )) {
+        node.remove();
+      }
+    });
+    return clone;
+  }
+  function collectContentBlocks(element) {
+    if (!element) return [];
+    const clone = cloneAndClean(element);
+    const blocks = [];
+    const seen = /* @__PURE__ */ new Set();
+    const addBlock = (node) => {
+      const text = getNodeText(node);
+      if (!isUsefulContentBlock(
+        node,
+        text
+      )) {
+        return;
+      }
+      const duplicateKey = text.toLowerCase();
+      if (seen.has(duplicateKey)) {
+        return;
+      }
+      seen.add(duplicateKey);
+      blocks.push(text);
+    };
+    clone.querySelectorAll(
+      "p, h2, h3, blockquote"
+    ).forEach(addBlock);
+    if (blocks.length < 2) {
+      clone.querySelectorAll("div").forEach((node) => {
+        if (node.querySelector(
+          "p, div, section, article"
+        )) {
+          return;
+        }
+        addBlock(node);
+      });
+    }
+    return blocks;
+  }
+  function buildCandidate(element, selector, priorityBonus = 0) {
+    const blocks = collectContentBlocks(element);
+    const text = normalizeText(
+      blocks.join("\n\n")
+    );
+    if (text.length < 250 || blocks.length < 2) {
+      return null;
+    }
+    const blockCount = blocks.length;
+    const averageBlockLength = text.length / blockCount;
+    const shortBlockCount = blocks.filter(
+      (block) => block.length < 80
+    ).length;
+    const longBlockCount = blocks.filter(
+      (block) => block.length >= 140
+    ).length;
+    const shortBlockRatio = shortBlockCount / Math.max(1, blockCount);
+    const linkDensity = getLinkDensity(
+      element,
+      text
+    );
+    const tooManyBlocks = blockCount > 90;
+    const heavilyFragmented = blockCount > 35 && averageBlockLength < 95;
+    const mostlyTinyBlocks = blockCount > 15 && shortBlockRatio > 0.72;
+    const linkHeavy = linkDensity > 0.55;
+    const suspicious = tooManyBlocks || heavilyFragmented || mostlyTinyBlocks || linkHeavy;
+    const fragmentationPenalty = Math.max(
+      0,
+      blockCount - 35
+    ) * 240;
+    const score = priorityBonus + Math.min(text.length, 14e3) + blockCount * 115 + longBlockCount * 170 + Math.min(
+      averageBlockLength,
+      260
+    ) * 4 - shortBlockRatio * 2200 - linkDensity * 6500 - fragmentationPenalty - (suspicious ? 8500 : 0);
+    return {
+      selector,
+      element,
+      blocks,
+      text,
+      score,
+      suspicious,
+      metrics: {
+        blockCount,
+        averageBlockLength: Math.round(
+          averageBlockLength
+        ),
+        linkDensity: Number(
+          linkDensity.toFixed(3)
+        ),
+        shortBlockRatio: Number(
+          shortBlockRatio.toFixed(3)
+        )
+      }
+    };
   }
   function getArticleTitle() {
     const candidates = [
@@ -1001,129 +1145,227 @@
     ];
     return candidates.map(normalizeText).find(Boolean) || "Untitled sports article";
   }
-  function findTitleAnchoredCandidate() {
+  function findTitleAnchoredCandidates() {
     const heading = document.querySelector(
-      "article h1, [role='article'] h1, main h1, [role='main'] h1, h1"
+      [
+        "article h1",
+        "[role='article'] h1",
+        "main h1",
+        "[role='main'] h1",
+        "h1"
+      ].join(", ")
     );
-    if (!heading) return null;
+    if (!heading) return [];
+    const candidates = [];
     let current = heading.parentElement;
-    let candidate = null;
-    for (let depth = 0; current && current !== document.body && depth < 10; depth += 1) {
-      const text = extractTextFromElement(current);
-      const paragraphCount = current.querySelectorAll("p").length;
-      const isUsable = text.length >= 450 && paragraphCount >= 3;
-      if (isUsable) {
-        if (candidate && text.length > candidate.text.length * 2.4) {
+    let previousCandidate = null;
+    for (let depth = 0; current && current !== document.body && depth < 9; depth += 1) {
+      const candidate = buildCandidate(
+        current,
+        "title-anchored",
+        Math.max(
+          1200,
+          4200 - depth * 350
+        )
+      );
+      if (candidate) {
+        if (previousCandidate && candidate.metrics.blockCount > previousCandidate.metrics.blockCount * 2.2 && candidate.text.length > previousCandidate.text.length * 2.1) {
           break;
         }
-        candidate = {
-          element: current,
-          text
-        };
-        if (current.matches(
-          "article, [role='article']"
-        )) {
-          break;
-        }
+        candidates.push(candidate);
+        previousCandidate = candidate;
+      }
+      if (current.matches(
+        [
+          ...PRIMARY_ARTICLE_SELECTORS,
+          ...STRUCTURAL_ARTICLE_SELECTORS
+        ].join(", ")
+      )) {
+        break;
       }
       current = current.parentElement;
     }
-    return candidate;
+    return candidates;
+  }
+  function addSelectorCandidates(candidates, seenElements, selectors, priorityBonus) {
+    for (const selector of selectors) {
+      const elements = document.querySelectorAll(
+        selector
+      );
+      for (const element of elements) {
+        if (!element || seenElements.has(element)) {
+          continue;
+        }
+        seenElements.add(element);
+        const candidate = buildCandidate(
+          element,
+          selector,
+          priorityBonus
+        );
+        if (candidate) {
+          candidates.push(
+            candidate
+          );
+        }
+      }
+    }
+  }
+  function truncateBlocks(blocks, maximumCharacters) {
+    const selected = [];
+    let usedCharacters = 0;
+    for (const block of blocks) {
+      const separatorLength = selected.length ? 2 : 0;
+      const available = maximumCharacters - usedCharacters - separatorLength;
+      if (available <= 0) break;
+      if (block.length <= available) {
+        selected.push(block);
+        usedCharacters += separatorLength + block.length;
+        continue;
+      }
+      if (available >= 140) {
+        let partial = block.slice(0, available);
+        const finalBoundary = Math.max(
+          partial.lastIndexOf(". "),
+          partial.lastIndexOf("! "),
+          partial.lastIndexOf("? "),
+          partial.lastIndexOf("?"),
+          partial.lastIndexOf("?"),
+          partial.lastIndexOf("?")
+        );
+        if (finalBoundary >= available * 0.55) {
+          partial = partial.slice(
+            0,
+            finalBoundary + 1
+          );
+        } else {
+          const lastSpace = partial.lastIndexOf(" ");
+          if (lastSpace >= available * 0.7) {
+            partial = partial.slice(
+              0,
+              lastSpace
+            );
+          }
+        }
+        partial = partial.trim();
+        if (partial.length >= 100) {
+          selected.push(partial);
+        }
+      }
+      break;
+    }
+    return {
+      text: normalizeText(
+        selected.join("\n\n")
+      ),
+      blockCount: selected.length
+    };
   }
   function extractArticlePage({
     maxCharacters = 6e3
   } = {}) {
     const candidates = [];
     const seenElements = /* @__PURE__ */ new Set();
-    const titleAnchoredCandidate = findTitleAnchoredCandidate();
-    if (titleAnchoredCandidate) {
+    for (const candidate of findTitleAnchoredCandidates()) {
+      if (seenElements.has(
+        candidate.element
+      )) {
+        continue;
+      }
       seenElements.add(
-        titleAnchoredCandidate.element
+        candidate.element
       );
-      candidates.push({
-        selector: "title-anchored",
-        element: titleAnchoredCandidate.element,
-        text: titleAnchoredCandidate.text,
-        score: scoreCandidate(
-          titleAnchoredCandidate.element,
-          titleAnchoredCandidate.text
-        ) + 1e4
-      });
+      candidates.push(candidate);
     }
-    for (const selector of ARTICLE_SELECTORS) {
-      const elements = document.querySelectorAll(selector);
-      for (const element of elements) {
-        if (!element || seenElements.has(element)) {
-          continue;
-        }
-        seenElements.add(element);
-        const text2 = extractTextFromElement(element);
-        if (text2.length < 200) continue;
-        candidates.push({
-          selector,
-          element,
-          text: text2,
-          score: scoreCandidate(
-            element,
-            text2
-          )
-        });
-      }
-    }
+    addSelectorCandidates(
+      candidates,
+      seenElements,
+      PRIMARY_ARTICLE_SELECTORS,
+      5200
+    );
+    addSelectorCandidates(
+      candidates,
+      seenElements,
+      STRUCTURAL_ARTICLE_SELECTORS,
+      3e3
+    );
+    addSelectorCandidates(
+      candidates,
+      seenElements,
+      FALLBACK_ARTICLE_SELECTORS,
+      0
+    );
     if (!candidates.length && document.body) {
-      const fallbackText = extractTextFromElement(document.body);
-      if (fallbackText.length >= 200) {
-        candidates.push({
-          selector: "body",
-          element: document.body,
-          text: fallbackText,
-          score: scoreCandidate(
-            document.body,
-            fallbackText
-          )
-        });
+      const bodyCandidate = buildCandidate(
+        document.body,
+        "body-fallback",
+        -5e3
+      );
+      if (bodyCandidate) {
+        candidates.push(
+          bodyCandidate
+        );
       }
     }
-    candidates.sort(
+    const cleanCandidates = candidates.filter(
+      (candidate) => !candidate.suspicious
+    );
+    const candidatePool = cleanCandidates.length ? cleanCandidates : candidates;
+    candidatePool.sort(
       (left, right) => right.score - left.score
     );
-    const bestCandidate = candidates[0] || null;
-    const fullText = bestCandidate?.text || "";
+    const bestCandidate = candidatePool[0] || null;
     const safeLimit = Math.max(
       1e3,
       Number(maxCharacters) || 6e3
     );
-    const text = fullText.slice(0, safeLimit).trim();
+    const truncated = truncateBlocks(
+      bestCandidate?.blocks || [],
+      safeLimit
+    );
     return {
       title: getArticleTitle(),
       url: window.location.href,
       hostname: window.location.hostname,
-      text,
-      fullCharacterCount: fullText.length,
-      characterCount: text.length,
-      paragraphCount: text ? text.split(/\n{2,}/).length : 0,
-      selector: bestCandidate?.selector || null
+      text: truncated.text,
+      fullCharacterCount: bestCandidate?.text.length || 0,
+      characterCount: truncated.text.length,
+      paragraphCount: truncated.blockCount,
+      selector: bestCandidate?.selector || null,
+      extractionMetrics: bestCandidate?.metrics || null,
+      candidateCount: candidates.length
     };
   }
-  var ARTICLE_SELECTORS, NOISE_SELECTORS;
+  var PRIMARY_ARTICLE_SELECTORS, STRUCTURAL_ARTICLE_SELECTORS, FALLBACK_ARTICLE_SELECTORS, NOISE_SELECTORS, NOISE_TOKEN_PATTERN, PROMOTIONAL_PATTERNS, BOILERPLATE_PATTERNS;
   var init_article_extractor = __esm({
     "src/content/article-extractor.js"() {
-      ARTICLE_SELECTORS = [
-        "article",
-        "main article",
-        "[role='main'] article",
-        "main",
-        "section article",
-        "div[data-testid='Body']",
-        "div[data-testid='article-body']",
-        ".Story__Body",
-        ".story__body",
+      PRIMARY_ARTICLE_SELECTORS = [
+        "[itemprop='articleBody']",
+        "[data-testid='article-body']",
+        "[data-testid='Body']",
+        "[data-module='ArticleBody']",
         ".article-body",
         ".article__body",
-        ".RichTextContainer",
-        ".Article__Content",
+        ".article-content",
         ".article__content",
-        "[data-module='ArticleBody']"
+        ".Article__Content",
+        ".entry-content",
+        ".post-content",
+        ".post__content",
+        ".story-body",
+        ".story__body",
+        ".Story__Body",
+        ".RichTextContainer"
+      ];
+      STRUCTURAL_ARTICLE_SELECTORS = [
+        "article",
+        "[role='article']",
+        "main article",
+        "[role='main'] article",
+        "section article"
+      ];
+      FALLBACK_ARTICLE_SELECTORS = [
+        "main",
+        "[role='main']"
       ];
       NOISE_SELECTORS = [
         "script",
@@ -1140,21 +1382,56 @@
         "input",
         "textarea",
         "select",
+        "figure",
+        "figcaption",
         "[aria-hidden='true']",
         "[hidden]",
         "[role='navigation']",
         "[role='banner']",
         "[role='complementary']",
+        "[role='dialog']",
         ".advertisement",
         ".advert",
         ".ads",
         ".ad",
+        ".banner",
         ".social-share",
         ".share-tools",
         ".newsletter",
         ".related-content",
         ".recommended-content",
-        ".comments"
+        ".comments",
+        ".sidebar",
+        ".widget",
+        ".promo",
+        ".sponsored"
+      ];
+      NOISE_TOKEN_PATTERN = /(?:^|[\s_-])(?:ad|ads|advert|advertisement|banner|betting|bookmaker|comments?|cookie|footer|latest|menu|newsletter|odds|promo|recommended|related|share|sidebar|social|sponsor|subscription|trending|widget)(?:$|[\s_-])/i;
+      PROMOTIONAL_PATTERNS = [
+        /\b(?:advertisement|advertising|sponsored|paid content)\b/i,
+        /\b(?:publicidad|contenido patrocinado|patrocinado)\b/i,
+        /\b(?:publicidade|conte?do patrocinado)\b/i,
+        /\b(?:publicit?|contenu sponsoris?)\b/i,
+        /\b(?:werbung|gesponsert)\b/i,
+        /\b(?:pubblicit?|contenuto sponsorizzato)\b/i,
+        /\b(?:register|sign up|subscribe|join now)\b/i,
+        /\b(?:reg[i?]strate|suscr[i?]bete|inicia sesi[o?]n)\b/i,
+        /\b(?:cadastre-se|inscreva-se)\b/i,
+        /\b(?:inscrivez-vous|abonnez-vous)\b/i,
+        /\b(?:bet365|sportsbook|bookmaker|betting odds|casino bonus)\b/i,
+        /\b(?:apuestas?|cuotas?|juego seguro|bono de apuesta)\b/i,
+        /\b(?:apostas?|cota??es|b?nus de aposta)\b/i,
+        /\b(?:paris sportifs|cotes|bonus de pari)\b/i,
+        /\b(?:scommesse|quote|bonus scommessa)\b/i,
+        /\b(?:sportwetten|quoten|wettbonus)\b/i
+      ];
+      BOILERPLATE_PATTERNS = [
+        /\b(?:follow us|share this|read more|recommended for you)\b/i,
+        /\b(?:s[i?]guenos|compartir|leer tambi[e?]n|te puede interesar)\b/i,
+        /\b(?:siga-nos|compartilhar|leia tamb[e?]m)\b/i,
+        /\b(?:suivez-nous|partager|lire aussi)\b/i,
+        /\b(?:folgen sie uns|teilen|auch lesen)\b/i,
+        /\b(?:seguici|condividi|leggi anche)\b/i
       ];
     }
   });
@@ -1269,7 +1546,11 @@
     container,
     modeLabel = "VIDEO INTELLIGENCE",
     message = "Preparing the analysis\u2026",
-    progress = 12
+    progress = 12,
+    neutral = false,
+    sourceTitle = "",
+    sourceDomain = "",
+    languageCode = ""
   } = {}) {
     if (!container) {
       return {
@@ -1279,6 +1560,27 @@
         }
       };
     }
+    const neutralMode = Boolean(neutral);
+    const safeTitle = String(
+      sourceTitle || message || ""
+    ).trim();
+    const safeDomain = String(
+      sourceDomain || modeLabel || ""
+    ).trim();
+    const safeLanguageCode = String(
+      languageCode || "SB"
+    ).trim().slice(0, 5).toUpperCase();
+    const visibleModeLabel = neutralMode && safeDomain ? safeDomain : modeLabel;
+    const visibleMessage = neutralMode && safeTitle ? safeTitle : message;
+    const liveLabel = neutralMode ? safeLanguageCode : "LIVE";
+    const analyzingLabel = neutralMode ? safeDomain : "ANALYZING";
+    const firstStageCount = neutralMode ? `${Math.round(progress)}%` : "Stage 1 of 3";
+    const stageLabels = neutralMode ? ["1", "2", "3"] : [
+      "Read",
+      "Evaluate",
+      "Distill"
+    ];
+    const progressAriaLabel = neutralMode && safeTitle ? safeTitle : "Sportabase analysis progress";
     container.innerHTML = `
     <div class="sb-analysis-loader">
       <div
@@ -1309,13 +1611,18 @@
             </div>
 
             <div class="sb-loader-mode">
-              ${escapeHtml(modeLabel)}
+              ${escapeHtml(
+      visibleModeLabel
+    )}
             </div>
           </div>
 
           <div class="sb-loader-live-pill">
             <span></span>
-            LIVE
+
+            ${escapeHtml(
+      liveLabel
+    )}
           </div>
         </div>
 
@@ -1324,27 +1631,36 @@
             class="sb-loader-message"
             data-sb-loader-message
           >
-            ${escapeHtml(message)}
+            ${escapeHtml(
+      visibleMessage
+    )}
           </div>
 
           <div class="sb-loader-progress-row">
             <div class="sb-loader-analyzing">
               <span></span>
-              ANALYZING
+
+              ${escapeHtml(
+      analyzingLabel
+    )}
             </div>
 
             <div
               class="sb-loader-stage-count"
               data-sb-loader-stage-count
             >
-              Stage 1 of 3
+              ${escapeHtml(
+      firstStageCount
+    )}
             </div>
           </div>
 
           <div
             class="sb-loader-track"
             role="progressbar"
-            aria-label="Sportabase analysis progress"
+            aria-label="${escapeHtml(
+      progressAriaLabel
+    )}"
             aria-valuemin="0"
             aria-valuemax="100"
             aria-valuenow="${progress}"
@@ -1358,29 +1674,20 @@
           </div>
 
           <div class="sb-loader-stages">
-            <div
-              class="sb-loader-stage"
-              data-sb-loader-stage="0"
-            >
-              <span></span>
-              Read
-            </div>
+            ${stageLabels.map(
+      (stageLabel, index) => `
+                  <div
+                    class="sb-loader-stage"
+                    data-sb-loader-stage="${index}"
+                  >
+                    <span></span>
 
-            <div
-              class="sb-loader-stage"
-              data-sb-loader-stage="1"
-            >
-              <span></span>
-              Evaluate
-            </div>
-
-            <div
-              class="sb-loader-stage"
-              data-sb-loader-stage="2"
-            >
-              <span></span>
-              Distill
-            </div>
+                    ${escapeHtml(
+        stageLabel
+      )}
+                  </div>
+                `
+    ).join("")}
           </div>
         </div>
       </section>
@@ -1408,14 +1715,18 @@
       progress: nextProgress
     } = {}) {
       const numericProgress = Number(nextProgress);
-      const safeProgress = Number.isFinite(numericProgress) ? Math.max(
+      const safeProgress = Number.isFinite(
+        numericProgress
+      ) ? Math.max(
         5,
         Math.min(
           95,
-          Math.round(numericProgress)
+          Math.round(
+            numericProgress
+          )
         )
       ) : 12;
-      if (nextMessage !== void 0 && messageElement) {
+      if (!neutralMode && nextMessage !== void 0 && messageElement) {
         messageElement.textContent = String(nextMessage);
       }
       if (barElement) {
@@ -1427,9 +1738,11 @@
           String(safeProgress)
         );
       }
-      const activeStage = getStageIndex(safeProgress);
+      const activeStage = getStageIndex(
+        safeProgress
+      );
       if (stageCountElement) {
-        stageCountElement.textContent = `Stage ${activeStage + 1} of 3`;
+        stageCountElement.textContent = neutralMode ? `${safeProgress}%` : `Stage ${activeStage + 1} of 3`;
       }
       stageElements.forEach(
         (stageElement, index) => {
@@ -1568,6 +1881,7 @@
   }
   function getReasonItems(data) {
     const candidates = [
+      data.localized_reasons,
       data.reasons,
       data.reason,
       data.merit_reasons,
@@ -1587,9 +1901,33 @@
     ];
   }
   function getArticleType(data) {
+    const localizedLabel = String(
+      data.localized_article_type || data.article_type_label || ""
+    ).trim();
+    if (localizedLabel) {
+      return localizedLabel;
+    }
     return humanizeLabel(
       data.article_type || data.content_type || data.category || data.story_type || "Article analysis"
     );
+  }
+  function getArticleUiLabels(data) {
+    const labels = {
+      ...DEFAULT_ARTICLE_UI_LABELS
+    };
+    const responseLabels = data?.ui_labels;
+    if (!responseLabels || typeof responseLabels !== "object") {
+      return labels;
+    }
+    for (const key of Object.keys(labels)) {
+      const localizedValue = String(
+        responseLabels[key] || ""
+      ).trim();
+      if (localizedValue) {
+        labels[key] = localizedValue;
+      }
+    }
+    return labels;
   }
   function validateArticleResponse(data) {
     if (!data || typeof data !== "object") {
@@ -1637,6 +1975,97 @@
 
     <span>${escapeHtml2(label)}</span>
   `;
+  }
+  function getPageLanguageCode(article) {
+    const candidates = [
+      document.documentElement?.lang,
+      document.querySelector(
+        'meta[property="og:locale"]'
+      )?.getAttribute(
+        "content"
+      ),
+      document.querySelector(
+        'meta[name="language"]'
+      )?.getAttribute(
+        "content"
+      ),
+      document.querySelector(
+        'meta[http-equiv="content-language"]'
+      )?.getAttribute(
+        "content"
+      )
+    ];
+    for (const candidate of candidates) {
+      const normalized = String(
+        candidate || ""
+      ).trim().toLowerCase().replaceAll(
+        "_",
+        "-"
+      );
+      const languageCode = normalized.split("-")[0];
+      if (/^[a-z]{2,3}$/.test(
+        languageCode
+      )) {
+        return languageCode.toUpperCase();
+      }
+    }
+    const sample = String(
+      article?.text || ""
+    ).slice(
+      0,
+      4e3
+    );
+    const scriptLanguages = [
+      [
+        /[\u0900-\u097f]/,
+        "HI"
+      ],
+      [
+        /[\u0980-\u09ff]/,
+        "BN"
+      ],
+      [
+        /[\u3040-\u30ff]/,
+        "JA"
+      ],
+      [
+        /[\uac00-\ud7af]/,
+        "KO"
+      ],
+      [
+        /[\u4e00-\u9fff]/,
+        "ZH"
+      ],
+      [
+        /[\u0600-\u06ff]/,
+        "AR"
+      ],
+      [
+        /[\u0400-\u04ff]/,
+        "RU"
+      ],
+      [
+        /[\u0370-\u03ff]/,
+        "EL"
+      ],
+      [
+        /[\u0590-\u05ff]/,
+        "HE"
+      ],
+      [
+        /[\u0e00-\u0e7f]/,
+        "TH"
+      ]
+    ];
+    for (const [
+      pattern,
+      languageCode
+    ] of scriptLanguages) {
+      if (pattern.test(sample)) {
+        return languageCode;
+      }
+    }
+    return "SB";
   }
   function openArticleMode({
     shell,
@@ -1916,6 +2345,7 @@
       const meritScore = getMeritScore(data);
       const scoreColor = getScoreColor(meritScore);
       const articleType = getArticleType(data);
+      const uiLabels = getArticleUiLabels(data);
       const summaryItems = getSummaryItems(data);
       const tags = getTags(data);
       const reasonItems = getReasonItems(data);
@@ -1946,7 +2376,7 @@
           ` : "";
       applyResultAccent(scoreColor);
       shell.setModeLabel(
-        `ARTICLE INTELLIGENCE \xB7 ${articleType.toUpperCase()}`
+        `${uiLabels.article_intelligence} ? ${articleType}`
       );
       shell.content.innerHTML = `
       <div class="sb-article-results">
@@ -1954,7 +2384,9 @@
           <div class="sb-article-score-top">
             <div>
               <div class="sb-article-result-eyebrow">
-                MERIT SCORE
+                ${escapeHtml2(
+        uiLabels.merit_score
+      )}
               </div>
 
               <div class="sb-article-score">
@@ -1979,15 +2411,21 @@
 
           <div class="sb-article-analysis-meta">
             ${article.characterCount.toLocaleString()}
-            characters analyzed \xB7
+            ${escapeHtml2(
+        uiLabels.characters_analyzed
+      )} &middot;
             ${article.paragraphCount}
-            content blocks
+            ${escapeHtml2(
+        uiLabels.content_blocks
+      )}
           </div>
         </section>
 
         <section class="sb-article-summary-card">
           <div class="sb-article-section-label">
-            TL;DR
+            ${escapeHtml2(
+        uiLabels.summary
+      )}
           </div>
 
           <ul>
@@ -1997,7 +2435,9 @@
 
         <section class="sb-article-reason-card">
           <div class="sb-article-section-label">
-            Why it scored this way
+            ${escapeHtml2(
+        uiLabels.why_scored
+      )}
           </div>
 
           <ul>
@@ -2009,7 +2449,9 @@
 
         <section class="sb-article-source-card">
           <div class="sb-article-section-label">
-            Analyzed story
+            ${escapeHtml2(
+        uiLabels.analyzed_story
+      )}
           </div>
 
           <div class="sb-article-source-title">
@@ -2027,7 +2469,9 @@
             type="button"
             data-sb-article-overview
           >
-            Article overview
+            ${escapeHtml2(
+        uiLabels.article_overview
+      )}
           </button>
 
           <button
@@ -2036,7 +2480,7 @@
             data-sb-article-reanalyze
           >
             ${getAnalyzeButtonMarkup(
-        "Analyze again"
+        uiLabels.analyze_again
       )}
           </button>
         </div>
@@ -2069,14 +2513,22 @@
         );
         return;
       }
+      const pageLanguageCode = getPageLanguageCode(
+        article
+      );
+      const sourceDomain = article.hostname || window.location.hostname || "Sportabase";
       shell.setModeLabel(
-        "ARTICLE INTELLIGENCE \xB7 ANALYZING"
+        `${sourceDomain} \xB7 ${pageLanguageCode}`
       );
       const loader = createAnalysisLoader({
         container: shell.content,
-        modeLabel: "ARTICLE INTELLIGENCE",
-        message: "Reading the article and removing page noise\u2026",
-        progress: 18
+        modeLabel: sourceDomain,
+        message: article.title,
+        progress: 18,
+        neutral: true,
+        sourceTitle: article.title,
+        sourceDomain,
+        languageCode: pageLanguageCode
       });
       const loaderStartedAt = performance.now();
       try {
@@ -2110,7 +2562,7 @@
           });
         }, 520);
         const apiBase = String(
-          config.api || "https://sportabase-api.onrender.com"
+          config.api || "http://127.0.0.1:8000"
         ).replace(/\/+$/, "");
         const response = await postJson(
           `${apiBase}/analyze`,
@@ -2155,7 +2607,7 @@
     }
     renderLanding();
   }
-  var ANALYSIS_STEPS, MINIMUM_LOADER_DURATION;
+  var ANALYSIS_STEPS, MINIMUM_LOADER_DURATION, DEFAULT_ARTICLE_UI_LABELS;
   var init_article_mode2 = __esm({
     "src/content/article-mode.js"() {
       init_article_extractor();
@@ -2184,6 +2636,23 @@
         }
       ];
       MINIMUM_LOADER_DURATION = 3e3;
+      DEFAULT_ARTICLE_UI_LABELS = Object.freeze({
+        article_intelligence: "ARTICLE INTELLIGENCE",
+        merit_score: "MERIT SCORE",
+        summary: "TL;DR",
+        why_scored: "Why it scored this way",
+        analyzed_story: "Analyzed story",
+        article_overview: "Article overview",
+        analyze_again: "Analyze again",
+        characters_analyzed: "characters analyzed",
+        content_blocks: "content blocks",
+        analyzing: "ANALYZING",
+        ready: "READY",
+        limited: "LIMITED",
+        unavailable: "UNAVAILABLE",
+        retry_analysis: "Retry analysis",
+        return_to_overview: "Return to article overview"
+      });
     }
   });
 
@@ -2899,7 +3368,7 @@
           );
         }, 1900);
         const apiBase = String(
-          config.api || "https://sportabase-api.onrender.com"
+          config.api || "http://127.0.0.1:8000"
         ).replace(/\/+$/, "");
         const response = await postJson(
           `${apiBase}/analyze/video`,

@@ -1,4 +1,4 @@
-﻿import {
+import {
   extractArticlePage,
 } from "./article-extractor.js";
 
@@ -190,6 +190,7 @@ function getMeritScore(data) {
 
 function getReasonItems(data) {
   const candidates = [
+    data.localized_reasons,
     data.reasons,
     data.reason,
     data.merit_reasons,
@@ -214,6 +215,16 @@ function getReasonItems(data) {
 }
 
 function getArticleType(data) {
+  const localizedLabel = String(
+    data.localized_article_type ||
+    data.article_type_label ||
+    ""
+  ).trim();
+
+  if (localizedLabel) {
+    return localizedLabel;
+  }
+
   return humanizeLabel(
     data.article_type ||
     data.content_type ||
@@ -222,6 +233,72 @@ function getArticleType(data) {
     "Article analysis"
   );
 }
+
+const DEFAULT_ARTICLE_UI_LABELS =
+  Object.freeze({
+    article_intelligence:
+      "ARTICLE INTELLIGENCE",
+    merit_score:
+      "MERIT SCORE",
+    summary:
+      "TL;DR",
+    why_scored:
+      "Why it scored this way",
+    analyzed_story:
+      "Analyzed story",
+    article_overview:
+      "Article overview",
+    analyze_again:
+      "Analyze again",
+    characters_analyzed:
+      "characters analyzed",
+    content_blocks:
+      "content blocks",
+    analyzing:
+      "ANALYZING",
+    ready:
+      "READY",
+    limited:
+      "LIMITED",
+    unavailable:
+      "UNAVAILABLE",
+    retry_analysis:
+      "Retry analysis",
+    return_to_overview:
+      "Return to article overview",
+  });
+
+function getArticleUiLabels(data) {
+  const labels = {
+    ...DEFAULT_ARTICLE_UI_LABELS,
+  };
+
+  const responseLabels =
+    data?.ui_labels;
+
+  if (
+    !responseLabels ||
+    typeof responseLabels !== "object"
+  ) {
+    return labels;
+  }
+
+  for (
+    const key
+    of Object.keys(labels)
+  ) {
+    const localizedValue = String(
+      responseLabels[key] || ""
+    ).trim();
+
+    if (localizedValue) {
+      labels[key] = localizedValue;
+    }
+  }
+
+  return labels;
+}
+
 
 function validateArticleResponse(data) {
   if (
@@ -291,6 +368,140 @@ function getAnalyzeButtonMarkup(label) {
     <span>${escapeHtml(label)}</span>
   `;
 }
+
+
+function getPageLanguageCode(article) {
+  const candidates = [
+    document
+      .documentElement
+      ?.lang,
+
+    document
+      .querySelector(
+        'meta[property="og:locale"]'
+      )
+      ?.getAttribute(
+        "content"
+      ),
+
+    document
+      .querySelector(
+        'meta[name="language"]'
+      )
+      ?.getAttribute(
+        "content"
+      ),
+
+    document
+      .querySelector(
+        'meta[http-equiv="content-language"]'
+      )
+      ?.getAttribute(
+        "content"
+      ),
+  ];
+
+  for (
+    const candidate
+    of candidates
+  ) {
+    const normalized =
+      String(
+        candidate || ""
+      )
+        .trim()
+        .toLowerCase()
+        .replaceAll(
+          "_",
+          "-"
+        );
+
+    const languageCode =
+      normalized
+        .split("-")[0];
+
+    if (
+      /^[a-z]{2,3}$/.test(
+        languageCode
+      )
+    ) {
+      return languageCode
+        .toUpperCase();
+    }
+  }
+
+  /*
+   * Script fallback for sites that do not
+   * declare an HTML language.
+   */
+  const sample =
+    String(
+      article?.text || ""
+    ).slice(
+      0,
+      4000
+    );
+
+  const scriptLanguages = [
+    [
+      /[\u0900-\u097f]/,
+      "HI",
+    ],
+    [
+      /[\u0980-\u09ff]/,
+      "BN",
+    ],
+    [
+      /[\u3040-\u30ff]/,
+      "JA",
+    ],
+    [
+      /[\uac00-\ud7af]/,
+      "KO",
+    ],
+    [
+      /[\u4e00-\u9fff]/,
+      "ZH",
+    ],
+    [
+      /[\u0600-\u06ff]/,
+      "AR",
+    ],
+    [
+      /[\u0400-\u04ff]/,
+      "RU",
+    ],
+    [
+      /[\u0370-\u03ff]/,
+      "EL",
+    ],
+    [
+      /[\u0590-\u05ff]/,
+      "HE",
+    ],
+    [
+      /[\u0e00-\u0e7f]/,
+      "TH",
+    ],
+  ];
+
+  for (
+    const [
+      pattern,
+      languageCode,
+    ]
+    of scriptLanguages
+  ) {
+    if (
+      pattern.test(sample)
+    ) {
+      return languageCode;
+    }
+  }
+
+  return "SB";
+}
+
 
 export function openArticleMode({
   shell,
@@ -651,6 +862,9 @@ export function openArticleMode({
     const articleType =
       getArticleType(data);
 
+    const uiLabels =
+      getArticleUiLabels(data);
+
     const summaryItems =
       getSummaryItems(data);
 
@@ -702,7 +916,7 @@ export function openArticleMode({
     applyResultAccent(scoreColor);
 
     shell.setModeLabel(
-      `ARTICLE INTELLIGENCE · ${articleType.toUpperCase()}`
+      `${uiLabels.article_intelligence} ? ${articleType}`
     );
 
     shell.content.innerHTML = `
@@ -711,7 +925,9 @@ export function openArticleMode({
           <div class="sb-article-score-top">
             <div>
               <div class="sb-article-result-eyebrow">
-                MERIT SCORE
+                ${escapeHtml(
+                  uiLabels.merit_score
+                )}
               </div>
 
               <div class="sb-article-score">
@@ -736,15 +952,21 @@ export function openArticleMode({
 
           <div class="sb-article-analysis-meta">
             ${article.characterCount.toLocaleString()}
-            characters analyzed ·
+            ${escapeHtml(
+              uiLabels.characters_analyzed
+            )} &middot;
             ${article.paragraphCount}
-            content blocks
+            ${escapeHtml(
+              uiLabels.content_blocks
+            )}
           </div>
         </section>
 
         <section class="sb-article-summary-card">
           <div class="sb-article-section-label">
-            TL;DR
+            ${escapeHtml(
+              uiLabels.summary
+            )}
           </div>
 
           <ul>
@@ -754,7 +976,9 @@ export function openArticleMode({
 
         <section class="sb-article-reason-card">
           <div class="sb-article-section-label">
-            Why it scored this way
+            ${escapeHtml(
+              uiLabels.why_scored
+            )}
           </div>
 
           <ul>
@@ -766,7 +990,9 @@ export function openArticleMode({
 
         <section class="sb-article-source-card">
           <div class="sb-article-section-label">
-            Analyzed story
+            ${escapeHtml(
+              uiLabels.analyzed_story
+            )}
           </div>
 
           <div class="sb-article-source-title">
@@ -784,7 +1010,9 @@ export function openArticleMode({
             type="button"
             data-sb-article-overview
           >
-            Article overview
+            ${escapeHtml(
+              uiLabels.article_overview
+            )}
           </button>
 
           <button
@@ -793,7 +1021,7 @@ export function openArticleMode({
             data-sb-article-reanalyze
           >
             ${getAnalyzeButtonMarkup(
-              "Analyze again"
+              uiLabels.analyze_again
             )}
           </button>
         </div>
@@ -840,18 +1068,44 @@ export function openArticleMode({
       return;
     }
 
+    const pageLanguageCode =
+      getPageLanguageCode(
+        article
+      );
+
+    const sourceDomain =
+      article.hostname ||
+      window.location.hostname ||
+      "Sportabase";
+
     shell.setModeLabel(
-      "ARTICLE INTELLIGENCE · ANALYZING"
+      `${sourceDomain} \u00B7 ${pageLanguageCode}`
     );
 
     const loader =
       createAnalysisLoader({
-        container: shell.content,
+        container:
+          shell.content,
+
         modeLabel:
-          "ARTICLE INTELLIGENCE",
+          sourceDomain,
+
         message:
-          "Reading the article and removing page noise…",
-        progress: 18,
+          article.title,
+
+        progress:
+          18,
+
+        neutral:
+          true,
+
+        sourceTitle:
+          article.title,
+
+        sourceDomain,
+
+        languageCode:
+          pageLanguageCode,
       });
 
     const loaderStartedAt =
@@ -918,7 +1172,7 @@ export function openArticleMode({
 
       const apiBase = String(
         config.api ||
-        "https://sportabase-api.onrender.com"
+        "http://127.0.0.1:8000"
       ).replace(/\/+$/, "");
 
       const response = await postJson(

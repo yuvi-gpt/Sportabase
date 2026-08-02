@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 import re
@@ -7,6 +7,7 @@ import time
 import hashlib
 import sqlite3
 from pathlib import Path
+from functools import lru_cache
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import html as ihtml
@@ -22,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from dotenv import load_dotenv
 from google import genai
+from lingua import LanguageDetectorBuilder
 # from app.routes.insights import router as insights_router
 
 
@@ -108,6 +110,12 @@ class AnalyzeResponse(BaseModel):
     type_signals: List[str] = Field(default_factory=list)
 
     reasons: List[str] = Field(default_factory=list)
+
+    language: Dict[str, Any] = Field(default_factory=dict)
+    localized_article_type: str = ""
+    localized_reasons: List[str] = Field(default_factory=list)
+    ui_labels: Dict[str, str] = Field(default_factory=dict)
+
     debug: Dict[str, Any] = Field(default_factory=dict)
 
 class VideoAnalyzeRequest(BaseModel):
@@ -2075,79 +2083,239 @@ def gemini_tldr(
     text: str,
     max_bullets: int = 3,
     language_info: Optional[Dict[str, Any]] = None,
-) -> List[str]:
+    article_type_label: str = "Article analysis",
+    reasons: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     text = clean_html(text)
+    language_info = language_info or {}
+
+    source_reasons = [
+        clean_html(str(reason)).strip()
+        for reason in (reasons or [])
+        if str(reason).strip()
+    ][:9]
+
+    fallback_result = {
+        "bullets": extractive_fallback(
+            text,
+            max_bullets=max_bullets,
+        ),
+        "localized_article_type": article_type_label,
+        "localized_reasons": source_reasons,
+        "ui_labels": {},
+    }
 
     client = gemini_client()
+
     if client is None:
-        return extractive_fallback(text, max_bullets=max_bullets)
+        return fallback_result
 
     clipped = text[:MAX_ANALYZE_CHARS]
 
+    detected_language = str(
+        language_info.get(
+            "detected_language",
+            "unknown",
+        )
+    ).strip()
+
+    mixed_language = bool(
+        language_info.get(
+            "mixed_language",
+            False,
+        )
+    )
+
+    if (
+        not detected_language
+        or detected_language.lower() == "unknown"
+    ):
+        output_language_instruction = (
+            "Use the same primary language as the source text. "
+            "Use English only if the source language cannot be "
+            "determined."
+        )
+    elif mixed_language:
+        output_language_instruction = (
+            "Preserve the source article's mixed or code-switched "
+            f"language style. Detected language: {detected_language}."
+        )
+    else:
+        output_language_instruction = (
+            f"Write every localized field in {detected_language}."
+        )
+
     prompt = (
-        "Return ONLY valid JSON. No markdown. No commentary.\n"
-        f"Task: summarize the sports/news article into exactly {max_bullets} TL;DR bullets.\n\n"
-        f"Detected language information: {json.dumps(language_info or {})}\n"
-        "Understand the article in its original language, including mixed or code-switched text.\n"
-        "Return the TL;DR bullets in English for now.\n\n"
+        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
+        f"Task: summarize the sports/news article into exactly "
+        f"{max_bullets} TL;DR bullets and localize the accompanying "
+        "Sportabase interface text.\n\n"
+        f"Detected language information: "
+        f"{json.dumps(language_info, ensure_ascii=False)}\n"
+        f"Language instruction: {output_language_instruction}\n\n"
+        f"Current article type label: {article_type_label}\n"
+        f"Current scoring reasons: "
+        f"{json.dumps(source_reasons, ensure_ascii=False)}\n\n"
         "Rules:\n"
-        "- Each bullet must be one sentence.\n"
-        "- Each bullet should be approximately 25 to 35 words, with one complete and specific insight.\n"
-        "- Prioritize concrete facts: who, what, when, why it matters.\n"
-        "- Remove site boilerplate, ads, newsletter text, captions, and navigation text.\n"
-        "- Do not invent facts not present in the text.\n"
+        "- Every bullet must be one complete sentence.\n"
+        "- Each bullet should be approximately 25 to 35 words.\n"
+        "- Prioritize concrete facts: who, what, when, and why it matters.\n"
+        "- Do not invent facts not present in the source.\n"
         "- Do not mention that this is an article.\n"
         "- Do not repeat the title as a bullet.\n"
-        "- If the text is mostly opinion, summarize the claim as opinion, not fact.\n\n"
-        'Output format: {"bullets": ["bullet 1", "bullet 2", "..."]}\n\n'
+        "- Preserve names of people, clubs, leagues, and competitions.\n"
+        "- Translate the article-type label and scoring reasons faithfully.\n"
+        "- UI labels must be short and natural, not literal or awkward.\n"
+        "- Keep the meaning of Merit Score as a credibility/substance score.\n\n"
+        "Return this exact JSON structure:\n"
+        "{\n"
+        '  "bullets": ["...", "..."],\n'
+        '  "localized_article_type": "...",\n'
+        '  "localized_reasons": ["...", "..."],\n'
+        '  "ui_labels": {\n'
+        '    "article_intelligence": "...",\n'
+        '    "merit_score": "...",\n'
+        '    "summary": "...",\n'
+        '    "why_scored": "...",\n'
+        '    "analyzed_story": "...",\n'
+        '    "article_overview": "...",\n'
+        '    "analyze_again": "...",\n'
+        '    "characters_analyzed": "...",\n'
+        '    "content_blocks": "...",\n'
+        '    "analyzing": "...",\n'
+        '    "ready": "...",\n'
+        '    "limited": "...",\n'
+        '    "unavailable": "...",\n'
+        '    "retry_analysis": "...",\n'
+        '    "return_to_overview": "..."\n'
+        "  }\n"
+        "}\n\n"
         f"Title: {title}\n\n"
         f"Text:\n{clipped}\n"
     )
 
     try:
-        resp = client.models.generate_content(
+        response = client.models.generate_content(
             model="gemini-3.5-flash",
             contents=prompt,
         )
 
-        raw = (resp.text or "").strip()
+        raw = (response.text or "").strip()
 
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            raw = raw[start:end + 1]
+        json_start = raw.find("{")
+        json_end = raw.rfind("}")
+
+        if (
+            json_start != -1
+            and json_end != -1
+            and json_end > json_start
+        ):
+            raw = raw[
+                json_start:json_end + 1
+            ]
 
         data = json.loads(raw)
 
-        bullets = data.get("bullets", [])
-        cleaned: List[str] = []
+        cleaned_bullets: List[str] = []
 
-        for b in bullets:
-            if not isinstance(b, str):
+        for bullet in data.get("bullets", []):
+            if not isinstance(bullet, str):
                 continue
 
-            b = clean_html(b)
-            b = re.sub(r"\s+", " ", b).strip()
+            cleaned_bullet = re.sub(
+                r"\s+",
+                " ",
+                clean_html(bullet),
+            ).strip()
 
-            if not b:
+            if not cleaned_bullet:
                 continue
 
+            if cleaned_bullet.lower() not in {
+                item.lower()
+                for item in cleaned_bullets
+            }:
+                cleaned_bullets.append(
+                    cleaned_bullet
+                )
 
-            low = b.lower()
-            if low not in [x.lower() for x in cleaned]:
-                cleaned.append(b)
-
-            if len(cleaned) >= max_bullets:
+            if (
+                len(cleaned_bullets)
+                >= max_bullets
+            ):
                 break
 
-        if cleaned:
-            return cleaned[:max_bullets]
+        localized_article_type = clean_html(
+            str(
+                data.get(
+                    "localized_article_type",
+                    article_type_label,
+                )
+            )
+        ).strip()
 
-        return extractive_fallback(text, max_bullets=max_bullets)
+        localized_reasons: List[str] = []
 
-    except Exception as e:
-        print("gemini_tldr fallback:", type(e).__name__, str(e)[:160])
-        return extractive_fallback(text, max_bullets=max_bullets)
+        for reason in data.get(
+            "localized_reasons",
+            [],
+        ):
+            if not isinstance(reason, str):
+                continue
+
+            cleaned_reason = re.sub(
+                r"\s+",
+                " ",
+                clean_html(reason),
+            ).strip()
+
+            if cleaned_reason:
+                localized_reasons.append(
+                    cleaned_reason
+                )
+
+        raw_ui_labels = data.get(
+            "ui_labels",
+            {},
+        )
+
+        ui_labels = {}
+
+        if isinstance(raw_ui_labels, dict):
+            ui_labels = {
+                str(key): re.sub(
+                    r"\s+",
+                    " ",
+                    clean_html(str(value)),
+                ).strip()
+                for key, value
+                in raw_ui_labels.items()
+                if str(value).strip()
+            }
+
+        return {
+            "bullets": (
+                cleaned_bullets[:max_bullets]
+                or fallback_result["bullets"]
+            ),
+            "localized_article_type": (
+                localized_article_type
+                or article_type_label
+            ),
+            "localized_reasons": (
+                localized_reasons
+                or source_reasons
+            ),
+            "ui_labels": ui_labels,
+        }
+
+    except Exception as error:
+        print(
+            "gemini_tldr fallback:",
+            type(error).__name__,
+            str(error)[:160],
+        )
+        return fallback_result
 
 
 # -----------------------------
@@ -2437,91 +2605,329 @@ def stories(
     finally:
         conn.close()
 
-def detect_content_language(text: str) -> Dict[str, Any]:
-    cleaned = clean_html(text).strip()
-
-    if not cleaned:
-        return {
-            "detected_language": "unknown",
-            "languages": [],
-            "mixed_language": False,
-            "language_confidence": 0.0,
-        }
-
-    client = gemini_client()
-
-    if client is None:
-        return {
-            "detected_language": "unknown",
-            "languages": [],
-            "mixed_language": False,
-            "language_confidence": 0.0,
-        }
-
-    sample = cleaned[:3000]
-
-    if len(cleaned) > 6000:
-        sample += "\n\n[END SAMPLE]\n" + cleaned[-3000:]
-
-    prompt = (
-        "Return ONLY valid JSON. No markdown. No commentary.\n\n"
-        "Detect the language or languages used in this sports content.\n"
-        "Recognize mixed-language and code-switched text such as Hinglish.\n"
-        "Do not treat player names, club names, or short foreign phrases as a separate language.\n\n"
-        "Output JSON format:\n"
-        "{\n"
-        '  "detected_language": "Hindi-English mixed",\n'
-        '  "languages": ["Hindi", "English"],\n'
-        '  "mixed_language": true,\n'
-        '  "language_confidence": 0.95\n'
-        "}\n\n"
-        f"Content:\n{sample}\n"
+@lru_cache(maxsize=1)
+def get_language_detector():
+    """
+    Build one reusable offline detector containing every modern spoken
+    language supported by Lingua.
+    """
+    return (
+        LanguageDetectorBuilder
+        .from_all_spoken_languages()
+        .with_low_accuracy_mode()
+        .build()
     )
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+
+def lingua_language_name(language: Any) -> str:
+    return str(language.name).replace("_", " ").title()
+
+
+def detect_content_language(text: str) -> Dict[str, Any]:
+    """
+    Detect article languages locally without using Gemini quota.
+
+    Lingua handles the primary language and substantial multilingual
+    sections. A small additional heuristic handles Romanized Hindi and
+    Hinglish, which are harder for script-based language detectors.
+    """
+    cleaned = clean_html(text).strip()
+
+    unknown_result = {
+        "detected_language": "unknown",
+        "languages": [],
+        "mixed_language": False,
+        "language_confidence": 0.0,
+        "detection_method": "lingua_local",
+        "language_candidates": [],
+    }
+
+    if not cleaned:
+        return unknown_result
+
+    if len(cleaned) <= 12000:
+        sample = cleaned
+    else:
+        sample = (
+            cleaned[:6000]
+            + "\n\n[END SAMPLE]\n\n"
+            + cleaned[-6000:]
         )
 
-        raw = (response.text or "").strip()
-        start = raw.find("{")
-        end = raw.rfind("}")
+    letter_count = sum(
+        1
+        for character in sample
+        if character.isalpha()
+    )
 
-        if start != -1 and end != -1 and end > start:
-            raw = raw[start:end + 1]
+    if letter_count < 10:
+        return unknown_result
 
-        data = json.loads(raw)
+    try:
+        detector = get_language_detector()
 
-        languages = data.get("languages", [])
-        if not isinstance(languages, list):
-            languages = [str(languages)]
+        primary_language = detector.detect_language_of(
+            sample
+        )
 
-        try:
-            confidence = float(data.get("language_confidence", 0.0))
-        except Exception:
-            confidence = 0.0
+        if primary_language is None:
+            return unknown_result
+
+        primary_name = lingua_language_name(
+            primary_language
+        )
+
+        confidence_values = (
+            detector.compute_language_confidence_values(sample)
+        )
+
+        if confidence_values:
+            primary_confidence = next(
+                (
+                    float(candidate.value)
+                    for candidate in confidence_values
+                    if candidate.language == primary_language
+                ),
+                float(confidence_values[0].value),
+            )
+
+            candidates = [
+                {
+                    "language": lingua_language_name(
+                        candidate.language
+                    ),
+                    "confidence": round(
+                        float(candidate.value),
+                        3,
+                    ),
+                }
+                for candidate in confidence_values[:3]
+            ]
+        else:
+            # Lingua's alphabet rule engine identified the
+            # language without requiring n-gram probabilities.
+            primary_confidence = 1.0
+            candidates = [
+                {
+                    "language": primary_name,
+                    "confidence": 1.0,
+                }
+            ]
+
+        # Detect substantial sections written in different languages.
+        segment_weights: Dict[str, int] = {}
+
+        for segment in detector.detect_multiple_languages_of(sample):
+            segment_text = sample[
+                segment.start_index:segment.end_index
+            ]
+
+            segment_letters = sum(
+                1
+                for character in segment_text
+                if character.isalpha()
+            )
+
+            if segment_letters <= 0:
+                continue
+
+            segment_name = lingua_language_name(
+                segment.language
+            )
+
+            segment_weights[segment_name] = (
+                segment_weights.get(segment_name, 0)
+                + segment_letters
+            )
+
+        total_segment_letters = sum(
+            segment_weights.values()
+        )
+
+        major_languages = []
+
+        if total_segment_letters > 0:
+            major_languages = [
+                (
+                    language,
+                    weight / total_segment_letters,
+                )
+                for language, weight in segment_weights.items()
+                if (
+                    weight >= 80
+                    and weight / total_segment_letters >= 0.15
+                )
+            ]
+
+            major_languages.sort(
+                key=lambda item: item[1],
+                reverse=True,
+            )
+
+        detected_languages = [
+            language
+            for language, _ratio in major_languages[:3]
+        ]
+
+        mixed_language = len(detected_languages) >= 2
+
+        if not mixed_language:
+            detected_languages = [primary_name]
+
+        detected_language = (
+            " / ".join(detected_languages) + " mixed"
+            if mixed_language
+            else primary_name
+        )
+
+        # Romanized Hindi and Hinglish overlay.
+        tokens = re.findall(
+            r"[A-Za-z']+",
+            sample.lower(),
+        )
+
+        romanized_hindi_markers = {
+            "hai",
+            "hain",
+            "nahi",
+            "nahin",
+            "kya",
+            "kyun",
+            "kaise",
+            "lekin",
+            "mein",
+            "mera",
+            "meri",
+            "hum",
+            "tum",
+            "unka",
+            "unki",
+            "uska",
+            "uski",
+            "raha",
+            "rahi",
+            "rahe",
+            "gaya",
+            "gayi",
+            "karna",
+            "kiya",
+            "karo",
+            "wala",
+            "wali",
+            "bahut",
+            "thoda",
+            "abhi",
+            "aaj",
+            "hoga",
+            "hogi",
+            "shayad",
+            "bilkul",
+            "magar",
+            "kyunki",
+        }
+
+        english_markers = {
+            "the",
+            "and",
+            "that",
+            "this",
+            "with",
+            "from",
+            "have",
+            "has",
+            "was",
+            "were",
+            "will",
+            "would",
+            "their",
+            "about",
+            "after",
+            "before",
+            "because",
+            "during",
+            "into",
+            "also",
+            "club",
+            "team",
+            "player",
+            "match",
+        }
+
+        hindi_hits = sum(
+            1
+            for token in tokens
+            if token in romanized_hindi_markers
+        )
+
+        english_hits = sum(
+            1
+            for token in tokens
+            if token in english_markers
+        )
+
+        token_count = max(1, len(tokens))
+        hindi_ratio = hindi_hits / token_count
+
+        looks_romanized_hindi = (
+            primary_name in {
+                "English",
+                "Hindi",
+                "Urdu",
+            }
+            and hindi_hits >= 6
+            and hindi_ratio >= 0.015
+        )
+
+        if looks_romanized_hindi:
+            has_substantial_english = (
+                english_hits >= 6
+            )
+
+            if has_substantial_english:
+                detected_language = (
+                    "Hindi-English mixed"
+                )
+                detected_languages = [
+                    "Hindi",
+                    "English",
+                ]
+                mixed_language = True
+            else:
+                detected_language = (
+                    "Hindi (Romanized)"
+                )
+                detected_languages = ["Hindi"]
+                mixed_language = False
+
+            primary_confidence = max(
+                primary_confidence,
+                0.75,
+            )
 
         return {
-            "detected_language": str(
-                data.get("detected_language", "unknown")
-            ),
-            "languages": [str(language) for language in languages],
-            "mixed_language": bool(data.get("mixed_language", False)),
+            "detected_language": detected_language,
+            "languages": detected_languages,
+            "mixed_language": mixed_language,
             "language_confidence": round(
-                max(0.0, min(1.0, confidence)),
+                max(
+                    0.0,
+                    min(1.0, primary_confidence),
+                ),
                 2,
             ),
+            "detection_method": "lingua_local",
+            "language_candidates": candidates,
         }
 
     except Exception as error:
         return {
-            "detected_language": "unknown",
-            "languages": [],
-            "mixed_language": False,
-            "language_confidence": 0.0,
-            "error": f"{type(error).__name__}: {str(error)[:160]}",
+            **unknown_result,
+            "error": (
+                f"{type(error).__name__}: "
+                f"{str(error)[:160]}"
+            ),
         }
+
 
 def ai_video_claim_readout(title: str, transcript: str, url: str = "") -> Dict[str, Any]:
     client = gemini_client()
@@ -2937,16 +3343,53 @@ def analyze(req: AnalyzeRequest):
             ],
         }
 
-    tldr = gemini_tldr(
+    score = merit_score(
+        req.title,
+        cleaned_text,
+        req.url,
+        final_type_info,
+    )
+    mark("merit_score_ms")
+
+    tldr_result = gemini_tldr(
         req.title,
         cleaned_text,
         max_bullets=req.max_bullets,
         language_info=language_info,
+        article_type_label=str(
+            final_type_info.get(
+                "label",
+                "Generic Sports News",
+            )
+        ),
+        reasons=score.get("reasons", []),
     )
     mark("tldr_ms")
 
-    score = merit_score(req.title, cleaned_text, req.url, type_info)
-    mark("merit_score_ms")
+    tldr = tldr_result.get(
+        "bullets",
+        [],
+    )
+
+    localized_article_type = str(
+        tldr_result.get(
+            "localized_article_type",
+            final_type_info.get(
+                "label",
+                "Generic Sports News",
+            ),
+        )
+    )
+
+    localized_reasons = tldr_result.get(
+        "localized_reasons",
+        score.get("reasons", []),
+    )
+
+    ui_labels = tldr_result.get(
+        "ui_labels",
+        {},
+    )
 
     total_ms = round((time.perf_counter() - started) * 1000, 2)
 
@@ -2964,6 +3407,12 @@ def analyze(req: AnalyzeRequest):
         type_signals=final_type_info.get("signals", []),
 
         reasons=score.get("reasons", []),
+
+        language=language_info,
+        localized_article_type=localized_article_type,
+        localized_reasons=localized_reasons,
+        ui_labels=ui_labels,
+
         debug={
             "timings": timings_ms,
             "total_ms": total_ms,

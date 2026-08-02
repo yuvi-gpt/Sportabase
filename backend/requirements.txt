@@ -1,4 +1,4 @@
-fastapi
+﻿fastapi
 uvicorn[standard]
 pydantic
 requests
@@ -9,3 +9,4 @@ google-genai
 beautifulsoup4
 lxml
 pandas
+lingua-language-detector==2.1.1
