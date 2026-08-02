@@ -1,4 +1,4 @@
-﻿#sportabase-root,
+#sportabase-root,
 #sportabase-root * {
   box-sizing: border-box;
 }
@@ -1298,4 +1298,27 @@
 
 #sportabase-root.sb-has-analysis-accent .sb-logo span {
   color: #ffffff;
+}
+
+.sb-data-disclosure {
+  max-width: 520px;
+  margin: 10px auto 0;
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(
+    --sb-text-muted,
+    rgba(180, 188, 202, 0.82)
+  );
+}
+
+.sb-data-disclosure a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.sb-data-disclosure a:hover {
+  opacity: 0.82;
 }

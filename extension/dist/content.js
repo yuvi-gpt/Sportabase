@@ -2239,6 +2239,19 @@
       )}
           </button>
 
+          <p class="sb-data-disclosure">
+            By analyzing, the page URL, title, and readable
+            article text are sent to Sportabase and Google
+            Gemini for analysis.
+            <a
+              href="https://yuvi-gpt.github.io/Sportabase/privacy.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy policy
+            </a>
+          </p>
+
           <div class="sb-article-feature-grid">
             <div>
               <span>01</span>
@@ -3021,6 +3034,19 @@
         "Analyze video"
       )}
           </button>
+
+          <p class="sb-data-disclosure">
+            By analyzing, the video title, URL, and available
+            transcript are sent to Sportabase and Google
+            Gemini for analysis.
+            <a
+              href="https://yuvi-gpt.github.io/Sportabase/privacy.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy policy
+            </a>
+          </p>
 
           <div class="sb-video-feature-grid">
             <div>

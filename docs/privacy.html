@@ -2,34 +2,56 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
   <title>Sportabase Privacy Policy</title>
+
   <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
       padding: 40px 20px;
-      font-family: Arial, Helvetica, sans-serif;
+      font-family:
+        Inter,
+        Arial,
+        Helvetica,
+        sans-serif;
       background: #070b12;
       color: #f5f7fb;
-      line-height: 1.65;
+      line-height: 1.7;
     }
 
     main {
-      max-width: 850px;
+      max-width: 900px;
       margin: 0 auto;
+      padding: 36px;
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 18px;
-      padding: 32px;
     }
 
-    h1, h2 {
+    h1,
+    h2 {
       color: #7dd3fc;
       line-height: 1.25;
     }
 
     h1 {
       margin-top: 0;
+    }
+
+    h2 {
+      margin-top: 34px;
     }
 
     a {
@@ -41,80 +63,453 @@
       font-size: 0.95rem;
     }
 
+    .notice {
+      padding: 16px;
+      border-left: 4px solid #86efac;
+      background: rgba(134, 239, 172, 0.08);
+      border-radius: 8px;
+    }
+
     ul {
       padding-left: 22px;
     }
+
+    code {
+      color: #bae6fd;
+    }
   </style>
 </head>
+
 <body>
   <main>
     <h1>Sportabase Privacy Policy</h1>
-    <p class="updated">Last updated: May 12, 2026</p>
 
-    <p>
-      Sportabase is a Chrome extension that analyzes sports articles when the user manually clicks the extension. It provides a TL;DR summary, article type detection, credibility score, and evidence signals.
+    <p class="updated">
+      Last updated: August 2, 2026
     </p>
 
-    <h2>Data We Collect</h2>
     <p>
-      Sportabase may process the following data when the user clicks the extension on an active page:
+      Sportabase is a Chrome extension that provides
+      AI-assisted analysis of sports articles and supported
+      YouTube sports videos. It can generate summaries,
+      classify content, evaluate evidence and reasoning,
+      identify potentially speculative or exaggerated
+      presentation, and provide multilingual analysis.
     </p>
+
+    <p>
+      Sportabase runs only after the user intentionally
+      opens or activates the extension. It does not
+      continuously monitor browsing activity in the
+      background.
+    </p>
+
+    <h2>Information Sportabase Processes</h2>
+
+    <p>
+      When a user requests an analysis, Sportabase may
+      process the following information:
+    </p>
+
     <ul>
-      <li>The active article URL</li>
-      <li>The active page title</li>
-      <li>Visible article text extracted from the active tab</li>
-      <li>Local extension preferences, such as overlay size and position</li>
+      <li>The active page URL and page title.</li>
+
+      <li>
+        Visible article text extracted from the active page.
+      </li>
+
+      <li>
+        The available transcript and title of a supported
+        YouTube video.
+      </li>
+
+      <li>
+        Information derived from the content, including
+        summaries, classifications, scores, explanations,
+        language information, and generated analysis.
+      </li>
+
+      <li>
+        Local interface preferences such as appearance,
+        text size, density, overlay size, and overlay
+        position.
+      </li>
+
+      <li>
+        A randomly generated installation identifier used
+        for rate limiting and abuse prevention.
+      </li>
+
+      <li>
+        Technical and operational information such as
+        request time, analysis type, model name, request
+        status, token counts, cache status, and error
+        information.
+      </li>
+
+      <li>
+        Network information such as an IP address that may
+        be processed by the Sportabase backend or hosting
+        provider when a request is made. An IP address may
+        reveal an approximate geographic area.
+      </li>
     </ul>
 
-    <h2>How We Use Data</h2>
+    <h2>How Sportabase Uses Information</h2>
+
     <p>
-      Article data is used only to generate the extension’s core features:
+      Information is used only to provide, secure, maintain,
+      and improve Sportabase's disclosed sports-analysis
+      functionality. This includes:
     </p>
+
     <ul>
-      <li>Article summaries</li>
-      <li>Article type detection, such as match report, transfer rumor, injury update, lineup news, interview, or tactical analysis</li>
-      <li>Credibility and merit scoring</li>
-      <li>Evidence signals explaining why an article received a score</li>
+      <li>
+        Generating article and video summaries.
+      </li>
+
+      <li>
+        Identifying sports-content types, including match
+        reports, transfer coverage, injuries, interviews,
+        analysis, opinion, rumors, and official news.
+      </li>
+
+      <li>
+        Evaluating evidence, sourcing, reasoning,
+        speculation, and presentation style.
+      </li>
+
+      <li>
+        Returning analysis and interface labels in the
+        detected language of the source.
+      </li>
+
+      <li>
+        Preventing excessive or abusive use through global
+        and per-installation usage limits.
+      </li>
+
+      <li>
+        Caching repeated analyses to reduce processing time
+        and unnecessary AI requests.
+      </li>
+
+      <li>
+        Diagnosing errors and maintaining service
+        reliability and security.
+      </li>
+    </ul>
+
+    <h2>Local Browser Storage</h2>
+
+    <p>
+      Sportabase uses Chrome's local extension storage to
+      save interface preferences and a randomly generated
+      installation identifier.
+    </p>
+
+    <p>
+      The identifier is not a username, email address, or
+      advertising identifier. It is used for operational
+      rate limiting and abuse prevention.
+    </p>
+
+    <p>
+      Sportabase does not intentionally store raw article
+      text or video transcripts in Chrome's local extension
+      storage.
+    </p>
+
+    <h2>Backend Processing and Caching</h2>
+
+    <p>
+      Analysis requests are transmitted over HTTPS to the
+      Sportabase backend hosted using Render.
+    </p>
+
+    <p>
+      The backend may temporarily cache generated analysis
+      so that unchanged content can be returned without
+      making another AI request.
+    </p>
+
+    <ul>
+      <li>
+        Standard article and video analysis becomes
+        ineligible for cache reuse after approximately
+        six hours.
+      </li>
+
+      <li>
+        Live-commentary or live-update content becomes
+        ineligible for cache reuse after approximately
+        three minutes.
+      </li>
+
+      <li>
+        Cache records may contain the page URL, a
+        cryptographic content hash, the generated response,
+        content classification, timestamps, and operational
+        metadata.
+      </li>
+
+      <li>
+        Raw article text and raw video transcripts are not
+        intentionally stored inside the Sportabase analysis
+        cache.
+      </li>
     </ul>
 
     <p>
-      Local extension preferences are stored in the browser to remember the user’s overlay layout.
+      Expired records may remain until routine database
+      cleanup occurs, but they are not treated as valid
+      cached results.
     </p>
 
-    <h2>Third-Party Processing</h2>
     <p>
-      Sportabase may use third-party AI providers, such as Google Gemini, to process article text and generate summaries or analysis.
+      Operational usage records may be retained for as long
+      as reasonably necessary for rate limiting, security,
+      debugging, service reliability, and compliance.
     </p>
+
+    <h2>Third-Party Service Providers</h2>
+
+    <h3>Render</h3>
+
+    <p>
+      Render hosts the Sportabase backend. Render may
+      process network, service, and technical information
+      necessary to host and operate the backend, including
+      request and service logs.
+    </p>
+
+    <p>
+      Render's privacy policy is available at:
+      <a
+        href="https://render.com/privacy"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        https://render.com/privacy
+      </a>
+    </p>
+
+    <h3>Google Gemini API</h3>
+
+    <p>
+      Sportabase uses the Google Gemini API to produce
+      portions of its summaries, classifications,
+      translations, and video analysis.
+    </p>
+
+    <p>
+      Depending on the requested feature, information sent
+      to Gemini may include the page or video title, URL,
+      extracted article text, video transcript, existing
+      scoring explanations, detected language, and
+      instructions required to generate the analysis.
+    </p>
+
+    <p>
+      Google's handling of submitted content depends on the
+      Gemini API service and billing configuration.
+      Google's terms state that content submitted through
+      unpaid Gemini services, together with generated
+      responses, may be used to provide, improve, and
+      develop Google products and machine-learning
+      technologies. Google also states that authorized
+      human reviewers may process input and output from
+      unpaid services.
+    </p>
+
+    <p>
+      Google states that prompts, contextual information,
+      and generated outputs may be retained for up to
+      55 days for abuse monitoring, safety, legal, and
+      regulatory purposes.
+    </p>
+
+    <p>
+      Users should not use Sportabase to analyze pages or
+      transcripts containing sensitive, confidential, or
+      private personal information.
+    </p>
+
+    <p>
+      Google's Gemini API terms and data policies are
+      available at:
+    </p>
+
+    <ul>
+      <li>
+        <a
+          href="https://ai.google.dev/gemini-api/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Gemini API Additional Terms
+        </a>
+      </li>
+
+      <li>
+        <a
+          href="https://ai.google.dev/gemini-api/docs/usage-policies"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Gemini API Abuse Monitoring Policy
+        </a>
+      </li>
+    </ul>
+
+    <h2>Information Sharing</h2>
+
+    <p>
+      Sportabase transfers information only when necessary
+      to provide and protect its disclosed functionality,
+      including transfers to the hosting and AI providers
+      identified above.
+    </p>
+
+    <p>
+      Information may also be disclosed when reasonably
+      necessary to:
+    </p>
+
+    <ul>
+      <li>Comply with applicable law or legal process.</li>
+      <li>Investigate fraud, abuse, or security incidents.</li>
+      <li>Protect users, Sportabase, or the public.</li>
+    </ul>
 
     <h2>What Sportabase Does Not Do</h2>
+
     <ul>
-      <li>Sportabase does not collect browsing history in the background.</li>
-      <li>Sportabase does not read pages unless the user manually clicks the extension.</li>
-      <li>Sportabase does not collect passwords, cookies, payment information, or private messages.</li>
-      <li>Sportabase does not sell user data.</li>
-      <li>Sportabase does not use article text for advertising.</li>
-      <li>Sportabase does not bypass paywalls or restricted content.</li>
+      <li>
+        Sportabase does not sell user data.
+      </li>
+
+      <li>
+        Sportabase does not use user data for targeted or
+        personalized advertising.
+      </li>
+
+      <li>
+        Sportabase does not transfer user data to data
+        brokers or advertising networks.
+      </li>
+
+      <li>
+        Sportabase does not use browsing information to
+        determine creditworthiness, insurance eligibility,
+        employment eligibility, or lending decisions.
+      </li>
+
+      <li>
+        Sportabase does not intentionally collect
+        passwords, authentication cookies, payment-card
+        information, private messages, or health records.
+      </li>
+
+      <li>
+        Sportabase does not analyze pages unless the user
+        intentionally activates the extension.
+      </li>
+
+      <li>
+        Sportabase does not bypass paywalls or access
+        controls.
+      </li>
     </ul>
 
-    <h2>Data Retention</h2>
+    <h2>Security</h2>
+
     <p>
-      Raw article text from extension scans is not intentionally stored long-term. Basic server logs may exist temporarily for debugging, reliability, and abuse prevention.
+      Sportabase uses HTTPS when communicating with its
+      backend. Access to backend services and AI credentials
+      is restricted to the server environment.
     </p>
 
-    <h2>Data Security</h2>
     <p>
-      Sportabase communicates with its backend over HTTPS. Data sent to the backend is used for the extension’s analysis features.
+      No system can guarantee absolute security. Sportabase
+      uses reasonable technical and operational safeguards,
+      but users should avoid submitting sensitive or
+      confidential content.
     </p>
 
-    <h2>User Control</h2>
+    <h2>User Choices and Control</h2>
+
+    <ul>
+      <li>
+        Users decide when Sportabase performs an analysis.
+      </li>
+
+      <li>
+        Users may close the Sportabase overlay without
+        performing an analysis.
+      </li>
+
+      <li>
+        Users may remove the extension to stop future
+        collection and remove its locally stored extension
+        data.
+      </li>
+
+      <li>
+        Users may contact Sportabase to ask questions or
+        request deletion of identifiable backend data,
+        where technically feasible and legally required.
+      </li>
+    </ul>
+
+    <h2>Age Requirement</h2>
+
     <p>
-      Users control when Sportabase runs. The extension only analyzes the active page when the user clicks it.
+      Sportabase is intended for users who are at least
+      18 years old. It is not directed toward children or
+      individuals under 18.
+    </p>
+
+    <h2>Automated Analysis Disclaimer</h2>
+
+    <p>
+      Sportabase uses automated rules and AI-assisted
+      systems. Its summaries, classifications, scores,
+      translations, and verdicts may be incomplete or
+      incorrect.
+    </p>
+
+    <p>
+      A high score does not guarantee that a claim is true,
+      and a low score does not prove that a claim is false.
+      Users should review the original source and use their
+      own judgment.
+    </p>
+
+    <h2>Chrome Web Store Limited Use</h2>
+
+    <p class="notice">
+      Sportabase's use of information received from Google
+      APIs will adhere to the Chrome Web Store User Data
+      Policy, including the Limited Use requirements.
+    </p>
+
+    <h2>Changes to This Policy</h2>
+
+    <p>
+      This policy may be updated when Sportabase's
+      functionality, service providers, or legal
+      obligations change. The latest revision date will be
+      displayed at the top of this page.
     </p>
 
     <h2>Contact</h2>
+
     <p>
-      For questions about this privacy policy, contact:
-      <a href="mailto:1yuvrajgupta@gmail.com">1yuvrajgupta@gmail.com</a>
+      For privacy questions or requests, contact:
+      <a href="mailto:1yuvrajgupta@gmail.com">
+        1yuvrajgupta@gmail.com
+      </a>
     </p>
   </main>
 </body>
