@@ -51,7 +51,7 @@ MAX_ANALYZE_CHARS = int(
 
 ANALYSIS_VERSION = os.getenv(
     "SPORTABASE_ANALYSIS_VERSION",
-    "article-video-v12-output-contract",
+    "article-video-v13-provider-errors",
 ).strip()
 
 ANALYSIS_CACHE_TTL_SECONDS = int(
@@ -4677,6 +4677,72 @@ def sanitize_video_model_payload(
     }
 
 
+def classify_video_provider_error(
+    error: Exception,
+) -> Dict[str, str]:
+    raw_error = (
+        f"{type(error).__name__}: "
+        f"{str(error)}"
+    )[:500]
+
+    normalized = raw_error.lower()
+
+    if (
+        "503" in normalized
+        or "unavailable" in normalized
+        or "high demand" in normalized
+        or "overloaded" in normalized
+    ):
+        return {
+            "code": "provider_capacity",
+            "message": (
+                "Gemini is temporarily busy. "
+                "Please wait a few minutes and "
+                "try the analysis again."
+            ),
+            "raw": raw_error,
+        }
+
+    if (
+        "429" in normalized
+        or "resource_exhausted" in normalized
+        or "rate limit" in normalized
+        or "quota" in normalized
+    ):
+        return {
+            "code": "provider_rate_limited",
+            "message": (
+                "Gemini is temporarily rate-limited. "
+                "Please wait before trying again."
+            ),
+            "raw": raw_error,
+        }
+
+    if (
+        "timeout" in normalized
+        or "timed out" in normalized
+        or "deadline_exceeded" in normalized
+    ):
+        return {
+            "code": "provider_timeout",
+            "message": (
+                "The AI provider took too long to "
+                "respond. Please try again shortly."
+            ),
+            "raw": raw_error,
+        }
+
+    return {
+        "code": "provider_error",
+        "message": (
+            "The AI provider could not complete "
+            "this analysis right now. Please try "
+            "again later."
+        ),
+        "raw": raw_error,
+    }
+
+
 def ai_video_claim_readout(
     title: str,
     transcript: str,
@@ -5659,11 +5725,29 @@ def ai_video_claim_readout(
         raise
 
     except Exception as e:
+        provider_error = (
+            classify_video_provider_error(e)
+        )
+
         return {
-            "claim": "AI video analysis failed.",
-            "evidence_used": [f"{type(e).__name__}: {str(e)[:160]}"],
-            "logic_check": "Could not complete logic check.",
-            "hype_check": "Could not complete hype check.",
+            "content_type": "unknown",
+            "claim": (
+                "AI video analysis could not "
+                "be completed."
+            ),
+            "evidence_used": [
+                provider_error["message"]
+            ],
+            "logic_check": (
+                "No logic assessment was produced "
+                "because the AI provider was "
+                "unavailable."
+            ),
+            "hype_check": (
+                "No presentation assessment was "
+                "produced because the AI provider "
+                "was unavailable."
+            ),
             "evidence_score": 0,
             "logic_score": 0,
             "verdict": "analysis_failed",
@@ -5671,10 +5755,14 @@ def ai_video_claim_readout(
                 "mode": "video",
                 "ai_enabled": True,
                 "transcript_raw_chars": len(
-                    transcript_data["raw_transcript"]
+                    transcript_data[
+                        "raw_transcript"
+                    ]
                 ),
                 "transcript_cleaned_chars": len(
-                    transcript_data["cleaned_transcript"]
+                    transcript_data[
+                        "cleaned_transcript"
+                    ]
                 ),
                 "transcript_extraction": (
                     transcript_extraction
@@ -5682,17 +5770,30 @@ def ai_video_claim_readout(
                 "transcript_extraction_limited": (
                     transcript_extraction_limited
                 ),
-                "transcript_confidence": transcript_data[
-                    "transcript_confidence"
-                ],
-                "uncertain_corrections": transcript_data[
-                    "uncertain_corrections"
-                ],
-                "error": str(e)[:200],
+                "transcript_confidence": (
+                    transcript_data[
+                        "transcript_confidence"
+                    ]
+                ),
+                "uncertain_corrections": (
+                    transcript_data[
+                        "uncertain_corrections"
+                    ]
+                ),
+                "error": (
+                    provider_error["message"]
+                ),
+                "error_code": (
+                    provider_error["code"]
+                ),
+                "provider_error": (
+                    provider_error["raw"]
+                ),
             },
         }
 
 VIDEO_CONTENT_TYPES = {
+    "unknown",
     "confirmed_news",
     "sports_report",
     "rumor",
