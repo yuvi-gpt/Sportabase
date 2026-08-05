@@ -51,7 +51,7 @@ MAX_ANALYZE_CHARS = int(
 
 ANALYSIS_VERSION = os.getenv(
     "SPORTABASE_ANALYSIS_VERSION",
-    "article-video-v6-temporal-guard",
+    "article-video-v9-consistency",
 ).strip()
 
 ANALYSIS_CACHE_TTL_SECONDS = int(
@@ -3935,97 +3935,386 @@ def ai_video_claim_readout(
         data = json.loads(raw)
 
         temporal_guard_triggered = False
+        temporal_guard_matches: List[
+            Dict[str, str]
+        ] = []
+        temporal_guard_rewrites: List[str] = []
 
-        generated_text_for_guard = json.dumps(
-            data,
-            ensure_ascii=False,
-        ).lower()
+        original_temporal_fields = {
+            "content_type": str(
+                data.get("content_type", "")
+            ),
+            "localized_content_type": str(
+                data.get(
+                    "localized_content_type",
+                    "",
+                )
+            ),
+            "localized_verdict": str(
+                data.get(
+                    "localized_verdict",
+                    "",
+                )
+            ),
+            "claim": str(
+                data.get("claim", "")
+            ),
+            "logic_check": str(
+                data.get("logic_check", "")
+            ),
+            "hype_check": str(
+                data.get("hype_check", "")
+            ),
+            "verdict": str(
+                data.get("verdict", "")
+            ),
+        }
 
-        forbidden_simulation_terms = (
-            "simulat",
+        simulation_guard_phrases = (
+            "simulated",
+            "simulation",
             "fictional",
             "video game",
             "career mode",
+            "gameplay",
+            "game-based",
             "alternate timeline",
             "alternate universe",
             "mock season",
         )
 
-        generated_simulation_framing = any(
-            term in generated_text_for_guard
-            for term in forbidden_simulation_terms
+        negation_before_simulation = re.compile(
+            r"\b(?:"
+            r"not|never|no|"
+            r"isn't|isnt|"
+            r"wasn't|wasnt|"
+            r"aren't|arent|"
+            r"weren't|werent"
+            r")\b"
+            r"[^.!?\n]{0,40}$",
+            re.IGNORECASE,
         )
 
+        def affirmative_simulation_matches(
+            field_name: str,
+            value: Any,
+        ) -> List[Dict[str, str]]:
+            normalized_value = clean_html(
+                str(value or "")
+            ).lower()
+
+            matches: List[
+                Dict[str, str]
+            ] = []
+
+            for phrase in simulation_guard_phrases:
+                search_from = 0
+
+                while True:
+                    match_index = (
+                        normalized_value.find(
+                            phrase,
+                            search_from,
+                        )
+                    )
+
+                    if match_index < 0:
+                        break
+
+                    preceding_text = normalized_value[
+                        max(0, match_index - 60):
+                        match_index
+                    ]
+
+                    is_negated = bool(
+                        negation_before_simulation
+                        .search(preceding_text)
+                    )
+
+                    if not is_negated:
+                        matches.append(
+                            {
+                                "field": field_name,
+                                "phrase": phrase,
+                            }
+                        )
+
+                    search_from = (
+                        match_index
+                        + len(phrase)
+                    )
+
+            return matches
+
+        framing_fields = {
+            "localized_content_type": (
+                data.get(
+                    "localized_content_type",
+                    "",
+                )
+            ),
+            "localized_verdict": (
+                data.get(
+                    "localized_verdict",
+                    "",
+                )
+            ),
+            "claim": data.get(
+                "claim",
+                "",
+            ),
+            "logic_check": data.get(
+                "logic_check",
+                "",
+            ),
+            "hype_check": data.get(
+                "hype_check",
+                "",
+            ),
+        }
+
+        for (
+            field_name,
+            field_value,
+        ) in framing_fields.items():
+            temporal_guard_matches.extend(
+                affirmative_simulation_matches(
+                    field_name,
+                    field_value,
+                )
+            )
+
+        raw_evidence = data.get(
+            "evidence_used",
+            [],
+        )
+
+        if not isinstance(
+            raw_evidence,
+            list,
+        ):
+            raw_evidence = [
+                str(raw_evidence)
+            ]
+
+        evidence_matches_by_index: Dict[
+            int,
+            List[Dict[str, str]],
+        ] = {}
+
+        for index, evidence_item in enumerate(
+            raw_evidence
+        ):
+            item_matches = (
+                affirmative_simulation_matches(
+                    f"evidence_used[{index}]",
+                    evidence_item,
+                )
+            )
+
+            if item_matches:
+                evidence_matches_by_index[
+                    index
+                ] = item_matches
+
+                temporal_guard_matches.extend(
+                    item_matches
+                )
+
         if (
-            generated_simulation_framing
+            temporal_guard_matches
             and not explicit_simulation_context
         ):
             temporal_guard_triggered = True
 
-            raw_evidence = data.get(
-                "evidence_used",
-                [],
-            )
-
-            if not isinstance(raw_evidence, list):
-                raw_evidence = [str(raw_evidence)]
+            contaminated_fields = {
+                match["field"]
+                for match
+                in temporal_guard_matches
+            }
 
             safe_evidence = [
                 str(item)
-                for item in raw_evidence
-                if not any(
-                    term in str(item).lower()
-                    for term
-                    in forbidden_simulation_terms
-                )
+                for index, item
+                in enumerate(raw_evidence)
+                if index
+                not in evidence_matches_by_index
             ]
 
-            data["content_type"] = (
-                "sports_analysis"
-            )
-            data["localized_content_type"] = (
-                "Current Sports Analysis"
-            )
-            data["localized_verdict"] = (
-                "Temporal Verification Required"
-            )
-            data["claim"] = (
-                "The video presents current sports "
-                "analysis based on the events and "
-                "claims described in its transcript."
-            )
-            data["evidence_used"] = safe_evidence
-            data["logic_check"] = (
-                "The reasoning should be evaluated "
-                "without treating unfamiliar recent "
-                "events as fictional."
-            )
-            data["hype_check"] = (
-                "Presentation style should be judged "
-                "separately from whether recent claims "
-                "have been independently verified."
-            )
-            data["evidence_score"] = min(
-                int(
+            if evidence_matches_by_index:
+                data["evidence_used"] = (
+                    safe_evidence
+                )
+
+                temporal_guard_rewrites.append(
+                    "removed_contaminated_evidence"
+                )
+
+            if (
+                "localized_content_type"
+                in contaminated_fields
+            ):
+                safe_content_type = str(
+                    data.get(
+                        "content_type",
+                        "sports_analysis",
+                    )
+                ).strip().lower()
+
+                if safe_content_type not in {
+                    "confirmed_news",
+                    "sports_report",
+                    "rumor",
+                    "sports_analysis",
+                    "sports_opinion",
+                    "engagement_bait",
+                    "not_sports_content",
+                }:
+                    safe_content_type = (
+                        "sports_analysis"
+                    )
+
+                data["content_type"] = (
+                    safe_content_type
+                )
+
+                data[
+                    "localized_content_type"
+                ] = safe_content_type.replace(
+                    "_",
+                    " ",
+                ).title()
+
+                temporal_guard_rewrites.append(
+                    "localized_content_type"
+                )
+
+            if (
+                "localized_verdict"
+                in contaminated_fields
+            ):
+                data["localized_verdict"] = (
+                    "Temporally Unverified Analysis"
+                )
+
+                temporal_guard_rewrites.append(
+                    "localized_verdict"
+                )
+
+            if "claim" in contaminated_fields:
+                clean_title = clean_html(
+                    title
+                ).strip()
+
+                data["claim"] = (
+                    "The video examines the claim "
+                    f"presented in its title: "
+                    f'"{clean_title}".'
+                )
+
+                temporal_guard_rewrites.append(
+                    "claim"
+                )
+
+            if (
+                "logic_check"
+                in contaminated_fields
+            ):
+                if safe_evidence:
+                    data["logic_check"] = (
+                        "The argument should be judged "
+                        "by whether the listed evidence "
+                        "directly supports the video's "
+                        "central claim. The original "
+                        "response used unsupported "
+                        "temporal framing."
+                    )
+                else:
+                    data["logic_check"] = (
+                        "The response did not provide "
+                        "enough uncontaminated evidence "
+                        "to assess the reasoning "
+                        "reliably."
+                    )
+
+                temporal_guard_rewrites.append(
+                    "logic_check"
+                )
+
+            if (
+                "hype_check"
+                in contaminated_fields
+            ):
+                data["hype_check"] = (
+                    "The video's presentation style "
+                    "should be assessed separately "
+                    "from the factual status of the "
+                    "recent events it describes."
+                )
+
+                temporal_guard_rewrites.append(
+                    "hype_check"
+                )
+
+            original_evidence_score = int(
+                float(
                     data.get(
                         "evidence_score",
                         0,
                     )
                     or 0
-                ),
-                35,
+                )
             )
-            data["logic_score"] = min(
-                int(
+
+            original_logic_score = int(
+                float(
                     data.get(
                         "logic_score",
                         0,
                     )
                     or 0
-                ),
-                55,
+                )
             )
-            data["verdict"] = "weakly_supported"
+
+            if evidence_matches_by_index:
+                if safe_evidence:
+                    data["evidence_score"] = min(
+                        original_evidence_score,
+                        65,
+                    )
+                else:
+                    data["evidence_score"] = min(
+                        original_evidence_score,
+                        35,
+                    )
+
+            if (
+                "claim" in contaminated_fields
+                or "logic_check"
+                in contaminated_fields
+            ):
+                data["logic_score"] = min(
+                    original_logic_score,
+                    60,
+                )
+
+                data["verdict"] = (
+                    "weakly_supported"
+                )
+
+                if (
+                    "localized_verdict"
+                    not in contaminated_fields
+                ):
+                    data[
+                        "localized_verdict"
+                    ] = (
+                        "Temporally Unverified Analysis"
+                    )
+
+                temporal_guard_rewrites.append(
+                    "verdict"
+                )
 
         # Lingua remains the authoritative
         # language detector for this response.
@@ -4211,6 +4500,15 @@ def ai_video_claim_readout(
                 "analysis_date_utc": (
                     current_date_utc
                 ),
+                "temporal_guard_matches": (
+                    temporal_guard_matches
+                ),
+                "temporal_guard_rewrites": (
+                    temporal_guard_rewrites
+                ),
+                "original_temporal_fields": (
+                    original_temporal_fields
+                ),
                 "transcript_raw_chars": len(
                     transcript_data["raw_transcript"]
                 ),
@@ -4260,6 +4558,624 @@ def ai_video_claim_readout(
             },
         }
 
+VIDEO_CONTENT_TYPES = {
+    "confirmed_news",
+    "sports_report",
+    "rumor",
+    "sports_analysis",
+    "sports_opinion",
+    "engagement_bait",
+    "not_sports_content",
+}
+
+VIDEO_VERDICTS = {
+    "confirmed",
+    "well_supported_report",
+    "well_supported_analysis",
+    "reasonable_opinion",
+    "plausible_rumor",
+    "weakly_supported",
+    "misleading",
+    "engagement_bait",
+    "not_sports_content",
+    "analysis_failed",
+    "ai_unavailable",
+}
+
+VIDEO_ALLOWED_VERDICTS_BY_TYPE = {
+    "confirmed_news": {
+        "confirmed",
+        "well_supported_report",
+        "weakly_supported",
+        "misleading",
+    },
+    "sports_report": {
+        "well_supported_report",
+        "weakly_supported",
+        "misleading",
+    },
+    "rumor": {
+        "plausible_rumor",
+        "weakly_supported",
+        "misleading",
+        "engagement_bait",
+    },
+    "sports_analysis": {
+        "well_supported_analysis",
+        "weakly_supported",
+        "misleading",
+        "engagement_bait",
+    },
+    "sports_opinion": {
+        "reasonable_opinion",
+        "weakly_supported",
+        "misleading",
+        "engagement_bait",
+    },
+    "engagement_bait": {
+        "engagement_bait",
+        "misleading",
+        "weakly_supported",
+    },
+    "not_sports_content": {
+        "not_sports_content",
+    },
+}
+
+VIDEO_VERDICT_REQUIREMENTS = {
+    "confirmed": {
+        "minimum_evidence_score": 85,
+        "minimum_logic_score": 70,
+        "minimum_evidence_items": 2,
+    },
+    "well_supported_report": {
+        "minimum_evidence_score": 70,
+        "minimum_logic_score": 65,
+        "minimum_evidence_items": 2,
+    },
+    "well_supported_analysis": {
+        "minimum_evidence_score": 60,
+        "minimum_logic_score": 65,
+        "minimum_evidence_items": 1,
+    },
+    "reasonable_opinion": {
+        "minimum_evidence_score": 0,
+        "minimum_logic_score": 60,
+        "minimum_evidence_items": 0,
+    },
+    "plausible_rumor": {
+        "minimum_evidence_score": 35,
+        "minimum_logic_score": 50,
+        "minimum_evidence_items": 1,
+    },
+}
+
+VIDEO_VERDICT_LABELS = {
+    "confirmed": "Confirmed",
+    "well_supported_report": (
+        "Well-Supported Report"
+    ),
+    "well_supported_analysis": (
+        "Well-Supported Analysis"
+    ),
+    "reasonable_opinion": (
+        "Reasonable Opinion"
+    ),
+    "plausible_rumor": "Plausible Rumor",
+    "weakly_supported": "Weakly Supported",
+    "misleading": "Misleading",
+    "engagement_bait": "Engagement Bait",
+    "not_sports_content": (
+        "Not Sports Content"
+    ),
+    "analysis_failed": "Analysis Failed",
+    "ai_unavailable": "AI Unavailable",
+}
+
+
+def bounded_video_score(
+    value: Any,
+) -> int:
+    try:
+        numeric_value = int(
+            float(value)
+        )
+    except Exception:
+        numeric_value = 0
+
+    return max(
+        0,
+        min(100, numeric_value),
+    )
+
+
+def validate_video_analysis_consistency(
+    result: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(result, dict):
+        result = {}
+
+    validated = dict(result)
+
+    debug = validated.get(
+        "debug",
+        {},
+    )
+
+    if not isinstance(debug, dict):
+        debug = {}
+
+    issues: List[str] = []
+    rewrites: List[str] = []
+
+    content_type = str(
+        validated.get(
+            "content_type",
+            "",
+        )
+    ).strip().lower()
+
+    if content_type not in VIDEO_CONTENT_TYPES:
+        issues.append(
+            "invalid_content_type"
+        )
+        rewrites.append(
+            "content_type_to_unknown"
+        )
+        content_type = "unknown"
+
+    verdict = str(
+        validated.get(
+            "verdict",
+            "",
+        )
+    ).strip().lower()
+
+    if verdict not in VIDEO_VERDICTS:
+        issues.append(
+            "invalid_verdict"
+        )
+        rewrites.append(
+            "verdict_to_weakly_supported"
+        )
+        verdict = "weakly_supported"
+
+    evidence_score = bounded_video_score(
+        validated.get(
+            "evidence_score",
+            0,
+        )
+    )
+
+    logic_score = bounded_video_score(
+        validated.get(
+            "logic_score",
+            0,
+        )
+    )
+
+    raw_evidence = validated.get(
+        "evidence_used",
+        [],
+    )
+
+    if not isinstance(raw_evidence, list):
+        raw_evidence = [
+            raw_evidence
+        ]
+        issues.append(
+            "evidence_not_list"
+        )
+        rewrites.append(
+            "normalized_evidence_list"
+        )
+
+    evidence_used: List[str] = []
+    seen_evidence = set()
+
+    for item in raw_evidence:
+        cleaned_item = clean_html(
+            str(item or "")
+        ).strip()
+
+        if not cleaned_item:
+            continue
+
+        evidence_key = (
+            cleaned_item.lower()
+        )
+
+        if evidence_key in seen_evidence:
+            continue
+
+        seen_evidence.add(
+            evidence_key
+        )
+        evidence_used.append(
+            cleaned_item
+        )
+
+    if len(evidence_used) != len(
+        raw_evidence
+    ):
+        issues.append(
+            "empty_or_duplicate_evidence"
+        )
+        rewrites.append(
+            "cleaned_evidence"
+        )
+
+    claim = clean_html(
+        str(
+            validated.get(
+                "claim",
+                "",
+            )
+        )
+    ).strip()
+
+    logic_check = clean_html(
+        str(
+            validated.get(
+                "logic_check",
+                "",
+            )
+        )
+    ).strip()
+
+    hype_check = clean_html(
+        str(
+            validated.get(
+                "hype_check",
+                "",
+            )
+        )
+    ).strip()
+
+    missing_core_analysis = False
+
+    if not claim:
+        missing_core_analysis = True
+        issues.append(
+            "missing_claim"
+        )
+        rewrites.append(
+            "safe_missing_claim_message"
+        )
+        claim = (
+            "Sportabase could not determine "
+            "a reliable central claim from "
+            "the available transcript."
+        )
+
+    if not logic_check:
+        missing_core_analysis = True
+        issues.append(
+            "missing_logic_check"
+        )
+        rewrites.append(
+            "safe_missing_logic_message"
+        )
+        logic_check = (
+            "The reasoning could not be "
+            "evaluated reliably from the "
+            "available transcript."
+        )
+
+    if not hype_check:
+        issues.append(
+            "missing_hype_check"
+        )
+        rewrites.append(
+            "safe_missing_hype_message"
+        )
+        hype_check = (
+            "The presentation style could "
+            "not be evaluated reliably from "
+            "the available transcript."
+        )
+
+    if content_type == "not_sports_content":
+        if verdict != "not_sports_content":
+            issues.append(
+                "not_sports_verdict_mismatch"
+            )
+            rewrites.append(
+                "verdict_to_not_sports_content"
+            )
+
+        verdict = "not_sports_content"
+        evidence_score = 0
+        logic_score = 0
+
+    elif content_type == "unknown":
+        if verdict not in {
+            "analysis_failed",
+            "ai_unavailable",
+        }:
+            issues.append(
+                "unknown_type_with_verdict"
+            )
+            rewrites.append(
+                "unknown_type_to_weak_verdict"
+            )
+            verdict = "weakly_supported"
+
+            evidence_score = min(
+                evidence_score,
+                40,
+            )
+            logic_score = min(
+                logic_score,
+                40,
+            )
+
+    else:
+        allowed_verdicts = (
+            VIDEO_ALLOWED_VERDICTS_BY_TYPE.get(
+                content_type,
+                {"weakly_supported"},
+            )
+        )
+
+        if verdict not in allowed_verdicts:
+            issues.append(
+                "content_type_verdict_mismatch"
+            )
+            rewrites.append(
+                "verdict_to_weakly_supported"
+            )
+            verdict = "weakly_supported"
+
+    requirements = (
+        VIDEO_VERDICT_REQUIREMENTS.get(
+            verdict
+        )
+    )
+
+    if requirements:
+        threshold_failures = []
+
+        if (
+            evidence_score
+            < requirements[
+                "minimum_evidence_score"
+            ]
+        ):
+            threshold_failures.append(
+                "evidence_score"
+            )
+
+        if (
+            logic_score
+            < requirements[
+                "minimum_logic_score"
+            ]
+        ):
+            threshold_failures.append(
+                "logic_score"
+            )
+
+        if (
+            len(evidence_used)
+            < requirements[
+                "minimum_evidence_items"
+            ]
+        ):
+            threshold_failures.append(
+                "evidence_items"
+            )
+
+        if threshold_failures:
+            issues.append(
+                "verdict_threshold_failure:"
+                + ",".join(
+                    threshold_failures
+                )
+            )
+            rewrites.append(
+                "verdict_to_weakly_supported"
+            )
+            verdict = "weakly_supported"
+
+    if (
+        verdict
+        in {
+            "misleading",
+            "engagement_bait",
+        }
+        and evidence_score >= 70
+        and logic_score >= 70
+    ):
+        issues.append(
+            "negative_verdict_high_scores"
+        )
+        rewrites.append(
+            "negative_verdict_to_uncertain"
+        )
+        verdict = "weakly_supported"
+
+    if missing_core_analysis:
+        verdict = "weakly_supported"
+        evidence_score = min(
+            evidence_score,
+            40,
+        )
+        logic_score = min(
+            logic_score,
+            40,
+        )
+
+    validated["content_type"] = (
+        content_type
+    )
+    validated["verdict"] = verdict
+    validated["claim"] = claim
+    validated["logic_check"] = (
+        logic_check
+    )
+    validated["hype_check"] = (
+        hype_check
+    )
+    validated["evidence_used"] = (
+        evidence_used
+    )
+    validated["evidence_score"] = (
+        evidence_score
+    )
+    validated["logic_score"] = (
+        logic_score
+    )
+
+    if rewrites:
+        validated[
+            "localized_verdict"
+        ] = VIDEO_VERDICT_LABELS.get(
+            verdict,
+            verdict.replace(
+                "_",
+                " ",
+            ).title(),
+        )
+
+    debug[
+        "consistency_validation"
+    ] = {
+        "valid": not bool(issues),
+        "adjusted": bool(rewrites),
+        "issues": issues,
+        "rewrites": rewrites,
+        "final_content_type": (
+            content_type
+        ),
+        "final_verdict": verdict,
+        "final_evidence_score": (
+            evidence_score
+        ),
+        "final_logic_score": (
+            logic_score
+        ),
+        "evidence_items": len(
+            evidence_used
+        ),
+    }
+
+    debug[
+        "consistency_adjusted"
+    ] = bool(rewrites)
+
+    validated["debug"] = debug
+
+    return validated
+
+
+def video_analysis_cache_decision(
+    result: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(result, dict):
+        return {
+            "allowed": False,
+            "reason": "invalid_result",
+        }
+
+    debug = result.get("debug", {})
+
+    if not isinstance(debug, dict):
+        debug = {}
+
+    if bool(
+        debug.get(
+            "temporal_guard_triggered",
+            False,
+        )
+    ):
+        return {
+            "allowed": False,
+            "reason": "temporal_guard_triggered",
+        }
+
+    if bool(
+        debug.get(
+            "consistency_adjusted",
+            False,
+        )
+    ):
+        return {
+            "allowed": False,
+            "reason": (
+                "consistency_adjusted"
+            ),
+        }
+
+    verdict = str(
+        result.get("verdict", "")
+    ).strip().lower()
+
+    if verdict in {
+        "analysis_failed",
+        "ai_unavailable",
+    }:
+        return {
+            "allowed": False,
+            "reason": verdict,
+        }
+
+    content_type = str(
+        result.get("content_type", "")
+    ).strip().lower()
+
+    if content_type in {
+        "",
+        "unknown",
+    }:
+        return {
+            "allowed": False,
+            "reason": "unknown_content_type",
+        }
+
+    claim = clean_html(
+        str(result.get("claim", ""))
+    ).strip()
+
+    if not claim:
+        return {
+            "allowed": False,
+            "reason": "missing_claim",
+        }
+
+    evidence_used = result.get(
+        "evidence_used",
+        [],
+    )
+
+    if not isinstance(
+        evidence_used,
+        list,
+    ):
+        evidence_used = []
+
+    if (
+        verdict
+        in {
+            "confirmed",
+            "well_supported_report",
+            "well_supported_analysis",
+        }
+        and not evidence_used
+    ):
+        return {
+            "allowed": False,
+            "reason": (
+                "strong_verdict_without_evidence"
+            ),
+        }
+
+    return {
+        "allowed": True,
+        "reason": "eligible",
+    }
+
+
 @app.post("/analyze/video", response_model=VideoAnalyzeResponse)
 def analyze_video(
     req: VideoAnalyzeRequest,
@@ -4295,6 +5211,32 @@ def analyze_video(
         req.transcript,
         req.url,
         client_key=client_key,
+    )
+
+    result = (
+        validate_video_analysis_consistency(
+            result
+        )
+    )
+
+    cache_decision = (
+        video_analysis_cache_decision(
+            result
+        )
+    )
+
+    cache_write_allowed = bool(
+        cache_decision.get(
+            "allowed",
+            False,
+        )
+    )
+
+    cache_write_reason = str(
+        cache_decision.get(
+            "reason",
+            "unknown",
+        )
     )
 
     response = VideoAnalyzeResponse(
@@ -4360,18 +5302,30 @@ def analyze_video(
                 "analysis_version": (
                     ANALYSIS_VERSION
                 ),
+                "write_allowed": (
+                    cache_write_allowed
+                ),
+                "write_reason": (
+                    cache_write_reason
+                ),
             },
         },
     )
 
-    set_cached_analysis(
-        cache_key=cache_key,
-        mode="video",
-        request_url=req.url,
-        content=cache_content,
-        response_payload=response,
-        article_type=response.content_type,
-    )
+    if cache_write_allowed:
+        set_cached_analysis(
+            cache_key=cache_key,
+            mode="video",
+            request_url=req.url,
+            content=cache_content,
+            response_payload=response,
+            article_type=response.content_type,
+        )
+    else:
+        print(
+            "video analysis cache skipped:",
+            cache_write_reason,
+        )
 
     return response
 
