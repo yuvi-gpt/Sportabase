@@ -51,7 +51,7 @@ MAX_ANALYZE_CHARS = int(
 
 ANALYSIS_VERSION = os.getenv(
     "SPORTABASE_ANALYSIS_VERSION",
-    "article-video-v9-consistency",
+    "article-video-v10-full-context",
 ).strip()
 
 ANALYSIS_CACHE_TTL_SECONDS = int(
@@ -3669,6 +3669,598 @@ def detect_content_language(text: str) -> Dict[str, Any]:
         }
 
 
+def _video_context_tokens(
+    value: str,
+) -> set[str]:
+    tokens = set(
+        re.findall(
+            r"[^\W_]{3,}",
+            str(value or "").lower(),
+            flags=re.UNICODE,
+        )
+    )
+
+    stopwords = {
+        "the",
+        "and",
+        "that",
+        "this",
+        "with",
+        "from",
+        "have",
+        "has",
+        "was",
+        "were",
+        "will",
+        "would",
+        "about",
+        "into",
+        "their",
+        "they",
+        "them",
+        "then",
+        "than",
+        "but",
+        "for",
+        "you",
+        "your",
+        "video",
+    }
+
+    return {
+        token
+        for token in tokens
+        if token not in stopwords
+    }
+
+
+def _video_context_sentences(
+    text: str,
+    max_sentence_chars: int = 420,
+) -> List[str]:
+    normalized = re.sub(
+        r"\s+",
+        " ",
+        clean_html(text),
+    ).strip()
+
+    if not normalized:
+        return []
+
+    rough_parts = re.split(
+        r"(?<=[.!????])\s+|\n+",
+        normalized,
+    )
+
+    sentences: List[str] = []
+
+    for raw_part in rough_parts:
+        part = re.sub(
+            r"\s+",
+            " ",
+            raw_part,
+        ).strip()
+
+        if not part:
+            continue
+
+        if len(part) <= max_sentence_chars:
+            if len(part) >= 20:
+                sentences.append(part)
+
+            continue
+
+        words = part.split()
+        window: List[str] = []
+        window_chars = 0
+
+        for word in words:
+            projected_chars = (
+                window_chars
+                + len(word)
+                + (1 if window else 0)
+            )
+
+            if (
+                window
+                and projected_chars
+                > max_sentence_chars
+            ):
+                sentence = " ".join(
+                    window
+                ).strip()
+
+                if sentence:
+                    sentences.append(
+                        sentence
+                    )
+
+                window = [word]
+                window_chars = len(word)
+            else:
+                window.append(word)
+                window_chars = (
+                    projected_chars
+                )
+
+        if window:
+            sentence = " ".join(
+                window
+            ).strip()
+
+            if sentence:
+                sentences.append(
+                    sentence
+                )
+
+    return sentences
+
+
+def build_video_transcript_context(
+    title: str,
+    transcript: str,
+    max_chars: int = 9000,
+    chunk_size: int = 3000,
+) -> Dict[str, Any]:
+    cleaned = re.sub(
+        r"\s+",
+        " ",
+        clean_html(transcript),
+    ).strip()
+
+    if not cleaned:
+        return {
+            "text": "",
+            "strategy": "empty",
+            "compression_applied": False,
+            "source_chars": 0,
+            "context_chars": 0,
+            "source_chunk_count": 0,
+            "represented_chunk_count": 0,
+            "selected_sentence_count": 0,
+            "chunk_coverage": 0.0,
+        }
+
+    chunks = split_video_transcript(
+        cleaned,
+        chunk_size=max(
+            500,
+            chunk_size,
+        ),
+        overlap=0,
+    )
+
+    if not chunks:
+        chunks = [cleaned]
+
+    if len(cleaned) <= max_chars:
+        return {
+            "text": cleaned,
+            "strategy": "full_transcript",
+            "compression_applied": False,
+            "source_chars": len(cleaned),
+            "context_chars": len(cleaned),
+            "source_chunk_count": len(chunks),
+            "represented_chunk_count": (
+                len(chunks)
+            ),
+            "selected_sentence_count": sum(
+                len(
+                    _video_context_sentences(
+                        chunk
+                    )
+                )
+                for chunk in chunks
+            ),
+            "chunk_coverage": 1.0,
+        }
+
+    title_tokens = _video_context_tokens(
+        title
+    )
+
+    evidence_markers = (
+        "official",
+        "confirmed",
+        "announced",
+        "according",
+        "reported",
+        "reporting",
+        "source",
+        "sources",
+        "statement",
+        "data",
+        "statistic",
+        "statistics",
+        "result",
+        "results",
+        "points",
+        "goal",
+        "goals",
+        "lap",
+        "laps",
+        "race",
+        "match",
+        "season",
+        "contract",
+        "transfer",
+        "injury",
+        "because",
+        "therefore",
+        "however",
+        "although",
+        "evidence",
+        "analysis",
+    )
+
+    candidates: List[
+        Dict[str, Any]
+    ] = []
+
+    seen_text = set()
+
+    for chunk_index, chunk in enumerate(
+        chunks
+    ):
+        sentences = (
+            _video_context_sentences(
+                chunk
+            )
+        )
+
+        if not sentences:
+            fallback_sentence = (
+                chunk[:420].strip()
+            )
+
+            if fallback_sentence:
+                sentences = [
+                    fallback_sentence
+                ]
+
+        for (
+            sentence_index,
+            sentence,
+        ) in enumerate(sentences):
+            normalized_key = re.sub(
+                r"\s+",
+                " ",
+                sentence.lower(),
+            ).strip()
+
+            if (
+                not normalized_key
+                or normalized_key
+                in seen_text
+            ):
+                continue
+
+            seen_text.add(
+                normalized_key
+            )
+
+            sentence_tokens = (
+                _video_context_tokens(
+                    sentence
+                )
+            )
+
+            title_overlap = len(
+                title_tokens
+                & sentence_tokens
+            )
+
+            number_hits = len(
+                re.findall(
+                    r"\b\d+(?:[.,]\d+)?\b",
+                    sentence,
+                )
+            )
+
+            lower_sentence = (
+                sentence.lower()
+            )
+
+            marker_hits = sum(
+                1
+                for marker
+                in evidence_markers
+                if marker in lower_sentence
+            )
+
+            entity_hits = len(
+                re.findall(
+                    r"\b[A-Z][\w'-]{2,}\b",
+                    sentence,
+                )
+            )
+
+            length_score = (
+                2.0
+                if 70 <= len(sentence) <= 360
+                else 1.0
+            )
+
+            boundary_score = 0.0
+
+            if sentence_index == 0:
+                boundary_score += 0.6
+
+            if (
+                sentence_index
+                == len(sentences) - 1
+            ):
+                boundary_score += 0.4
+
+            score = (
+                title_overlap * 4.0
+                + min(number_hits, 4) * 1.3
+                + min(marker_hits, 5) * 1.5
+                + min(entity_hits, 5) * 0.35
+                + length_score
+                + boundary_score
+            )
+
+            candidates.append(
+                {
+                    "chunk_index": (
+                        chunk_index
+                    ),
+                    "sentence_index": (
+                        sentence_index
+                    ),
+                    "text": sentence,
+                    "score": score,
+                }
+            )
+
+    if not candidates:
+        fallback_text = cleaned[
+            :max_chars
+        ]
+
+        return {
+            "text": fallback_text,
+            "strategy": (
+                "deterministic_fallback"
+            ),
+            "compression_applied": True,
+            "source_chars": len(cleaned),
+            "context_chars": len(
+                fallback_text
+            ),
+            "source_chunk_count": (
+                len(chunks)
+            ),
+            "represented_chunk_count": 1,
+            "selected_sentence_count": 1,
+            "chunk_coverage": round(
+                1 / max(1, len(chunks)),
+                3,
+            ),
+        }
+
+    best_by_chunk: Dict[
+        int,
+        Dict[str, Any],
+    ] = {}
+
+    for candidate in candidates:
+        chunk_index = int(
+            candidate["chunk_index"]
+        )
+
+        current_best = (
+            best_by_chunk.get(
+                chunk_index
+            )
+        )
+
+        if (
+            current_best is None
+            or candidate["score"]
+            > current_best["score"]
+        ):
+            best_by_chunk[
+                chunk_index
+            ] = candidate
+
+    anchor_candidates = [
+        best_by_chunk[index]
+        for index in sorted(
+            best_by_chunk
+        )
+    ]
+
+    average_anchor_chars = max(
+        1,
+        int(
+            sum(
+                len(
+                    candidate["text"]
+                )
+                for candidate
+                in anchor_candidates
+            )
+            / max(
+                1,
+                len(anchor_candidates),
+            )
+        ),
+    )
+
+    anchor_capacity = max(
+        2,
+        int(
+            max_chars * 0.60
+            / (
+                average_anchor_chars
+                + 55
+            )
+        ),
+    )
+
+    anchor_capacity = min(
+        len(anchor_candidates),
+        anchor_capacity,
+    )
+
+    if (
+        len(anchor_candidates)
+        <= anchor_capacity
+    ):
+        selected_anchors = (
+            anchor_candidates
+        )
+    elif anchor_capacity <= 1:
+        selected_anchors = [
+            anchor_candidates[
+                len(anchor_candidates) // 2
+            ]
+        ]
+    else:
+        anchor_positions = {
+            round(
+                position
+                * (
+                    len(anchor_candidates)
+                    - 1
+                )
+                / (
+                    anchor_capacity
+                    - 1
+                )
+            )
+            for position
+            in range(anchor_capacity)
+        }
+
+        selected_anchors = [
+            anchor_candidates[index]
+            for index
+            in sorted(anchor_positions)
+        ]
+
+    selected: Dict[
+        tuple[int, int],
+        Dict[str, Any],
+    ] = {}
+
+    used_chars = 0
+
+    def add_candidate(
+        candidate: Dict[str, Any],
+    ) -> None:
+        nonlocal used_chars
+
+        key = (
+            int(
+                candidate[
+                    "chunk_index"
+                ]
+            ),
+            int(
+                candidate[
+                    "sentence_index"
+                ]
+            ),
+        )
+
+        if key in selected:
+            return
+
+        estimated_chars = (
+            len(candidate["text"])
+            + 60
+        )
+
+        if (
+            used_chars
+            + estimated_chars
+            > max_chars
+        ):
+            return
+
+        selected[key] = candidate
+        used_chars += estimated_chars
+
+    for candidate in selected_anchors:
+        add_candidate(candidate)
+
+    ranked_candidates = sorted(
+        candidates,
+        key=lambda candidate: (
+            candidate["score"],
+            -candidate["chunk_index"],
+            -candidate["sentence_index"],
+        ),
+        reverse=True,
+    )
+
+    for candidate in ranked_candidates:
+        add_candidate(candidate)
+
+    selected_in_order = sorted(
+        selected.values(),
+        key=lambda candidate: (
+            candidate["chunk_index"],
+            candidate["sentence_index"],
+        ),
+    )
+
+    context_parts: List[str] = []
+
+    represented_chunks = set()
+
+    for candidate in selected_in_order:
+        chunk_index = int(
+            candidate["chunk_index"]
+        )
+
+        represented_chunks.add(
+            chunk_index
+        )
+
+        context_parts.append(
+            (
+                f"[SOURCE CHUNK "
+                f"{chunk_index + 1} "
+                f"OF {len(chunks)}]\n"
+                f"{candidate['text']}"
+            )
+        )
+
+    context_text = "\n\n".join(
+        context_parts
+    ).strip()
+
+    return {
+        "text": context_text,
+        "strategy": (
+            "all_chunk_extractive_compression"
+        ),
+        "compression_applied": True,
+        "source_chars": len(cleaned),
+        "context_chars": len(
+            context_text
+        ),
+        "source_chunk_count": len(
+            chunks
+        ),
+        "represented_chunk_count": len(
+            represented_chunks
+        ),
+        "selected_sentence_count": len(
+            selected_in_order
+        ),
+        "chunk_coverage": round(
+            len(represented_chunks)
+            / max(1, len(chunks)),
+            3,
+        ),
+    }
+
+
 def ai_video_claim_readout(
     title: str,
     transcript: str,
@@ -3740,37 +4332,21 @@ def ai_video_claim_readout(
             f"in {detected_language}."
         )
 
-    transcript_chunks = split_video_transcript(
-        cleaned_transcript,
-        chunk_size=4000,
-        overlap=400,
+    transcript_context = (
+        build_video_transcript_context(
+            title=title,
+            transcript=cleaned_transcript,
+            max_chars=9000,
+            chunk_size=3000,
+        )
     )
 
-    if not transcript_chunks:
-        clipped_transcript = ""
-    elif len(transcript_chunks) <= 3:
-        clipped_transcript = "\n\n".join(
-            (
-                f"[TRANSCRIPT CHUNK {index + 1} "
-                f"OF {len(transcript_chunks)}]\n{chunk}"
-            )
-            for index, chunk in enumerate(transcript_chunks)
+    clipped_transcript = str(
+        transcript_context.get(
+            "text",
+            "",
         )
-    else:
-        selected_indices = [
-            0,
-            len(transcript_chunks) // 2,
-            len(transcript_chunks) - 1,
-        ]
-
-        clipped_transcript = "\n\n".join(
-            (
-                f"[TRANSCRIPT CHUNK {index + 1} "
-                f"OF {len(transcript_chunks)}]\n"
-                f"{transcript_chunks[index]}"
-            )
-            for index in selected_indices
-        )
+    )
 
     current_date_utc = (
         datetime.now(timezone.utc)
@@ -4515,6 +5091,12 @@ def ai_video_claim_readout(
                 "transcript_cleaned_chars": len(
                     transcript_data["cleaned_transcript"]
                 ),
+                "transcript_context": {
+                    key: value
+                    for key, value
+                    in transcript_context.items()
+                    if key != "text"
+                },
                 "transcript_confidence": transcript_data[
                     "transcript_confidence"
                 ],
