@@ -2970,6 +2970,50 @@
       (character) => character.toUpperCase()
     );
   }
+  function getTranscriptTrustState(data, transcriptResult) {
+    const debug = data?.debug && typeof data.debug === "object" ? data.debug : {};
+    const language = data?.language && typeof data.language === "object" ? data.language : {};
+    const backendConfidence = Number(
+      debug.transcript_confidence
+    );
+    const localConfidence = Number(
+      transcriptResult?.extractionConfidence
+    );
+    const confidence = Number.isFinite(backendConfidence) ? backendConfidence : Number.isFinite(localConfidence) ? localConfidence : 1;
+    const detectedLanguage = String(
+      language.detected_language || ""
+    ).trim();
+    const languageConfidence = Number(
+      language.language_confidence
+    );
+    const mixedLanguage = Boolean(
+      language.mixed_language
+    );
+    let warning = "";
+    let tooltip = "";
+    if (confidence >= 0.25 && confidence < 0.65) {
+      warning = "Caption quality may affect details";
+      tooltip = "Some caption details may be unclear.";
+    }
+    if (mixedLanguage && (!Number.isFinite(
+      languageConfidence
+    ) || languageConfidence < 0.75)) {
+      warning = "Mixed-language interpretation";
+      tooltip = "Some language nuance may be imperfect.";
+    }
+    const normalizedLanguage = detectedLanguage.toLowerCase();
+    const showLanguage = detectedLanguage && normalizedLanguage !== "unknown" && !normalizedLanguage.startsWith(
+      "english"
+    );
+    return {
+      warning,
+      tooltip,
+      languageLabel: showLanguage ? detectedLanguage.replace(
+        /\s+mixed$/i,
+        ""
+      ) : ""
+    };
+  }
   function getVideoTitle() {
     return document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") || "YouTube video";
   }
@@ -3017,6 +3061,16 @@
       );
       throw new SportabaseApiError(
         backendError
+      );
+    }
+    const transcriptConfidence = Number(
+      data.debug?.transcript_confidence
+    );
+    if (Number.isFinite(
+      transcriptConfidence
+    ) && transcriptConfidence < 0.25) {
+      throw new SportabaseApiError(
+        "Captions are too unreliable to analyze."
       );
     }
     return data;
@@ -3356,6 +3410,38 @@
               were returned.
             </li>
           `;
+      const transcriptTrust = getTranscriptTrustState(
+        data,
+        transcriptResult
+      );
+      const transcriptTrustMarkup = transcriptTrust.languageLabel || transcriptTrust.warning ? `
+            <div
+              class="sb-transcript-trust"
+              title="${escapeHtml3(
+        transcriptTrust.tooltip
+      )}"
+            >
+              ${transcriptTrust.languageLabel ? `
+                      <span
+                        class="sb-transcript-language"
+                      >
+                        ${escapeHtml3(
+        transcriptTrust.languageLabel
+      )}
+                      </span>
+                    ` : ""}
+
+              ${transcriptTrust.warning ? `
+                      <span
+                        class="sb-transcript-warning"
+                      >
+                        ? ${escapeHtml3(
+        transcriptTrust.warning
+      )}
+                      </span>
+                    ` : ""}
+            </div>
+          ` : "";
       applyResultAccent(scoreColor);
       shell.setModeLabel(
         `VIDEO INTELLIGENCE \xB7 ${contentTypeLabel.toUpperCase()}`
@@ -3391,11 +3477,15 @@
             ></div>
           </div>
 
-          <div class="sb-result-transcript-meta">
-            ${transcriptResult.segmentCount}
-            transcript segments \xB7
-            ${transcriptResult.characterCount.toLocaleString()}
-            characters analyzed
+          <div class="sb-result-transcript-row">
+            <div class="sb-result-transcript-meta">
+              ${transcriptResult.segmentCount}
+              transcript segments ?
+              ${transcriptResult.characterCount.toLocaleString()}
+              characters analyzed
+            </div>
+
+            ${transcriptTrustMarkup}
           </div>
         </section>
 
@@ -3548,6 +3638,16 @@
       });
       try {
         const transcriptResult = await extractYouTubeTranscript();
+        const localTranscriptConfidence = Number(
+          transcriptResult.extractionConfidence
+        );
+        if (Number.isFinite(
+          localTranscriptConfidence
+        ) && localTranscriptConfidence < 0.25) {
+          throw new SportabaseApiError(
+            "Captions are too unreliable to analyze."
+          );
+        }
         loader.update({
           message: "Transcript found. Preparing the video analysis\u2026",
           progress: 38
