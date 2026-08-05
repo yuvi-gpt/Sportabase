@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import unittest
 
 from pathlib import Path
@@ -137,6 +137,16 @@ class VideoConsistencyTests(
         source["verdict"] = "confirmed"
         source["evidence_score"] = 92
         source["logic_score"] = 86
+        source["evidence_used"] = [
+            (
+                "An official team statement "
+                "confirms the announcement."
+            ),
+            (
+                "The governing body's official "
+                "result supports the report."
+            ),
+        ]
 
         result = (
             validate_video_analysis_consistency(

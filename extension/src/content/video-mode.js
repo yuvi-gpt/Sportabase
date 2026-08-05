@@ -829,6 +829,30 @@ export function openVideoMode({
           transcript:
             transcriptResult.transcript,
           url: window.location.href,
+          transcript_metadata: {
+            extraction_confidence:
+              transcriptResult
+                .extractionConfidence,
+            extraction_warnings:
+              transcriptResult
+                .extractionWarnings,
+            segment_count:
+              transcriptResult.segmentCount,
+            character_count:
+              transcriptResult.characterCount,
+            duplicate_segment_count:
+              transcriptResult
+                .duplicateSegmentCount,
+            duplicate_ratio:
+              transcriptResult
+                .duplicateRatio,
+            average_segment_length:
+              transcriptResult
+                .averageSegmentLength,
+            timestamps_available:
+              transcriptResult
+                .timestampsAvailable,
+          },
         },
         {
           timeoutMs: 120000,

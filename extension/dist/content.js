@@ -2698,6 +2698,122 @@
   });
 
   // src/content/youtube-transcript.js
+  function normalizeTranscriptSegments(rawSegments) {
+    const normalizedSegments = [];
+    const seenAdjacent = [];
+    let rawSegmentCount = 0;
+    let emptySegmentCount = 0;
+    let duplicateSegmentCount = 0;
+    for (const rawSegment of rawSegments || []) {
+      rawSegmentCount += 1;
+      const text = String(
+        rawSegment?.text ?? rawSegment ?? ""
+      ).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      if (!text) {
+        emptySegmentCount += 1;
+        continue;
+      }
+      const duplicateKey = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const previousKey = seenAdjacent[seenAdjacent.length - 1];
+      if (duplicateKey && duplicateKey === previousKey) {
+        duplicateSegmentCount += 1;
+        continue;
+      }
+      seenAdjacent.push(duplicateKey);
+      normalizedSegments.push({
+        text,
+        timestamp: String(
+          rawSegment?.timestamp || ""
+        ).trim()
+      });
+    }
+    const transcript = normalizedSegments.map((segment) => segment.text).join("\n").trim();
+    const characterCount = transcript.length;
+    const segmentCount = normalizedSegments.length;
+    const duplicateRatio = rawSegmentCount > 0 ? duplicateSegmentCount / rawSegmentCount : 0;
+    const averageSegmentLength = segmentCount > 0 ? characterCount / segmentCount : 0;
+    const warnings = [];
+    if (segmentCount < 3) {
+      warnings.push(
+        "very_few_segments"
+      );
+    }
+    if (characterCount < 120) {
+      warnings.push(
+        "very_short_transcript"
+      );
+    }
+    if (duplicateRatio >= 0.25) {
+      warnings.push(
+        "high_duplicate_ratio"
+      );
+    }
+    if (segmentCount >= 5 && averageSegmentLength < 8) {
+      warnings.push(
+        "fragmented_captions"
+      );
+    }
+    let extractionConfidence = 1;
+    extractionConfidence -= Math.min(
+      0.35,
+      duplicateRatio
+    );
+    if (segmentCount < 3) {
+      extractionConfidence -= 0.35;
+    } else if (segmentCount < 8) {
+      extractionConfidence -= 0.12;
+    }
+    if (characterCount < 120) {
+      extractionConfidence -= 0.3;
+    } else if (characterCount < 400) {
+      extractionConfidence -= 0.1;
+    }
+    if (averageSegmentLength > 0 && averageSegmentLength < 8) {
+      extractionConfidence -= 0.15;
+    }
+    extractionConfidence = Math.max(
+      0,
+      Math.min(
+        1,
+        Number(
+          extractionConfidence.toFixed(2)
+        )
+      )
+    );
+    return {
+      transcript,
+      segments: normalizedSegments,
+      rawSegmentCount,
+      segmentCount,
+      characterCount,
+      emptySegmentCount,
+      duplicateSegmentCount,
+      duplicateRatio: Number(
+        duplicateRatio.toFixed(3)
+      ),
+      averageSegmentLength: Number(
+        averageSegmentLength.toFixed(1)
+      ),
+      extractionConfidence,
+      warnings
+    };
+  }
+  function getTranscriptTimestamp(element) {
+    const container = element.closest(
+      [
+        "transcript-segment-view-model",
+        "ytd-transcript-segment-renderer"
+      ].join(", ")
+    );
+    return container?.querySelector(
+      [
+        ".segment-timestamp",
+        "[class*='timestamp']",
+        "[aria-label*='minute' i]",
+        "[aria-label*='second' i]"
+      ].join(", ")
+    )?.textContent?.replace(/\s+/g, " ").trim() || "";
+  }
   function wait2(milliseconds) {
     return new Promise((resolve) => {
       window.setTimeout(resolve, milliseconds);
@@ -2785,19 +2901,34 @@
         await wait2(250);
       }
     }
-    const segments = transcriptElements.map((element) => {
-      return element.textContent?.replace(/\s+/g, " ").trim();
-    }).filter(Boolean);
-    const transcript = segments.join(" ").trim();
-    if (!transcript) {
+    const rawSegments = transcriptElements.map(
+      (element) => {
+        return {
+          text: element.textContent || "",
+          timestamp: getTranscriptTimestamp(element)
+        };
+      }
+    );
+    const normalized = normalizeTranscriptSegments(
+      rawSegments
+    );
+    if (!normalized.transcript) {
       throw new Error(
         "The transcript panel opened, but no transcript text was found."
       );
     }
     return {
-      transcript,
-      segmentCount: segments.length,
-      characterCount: transcript.length
+      transcript: normalized.transcript,
+      segmentCount: normalized.segmentCount,
+      characterCount: normalized.characterCount,
+      extractionConfidence: normalized.extractionConfidence,
+      extractionWarnings: normalized.warnings,
+      duplicateSegmentCount: normalized.duplicateSegmentCount,
+      duplicateRatio: normalized.duplicateRatio,
+      averageSegmentLength: normalized.averageSegmentLength,
+      timestampsAvailable: normalized.segments.some(
+        (segment) => Boolean(segment.timestamp)
+      )
     };
   }
   var TRANSCRIPT_SELECTORS;
@@ -3442,7 +3573,17 @@
           {
             title: videoTitle,
             transcript: transcriptResult.transcript,
-            url: window.location.href
+            url: window.location.href,
+            transcript_metadata: {
+              extraction_confidence: transcriptResult.extractionConfidence,
+              extraction_warnings: transcriptResult.extractionWarnings,
+              segment_count: transcriptResult.segmentCount,
+              character_count: transcriptResult.characterCount,
+              duplicate_segment_count: transcriptResult.duplicateSegmentCount,
+              duplicate_ratio: transcriptResult.duplicateRatio,
+              average_segment_length: transcriptResult.averageSegmentLength,
+              timestamps_available: transcriptResult.timestampsAvailable
+            }
           },
           {
             timeoutMs: 12e4
