@@ -51,7 +51,7 @@ MAX_ANALYZE_CHARS = int(
 
 ANALYSIS_VERSION = os.getenv(
     "SPORTABASE_ANALYSIS_VERSION",
-    "article-video-v13-provider-errors",
+    "article-video-v14-score-single-pass",
 ).strip()
 
 ANALYSIS_CACHE_TTL_SECONDS = int(
