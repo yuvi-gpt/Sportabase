@@ -11,6 +11,10 @@ import {
   createAnalysisLoader,
 } from "../ui/loader.js";
 
+import {
+  createRequestLifecycle,
+} from "./request-lifecycle.js";
+
 const ANALYSIS_STEPS = [
   {
     message: "Identifying the video's central claim…",
@@ -188,6 +192,9 @@ export function openVideoMode({
   let analysisRunning = false;
   let loadingTicker = null;
 
+  const analysisRequests =
+    createRequestLifecycle();
+
   shell.setModeLabel(
     "VIDEO INTELLIGENCE · YOUTUBE"
   );
@@ -261,6 +268,20 @@ export function openVideoMode({
 
     loadingTicker = null;
   }
+
+  function cancelActiveAnalysis() {
+    stopLoadingTicker();
+
+    analysisRequests.cancel(
+      "video mode closed"
+    );
+
+    analysisRunning = false;
+  }
+
+  shell.onClose?.(
+    cancelActiveAnalysis
+  );
 
   function renderLanding() {
     stopLoadingTicker();
@@ -783,9 +804,18 @@ export function openVideoMode({
         progress: 18,
       });
 
+    const analysisRequest =
+      analysisRequests.begin();
+
     try {
       const transcriptResult =
         await extractYouTubeTranscript();
+
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
 
       loader.update({
         message:
@@ -794,6 +824,12 @@ export function openVideoMode({
       });
 
       await wait(320);
+
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
 
       let loadingStepIndex = 0;
 
@@ -856,8 +892,16 @@ export function openVideoMode({
         },
         {
           timeoutMs: 120000,
+          signal:
+            analysisRequest.signal,
         }
       );
+
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
 
       stopLoadingTicker();
 
@@ -872,17 +916,38 @@ export function openVideoMode({
 
       await wait(380);
 
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
+
       renderResults(
         validatedResponse,
         transcriptResult
       );
     } catch (error) {
+      if (
+        error?.cancelled ||
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
+
       console.error(
         "[sportabase] Video analysis failed:",
         error
       );
 
       renderError(error);
+    } finally {
+      analysisRequest.finish();
+
+      if (
+        !analysisRequests.hasActive()
+      ) {
+        analysisRunning = false;
+      }
     }
   }
 

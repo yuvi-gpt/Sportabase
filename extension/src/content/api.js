@@ -4,6 +4,7 @@ export class SportabaseApiError extends Error {
     {
       status = 0,
       details = "",
+      cancelled = false,
     } = {}
   ) {
     super(message);
@@ -11,6 +12,7 @@ export class SportabaseApiError extends Error {
     this.name = "SportabaseApiError";
     this.status = status;
     this.details = details;
+    this.cancelled = Boolean(cancelled);
   }
 }
 
@@ -58,12 +60,44 @@ export async function postJson(
   payload,
   {
     timeoutMs = 120000,
+    signal = null,
   } = {}
 ) {
-  const controller = new AbortController();
+  const controller =
+    new AbortController();
+
+  const callerSignal =
+    signal &&
+    typeof signal.addEventListener ===
+      "function"
+      ? signal
+      : null;
+
+  let timedOut = false;
+
+  const abortFromCaller = () => {
+    controller.abort(
+      callerSignal?.reason
+    );
+  };
+
+  if (callerSignal?.aborted) {
+    abortFromCaller();
+  } else {
+    callerSignal?.addEventListener(
+      "abort",
+      abortFromCaller,
+      {
+        once: true,
+      }
+    );
+  }
 
   const timeoutId = window.setTimeout(
-    () => controller.abort(),
+    () => {
+      timedOut = true;
+      controller.abort();
+    },
     timeoutMs
   );
 
@@ -71,19 +105,31 @@ export async function postJson(
     const clientId =
       await getSportabaseClientId();
 
+    if (controller.signal.aborted) {
+      const abortError =
+        new Error("Request aborted.");
+
+      abortError.name = "AbortError";
+
+      throw abortError;
+    }
+
     const response = await fetch(url, {
       method: "POST",
 
       headers: {
-        "Content-Type": "application/json",
-        "X-Sportabase-Client-ID": clientId,
+        "Content-Type":
+          "application/json",
+        "X-Sportabase-Client-ID":
+          clientId,
       },
 
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
-    const responseText = await response.text();
+    const responseText =
+      await response.text();
 
     let data = null;
 
@@ -136,16 +182,28 @@ export async function postJson(
     return data;
   } catch (error) {
     if (error?.name === "AbortError") {
+      if (timedOut) {
+        throw new SportabaseApiError(
+          "The analysis took too long and was stopped. Try again once.",
+          {
+            status: 408,
+          }
+        );
+      }
+
       throw new SportabaseApiError(
-        "The analysis took too long and was stopped. Try again once.",
+        "The analysis was cancelled.",
         {
-          status: 408,
+          status: 499,
+          details: "cancelled",
+          cancelled: true,
         }
       );
     }
 
     if (
-      error instanceof SportabaseApiError
+      error instanceof
+      SportabaseApiError
     ) {
       throw error;
     }
@@ -154,11 +212,18 @@ export async function postJson(
       "Sportabase could not reach the analysis service.",
       {
         details: String(
-          error?.message || error || ""
+          error?.message ||
+          error ||
+          ""
         ),
       }
     );
   } finally {
     window.clearTimeout(timeoutId);
+
+    callerSignal?.removeEventListener(
+      "abort",
+      abortFromCaller
+    );
   }
 }

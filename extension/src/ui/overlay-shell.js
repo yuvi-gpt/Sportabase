@@ -1,4 +1,4 @@
-﻿import {
+import {
   getSportabaseLogoMarkup,
 } from "./logo.js";
 
@@ -16,6 +16,30 @@ import {
 
 const OVERLAY_ID = "sportabase-root";
 
+const SHELL_CLOSE_EVENT =
+  "sportabase:before-close";
+
+function notifySportabaseShellClosing(
+  overlay
+) {
+  if (
+    !overlay ||
+    overlay.dataset.closeNotified ===
+      "true"
+  ) {
+    return;
+  }
+
+  overlay.dataset.closeNotified =
+    "true";
+
+  overlay.dispatchEvent(
+    new CustomEvent(
+      SHELL_CLOSE_EVENT
+    )
+  );
+}
+
 function closeSportabaseShell(overlay) {
   if (
     !overlay ||
@@ -23,6 +47,10 @@ function closeSportabaseShell(overlay) {
   ) {
     return;
   }
+
+  notifySportabaseShellClosing(
+    overlay
+  );
 
   overlay.dataset.closing = "true";
   overlay.classList.remove("sb-is-open");
@@ -37,9 +65,18 @@ export function openSportabaseShell({
   mode = "article",
   preferences = {},
 } = {}) {
-  document
-    .getElementById(OVERLAY_ID)
-    ?.remove();
+  const existingOverlay =
+    document.getElementById(
+      OVERLAY_ID
+    );
+
+  if (existingOverlay) {
+    notifySportabaseShellClosing(
+      existingOverlay
+    );
+
+    existingOverlay.remove();
+  }
 
   const modeLabel =
     mode === "video"
@@ -176,6 +213,34 @@ export function openSportabaseShell({
   return {
     overlay,
     content,
+
+    onClose(callback) {
+      if (
+        typeof callback !==
+        "function"
+      ) {
+        return () => {};
+      }
+
+      const listener = () => {
+        callback();
+      };
+
+      overlay.addEventListener(
+        SHELL_CLOSE_EVENT,
+        listener,
+        {
+          once: true,
+        }
+      );
+
+      return () => {
+        overlay.removeEventListener(
+          SHELL_CLOSE_EVENT,
+          listener
+        );
+      };
+    },
 
     close() {
       closeSportabaseShell(overlay);

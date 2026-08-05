@@ -797,10 +797,24 @@
   });
 
   // src/ui/overlay-shell.js
+  function notifySportabaseShellClosing(overlay) {
+    if (!overlay || overlay.dataset.closeNotified === "true") {
+      return;
+    }
+    overlay.dataset.closeNotified = "true";
+    overlay.dispatchEvent(
+      new CustomEvent(
+        SHELL_CLOSE_EVENT
+      )
+    );
+  }
   function closeSportabaseShell(overlay) {
     if (!overlay || overlay.dataset.closing === "true") {
       return;
     }
+    notifySportabaseShellClosing(
+      overlay
+    );
     overlay.dataset.closing = "true";
     overlay.classList.remove("sb-is-open");
     overlay.classList.add("sb-is-closing");
@@ -812,7 +826,15 @@
     mode = "article",
     preferences = {}
   } = {}) {
-    document.getElementById(OVERLAY_ID)?.remove();
+    const existingOverlay = document.getElementById(
+      OVERLAY_ID
+    );
+    if (existingOverlay) {
+      notifySportabaseShellClosing(
+        existingOverlay
+      );
+      existingOverlay.remove();
+    }
     const modeLabel = mode === "video" ? "VIDEO INTELLIGENCE \xB7 YOUTUBE" : "ARTICLE INTELLIGENCE";
     const overlay = document.createElement("aside");
     overlay.id = OVERLAY_ID;
@@ -924,6 +946,28 @@
     return {
       overlay,
       content,
+      onClose(callback) {
+        if (typeof callback !== "function") {
+          return () => {
+          };
+        }
+        const listener = () => {
+          callback();
+        };
+        overlay.addEventListener(
+          SHELL_CLOSE_EVENT,
+          listener,
+          {
+            once: true
+          }
+        );
+        return () => {
+          overlay.removeEventListener(
+            SHELL_CLOSE_EVENT,
+            listener
+          );
+        };
+      },
       close() {
         closeSportabaseShell(overlay);
       },
@@ -934,7 +978,7 @@
       }
     };
   }
-  var OVERLAY_ID;
+  var OVERLAY_ID, SHELL_CLOSE_EVENT;
   var init_overlay_shell = __esm({
     "src/ui/overlay-shell.js"() {
       init_logo();
@@ -942,6 +986,7 @@
       init_settings();
       init_window_controls();
       OVERLAY_ID = "sportabase-root";
+      SHELL_CLOSE_EVENT = "sportabase:before-close";
     }
   });
 
@@ -1464,15 +1509,42 @@
     }
   }
   async function postJson(url, payload, {
-    timeoutMs = 12e4
+    timeoutMs = 12e4,
+    signal = null
   } = {}) {
     const controller = new AbortController();
+    const callerSignal = signal && typeof signal.addEventListener === "function" ? signal : null;
+    let timedOut = false;
+    const abortFromCaller = () => {
+      controller.abort(
+        callerSignal?.reason
+      );
+    };
+    if (callerSignal?.aborted) {
+      abortFromCaller();
+    } else {
+      callerSignal?.addEventListener(
+        "abort",
+        abortFromCaller,
+        {
+          once: true
+        }
+      );
+    }
     const timeoutId = window.setTimeout(
-      () => controller.abort(),
+      () => {
+        timedOut = true;
+        controller.abort();
+      },
       timeoutMs
     );
     try {
       const clientId = await getSportabaseClientId();
+      if (controller.signal.aborted) {
+        const abortError = new Error("Request aborted.");
+        abortError.name = "AbortError";
+        throw abortError;
+      }
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -1522,10 +1594,20 @@
       return data;
     } catch (error) {
       if (error?.name === "AbortError") {
+        if (timedOut) {
+          throw new SportabaseApiError(
+            "The analysis took too long and was stopped. Try again once.",
+            {
+              status: 408
+            }
+          );
+        }
         throw new SportabaseApiError(
-          "The analysis took too long and was stopped. Try again once.",
+          "The analysis was cancelled.",
           {
-            status: 408
+            status: 499,
+            details: "cancelled",
+            cancelled: true
           }
         );
       }
@@ -1542,6 +1624,10 @@
       );
     } finally {
       window.clearTimeout(timeoutId);
+      callerSignal?.removeEventListener(
+        "abort",
+        abortFromCaller
+      );
     }
   }
   var SportabaseApiError;
@@ -1550,12 +1636,14 @@
       SportabaseApiError = class extends Error {
         constructor(message, {
           status = 0,
-          details = ""
+          details = "",
+          cancelled = false
         } = {}) {
           super(message);
           this.name = "SportabaseApiError";
           this.status = status;
           this.details = details;
+          this.cancelled = Boolean(cancelled);
         }
       };
     }
@@ -1804,6 +1892,52 @@
   }
   var init_loader2 = __esm({
     "src/ui/loader.js"() {
+    }
+  });
+
+  // src/content/request-lifecycle.js
+  function createRequestLifecycle() {
+    let activeController = null;
+    let sequence = 0;
+    function cancel(reason = "cancelled") {
+      sequence += 1;
+      const controller = activeController;
+      activeController = null;
+      if (controller && !controller.signal.aborted) {
+        controller.abort(reason);
+      }
+    }
+    function begin() {
+      cancel("superseded");
+      const controller = new AbortController();
+      const requestSequence = sequence;
+      activeController = controller;
+      return {
+        controller,
+        signal: controller.signal,
+        isCurrent() {
+          return activeController === controller && sequence === requestSequence && !controller.signal.aborted;
+        },
+        finish() {
+          if (activeController === controller) {
+            activeController = null;
+          }
+        }
+      };
+    }
+    function hasActive() {
+      return Boolean(
+        activeController && !activeController.signal.aborted
+      );
+    }
+    return {
+      begin,
+      cancel,
+      hasActive
+    };
+  }
+  var init_request_lifecycle = __esm({
+    "src/content/request-lifecycle.js"() {
     }
   });
 
@@ -2102,6 +2236,7 @@
     if (!shell?.content) return;
     let analysisRunning = false;
     let loadingTicker = null;
+    const analysisRequests = createRequestLifecycle();
     const baseAccent = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent").trim() || "#7c3aed";
     const baseAccentBright = getComputedStyle(shell.overlay).getPropertyValue(
       "--sb-accent-bright"
@@ -2153,6 +2288,16 @@
       );
       loadingTicker = null;
     }
+    function cancelActiveAnalysis() {
+      stopLoadingTicker();
+      analysisRequests.cancel(
+        "article mode closed"
+      );
+      analysisRunning = false;
+    }
+    shell.onClose?.(
+      cancelActiveAnalysis
+    );
     function getCurrentArticle() {
       const configuredLimit = Number(
         config.maxAnalyzeChars || config.max_analyze_chars || 6e3
@@ -2572,13 +2717,20 @@
         languageCode: pageLanguageCode
       });
       const loaderStartedAt = performance.now();
+      const analysisRequest = analysisRequests.begin();
       try {
         await waitForNextPaint();
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         loader.update({
           message: "Article text found. Preparing the intelligence pass\u2026",
           progress: 28
         });
         await wait(320);
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         let smoothProgress = 28;
         let loadingStepIndex = 0;
         loader.update({
@@ -2614,9 +2766,13 @@
             max_bullets: 4
           },
           {
-            timeoutMs: 12e4
+            timeoutMs: 12e4,
+            signal: analysisRequest.signal
           }
         );
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         stopLoadingTicker();
         loader.update({
           message: "Finalizing your Sportabase article brief\u2026",
@@ -2629,21 +2785,35 @@
           MINIMUM_LOADER_DURATION - loaderElapsed
         );
         await wait(remainingLoaderTime);
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         loader.update({
           message: "Analysis complete. Opening your intelligence brief\u2026",
           progress: 95
         });
         await wait(420);
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         renderResults(
           validatedResponse,
           article
         );
       } catch (error) {
+        if (error?.cancelled || !analysisRequest.isCurrent()) {
+          return;
+        }
         console.error(
           "[sportabase] Article analysis failed:",
           error
         );
         renderError(error);
+      } finally {
+        analysisRequest.finish();
+        if (!analysisRequests.hasActive()) {
+          analysisRunning = false;
+        }
       }
     }
     renderLanding();
@@ -2654,6 +2824,7 @@
       init_article_extractor();
       init_api();
       init_loader2();
+      init_request_lifecycle();
       ANALYSIS_STEPS = [
         {
           message: "Identifying the article's central story\u2026",
@@ -3043,6 +3214,7 @@
     const videoTitle = getVideoTitle();
     let analysisRunning = false;
     let loadingTicker = null;
+    const analysisRequests = createRequestLifecycle();
     shell.setModeLabel(
       "VIDEO INTELLIGENCE \xB7 YOUTUBE"
     );
@@ -3095,6 +3267,16 @@
       );
       loadingTicker = null;
     }
+    function cancelActiveAnalysis() {
+      stopLoadingTicker();
+      analysisRequests.cancel(
+        "video mode closed"
+      );
+      analysisRunning = false;
+    }
+    shell.onClose?.(
+      cancelActiveAnalysis
+    );
     function renderLanding() {
       stopLoadingTicker();
       analysisRunning = false;
@@ -3546,13 +3728,20 @@
         message: "Opening and reading the YouTube transcript\u2026",
         progress: 18
       });
+      const analysisRequest = analysisRequests.begin();
       try {
         const transcriptResult = await extractYouTubeTranscript();
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         loader.update({
           message: "Transcript found. Preparing the video analysis\u2026",
           progress: 38
         });
         await wait3(320);
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         let loadingStepIndex = 0;
         loader.update(
           ANALYSIS_STEPS2[loadingStepIndex]
@@ -3586,9 +3775,13 @@
             }
           },
           {
-            timeoutMs: 12e4
+            timeoutMs: 12e4,
+            signal: analysisRequest.signal
           }
         );
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         stopLoadingTicker();
         loader.update({
           message: "Finalizing your Sportabase video readout\u2026",
@@ -3596,16 +3789,27 @@
         });
         const validatedResponse = validateVideoResponse(response);
         await wait3(380);
+        if (!analysisRequest.isCurrent()) {
+          return;
+        }
         renderResults(
           validatedResponse,
           transcriptResult
         );
       } catch (error) {
+        if (error?.cancelled || !analysisRequest.isCurrent()) {
+          return;
+        }
         console.error(
           "[sportabase] Video analysis failed:",
           error
         );
         renderError(error);
+      } finally {
+        analysisRequest.finish();
+        if (!analysisRequests.hasActive()) {
+          analysisRunning = false;
+        }
       }
     }
     renderLanding();
@@ -3616,6 +3820,7 @@
       init_youtube_transcript();
       init_api();
       init_loader2();
+      init_request_lifecycle();
       ANALYSIS_STEPS2 = [
         {
           message: "Identifying the video's central claim\u2026",

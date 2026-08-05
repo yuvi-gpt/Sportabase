@@ -5,7 +5,8 @@
   "main": "background.js",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "watch": "node esbuild.config.mjs --watch"
+    "watch": "node esbuild.config.mjs --watch",
+    "test": "node --test tests/*.test.mjs"
   },
   "keywords": [],
   "author": "",

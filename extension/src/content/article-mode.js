@@ -11,6 +11,10 @@ import {
   createAnalysisLoader,
 } from "../ui/loader.js";
 
+import {
+  createRequestLifecycle,
+} from "./request-lifecycle.js";
+
 const ANALYSIS_STEPS = [
   {
     message: "Identifying the article's central story…",
@@ -512,6 +516,9 @@ export function openArticleMode({
   let analysisRunning = false;
   let loadingTicker = null;
 
+  const analysisRequests =
+    createRequestLifecycle();
+
   const baseAccent =
     getComputedStyle(shell.overlay)
       .getPropertyValue("--sb-accent")
@@ -583,6 +590,20 @@ export function openArticleMode({
 
     loadingTicker = null;
   }
+
+  function cancelActiveAnalysis() {
+    stopLoadingTicker();
+
+    analysisRequests.cancel(
+      "article mode closed"
+    );
+
+    analysisRunning = false;
+  }
+
+  shell.onClose?.(
+    cancelActiveAnalysis
+  );
 
   function getCurrentArticle() {
     const configuredLimit = Number(
@@ -1124,8 +1145,17 @@ export function openArticleMode({
     const loaderStartedAt =
       performance.now();
 
+    const analysisRequest =
+      analysisRequests.begin();
+
     try {
       await waitForNextPaint();
+
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
       loader.update({
         message:
           "Article text found. Preparing the intelligence pass…",
@@ -1133,6 +1163,12 @@ export function openArticleMode({
       });
 
       await wait(320);
+
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
 
       let smoothProgress = 28;
       let loadingStepIndex = 0;
@@ -1198,8 +1234,16 @@ export function openArticleMode({
         },
         {
           timeoutMs: 120000,
+          signal:
+            analysisRequest.signal,
         }
       );
+
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
 
       stopLoadingTicker();
 
@@ -1225,6 +1269,12 @@ export function openArticleMode({
 
       await wait(remainingLoaderTime);
 
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
+
       loader.update({
         message:
           "Analysis complete. Opening your intelligence brief…",
@@ -1233,17 +1283,38 @@ export function openArticleMode({
 
       await wait(420);
 
+      if (
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
+
       renderResults(
         validatedResponse,
         article
       );
     } catch (error) {
+      if (
+        error?.cancelled ||
+        !analysisRequest.isCurrent()
+      ) {
+        return;
+      }
+
       console.error(
         "[sportabase] Article analysis failed:",
         error
       );
 
       renderError(error);
+    } finally {
+      analysisRequest.finish();
+
+      if (
+        !analysisRequests.hasActive()
+      ) {
+        analysisRunning = false;
+      }
     }
   }
 
