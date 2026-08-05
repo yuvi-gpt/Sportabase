@@ -150,6 +150,20 @@ class AnalyzeResponse(BaseModel):
 
     reasons: List[str] = Field(default_factory=list)
 
+    score_components: Dict[
+        str,
+        float,
+    ] = Field(
+        default_factory=dict
+    )
+
+    score_calculation: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
     language: Dict[str, Any] = Field(default_factory=dict)
     localized_article_type: str = ""
     localized_reasons: List[str] = Field(default_factory=list)
@@ -2640,6 +2654,8 @@ def merit_score(
 
     total = _clamp(raw_total - penalty, 0, 100)
 
+    score_before_soft_ceilings = total
+
     # -----------------------------
     # Soft ceilings
     # These prevent nonsense, but avoid making everything identical.
@@ -2695,10 +2711,63 @@ def merit_score(
     elif total < 35:
         reasons.append("Low source/evidence reliability pushes this into speculative territory.")
 
+    components = {
+        "source_score": round(
+            float(source_score),
+            2,
+        ),
+        "evidence_quality": round(
+            float(evidence_quality),
+            2,
+        ),
+        "specificity": round(
+            float(specificity),
+            2,
+        ),
+        "language_reliability": round(
+            float(language_reliability),
+            2,
+        ),
+        "article_type": round(
+            float(article_type),
+            2,
+        ),
+        "corroboration": round(
+            float(corroboration),
+            2,
+        ),
+        "impact": round(
+            float(impact),
+            2,
+        ),
+        "type_fit": round(
+            float(type_fit),
+            2,
+        ),
+    }
+
     return {
         "total": total,
         "badge": badge(total),
         "reasons": reasons[:9],
+        "components": components,
+        "calculation": {
+            "raw_total": round(
+                float(raw_total),
+                2,
+            ),
+            "penalty": round(
+                float(penalty),
+                2,
+            ),
+            "before_soft_ceilings": round(
+                float(
+                    score_before_soft_ceilings
+                ),
+                2,
+            ),
+            "final_total": int(total),
+        },
     }
 
 
@@ -6927,6 +6996,16 @@ def analyze(
         reasons=score.get(
             "reasons",
             [],
+        ),
+
+        score_components=score.get(
+            "components",
+            {},
+        ),
+
+        score_calculation=score.get(
+            "calculation",
+            {},
         ),
 
         language=language_info,
