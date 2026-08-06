@@ -730,7 +730,6 @@ export function openArticleMode({
         );
     }
 
-    installVisualTestControls(article);
   }
 
   function renderError(error) {

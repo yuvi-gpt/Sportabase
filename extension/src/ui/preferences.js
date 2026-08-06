@@ -1,3 +1,5 @@
+export const SPORTABASE_VIEWPORT_GUTTER = 8;
+
 export const DEFAULT_PREFERENCES = {
   sportabaseAppearance: "system",
 
@@ -23,7 +25,7 @@ export const DEFAULT_PREFERENCES = {
   sportabaseTop: null,
 
   sportabaseHorizontalAnchor: "right",
-  sportabaseEdgeOffset: 8,
+  sportabaseEdgeOffset: SPORTABASE_VIEWPORT_GUTTER,
   sportabaseRememberPosition: true,
 
   sportabaseDetailLevel: "full",
@@ -74,9 +76,29 @@ const SIZE_PRESETS = {
   },
 };
 
-const EDGE_MARGIN = 8;
+const EDGE_MARGIN = SPORTABASE_VIEWPORT_GUTTER;
 const MIN_PANEL_WIDTH = 300;
 const MIN_PANEL_HEIGHT = 320;
+
+function getViewportWidth() {
+  return Math.max(
+    1,
+    document.documentElement
+      ?.clientWidth ||
+      globalThis.innerWidth ||
+      1
+  );
+}
+
+function getViewportHeight() {
+  return Math.max(
+    1,
+    document.documentElement
+      ?.clientHeight ||
+      globalThis.innerHeight ||
+      1
+  );
+}
 
 function clamp(
   value,
@@ -229,31 +251,40 @@ export function applyPanelLayout(
     preferences.sportabaseCustomHeight !==
       null;
 
-  const desiredWidth =
-    customSizeAvailable
-      ? preferences
-          .sportabaseCustomWidth
-      : preset.width;
-
-  const desiredHeight =
-    customSizeAvailable
-      ? preferences
-          .sportabaseCustomHeight
-      : preset.height;
-
   const availableWidth =
     Math.max(
       1,
-      window.innerWidth -
+      getViewportWidth() -
         EDGE_MARGIN * 2
     );
 
   const availableHeight =
     Math.max(
       1,
-      window.innerHeight -
+      getViewportHeight() -
         EDGE_MARGIN * 2
     );
+
+  const desiredWidth =
+    customSizeAvailable
+      ? preferences
+          .sportabaseCustomWidth
+      : preset.width;
+
+  /*
+   * Preset layouts use the complete
+   * available viewport height, leaving
+   * the same gutter at the top and bottom.
+   *
+   * Manual edge resizing switches the
+   * panel to Custom and preserves the
+   * user's chosen height.
+   */
+  const desiredHeight =
+    customSizeAvailable
+      ? preferences
+          .sportabaseCustomHeight
+      : availableHeight;
 
   const width =
     fitDimension(
@@ -282,7 +313,7 @@ export function applyPanelLayout(
     const maximumEdgeOffset =
       Math.max(
         EDGE_MARGIN,
-        window.innerWidth -
+        getViewportWidth() -
           width -
           EDGE_MARGIN
       );
@@ -300,7 +331,7 @@ export function applyPanelLayout(
         .sportabaseHorizontalAnchor ===
       "right"
         ? (
-            window.innerWidth -
+            getViewportWidth() -
             width -
             edgeOffset
           )
@@ -312,7 +343,7 @@ export function applyPanelLayout(
         EDGE_MARGIN,
         Math.max(
           EDGE_MARGIN,
-          window.innerHeight -
+          getViewportHeight() -
             height -
             EDGE_MARGIN
         )
@@ -326,7 +357,7 @@ export function applyPanelLayout(
       "top-left"
         ? EDGE_MARGIN
         : (
-            window.innerWidth -
+            getViewportWidth() -
             width -
             EDGE_MARGIN
           );
@@ -338,7 +369,7 @@ export function applyPanelLayout(
       EDGE_MARGIN,
       Math.max(
         EDGE_MARGIN,
-        window.innerWidth -
+        getViewportWidth() -
           width -
           EDGE_MARGIN
       )

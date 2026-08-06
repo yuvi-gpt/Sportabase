@@ -2,11 +2,33 @@ import {
   applyPanelLayout,
   resolvePreferences,
   savePreferences,
+  SPORTABASE_VIEWPORT_GUTTER,
 } from "./preferences.js";
 
-const EDGE_MARGIN = 8;
+const EDGE_MARGIN =
+  SPORTABASE_VIEWPORT_GUTTER;
 const MIN_WIDTH = 300;
 const MIN_HEIGHT = 320;
+
+function getViewportWidth() {
+  return Math.max(
+    1,
+    document.documentElement
+      ?.clientWidth ||
+      globalThis.innerWidth ||
+      1
+  );
+}
+
+function getViewportHeight() {
+  return Math.max(
+    1,
+    document.documentElement
+      ?.clientHeight ||
+      globalThis.innerHeight ||
+      1
+  );
+}
 
 function clamp(
   value,
@@ -40,14 +62,14 @@ function clampGeometry({
   const maximumWidth =
     Math.max(
       1,
-      window.innerWidth -
+      getViewportWidth() -
         EDGE_MARGIN * 2
     );
 
   const maximumHeight =
     Math.max(
       1,
-      window.innerHeight -
+      getViewportHeight() -
         EDGE_MARGIN * 2
     );
 
@@ -77,7 +99,7 @@ function clampGeometry({
       EDGE_MARGIN,
       Math.max(
         EDGE_MARGIN,
-        window.innerWidth -
+        getViewportWidth() -
           safeWidth -
           EDGE_MARGIN
       )
@@ -89,7 +111,7 @@ function clampGeometry({
       EDGE_MARGIN,
       Math.max(
         EDGE_MARGIN,
-        window.innerHeight -
+        getViewportHeight() -
           safeHeight -
           EDGE_MARGIN
       )
@@ -168,14 +190,14 @@ export function installWindowControls({
         geometry.left +
           geometry.width / 2
       ) >=
-      window.innerWidth / 2
+      getViewportWidth() / 2
         ? "right"
         : "left";
 
     const edgeOffset =
       anchor === "right"
         ? (
-            window.innerWidth -
+            getViewportWidth() -
             geometry.left -
             geometry.width
           )

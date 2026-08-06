@@ -72,6 +72,18 @@
   });
 
   // src/ui/preferences.js
+  function getViewportWidth() {
+    return Math.max(
+      1,
+      document.documentElement?.clientWidth || globalThis.innerWidth || 1
+    );
+  }
+  function getViewportHeight() {
+    return Math.max(
+      1,
+      document.documentElement?.clientHeight || globalThis.innerHeight || 1
+    );
+  }
   function clamp(value, minimum, maximum) {
     return Math.max(
       minimum,
@@ -147,16 +159,16 @@
     );
     const preset = SIZE_PRESETS[preferences.sportabaseSizeMode] || SIZE_PRESETS.comfort;
     const customSizeAvailable = preferences.sportabaseSizeMode === "custom" && preferences.sportabaseCustomWidth !== null && preferences.sportabaseCustomHeight !== null;
-    const desiredWidth = customSizeAvailable ? preferences.sportabaseCustomWidth : preset.width;
-    const desiredHeight = customSizeAvailable ? preferences.sportabaseCustomHeight : preset.height;
     const availableWidth = Math.max(
       1,
-      window.innerWidth - EDGE_MARGIN * 2
+      getViewportWidth() - EDGE_MARGIN * 2
     );
     const availableHeight = Math.max(
       1,
-      window.innerHeight - EDGE_MARGIN * 2
+      getViewportHeight() - EDGE_MARGIN * 2
     );
+    const desiredWidth = customSizeAvailable ? preferences.sportabaseCustomWidth : preset.width;
+    const desiredHeight = customSizeAvailable ? preferences.sportabaseCustomHeight : availableHeight;
     const width = fitDimension(
       desiredWidth,
       availableWidth,
@@ -173,32 +185,32 @@
     if (hasSavedPosition) {
       const maximumEdgeOffset = Math.max(
         EDGE_MARGIN,
-        window.innerWidth - width - EDGE_MARGIN
+        getViewportWidth() - width - EDGE_MARGIN
       );
       const edgeOffset = clamp(
         preferences.sportabaseEdgeOffset,
         EDGE_MARGIN,
         maximumEdgeOffset
       );
-      left = preferences.sportabaseHorizontalAnchor === "right" ? window.innerWidth - width - edgeOffset : edgeOffset;
+      left = preferences.sportabaseHorizontalAnchor === "right" ? getViewportWidth() - width - edgeOffset : edgeOffset;
       top = clamp(
         preferences.sportabaseTop,
         EDGE_MARGIN,
         Math.max(
           EDGE_MARGIN,
-          window.innerHeight - height - EDGE_MARGIN
+          getViewportHeight() - height - EDGE_MARGIN
         )
       );
     } else {
       top = EDGE_MARGIN;
-      left = preferences.sportabasePanelPosition === "top-left" ? EDGE_MARGIN : window.innerWidth - width - EDGE_MARGIN;
+      left = preferences.sportabasePanelPosition === "top-left" ? EDGE_MARGIN : getViewportWidth() - width - EDGE_MARGIN;
     }
     left = clamp(
       left,
       EDGE_MARGIN,
       Math.max(
         EDGE_MARGIN,
-        window.innerWidth - width - EDGE_MARGIN
+        getViewportWidth() - width - EDGE_MARGIN
       )
     );
     overlay.dataset.sbPosition = preferences.sportabasePanelPosition;
@@ -304,9 +316,10 @@
       payload
     });
   }
-  var DEFAULT_PREFERENCES, PALETTES, SIZE_PRESETS, EDGE_MARGIN, MIN_PANEL_WIDTH, MIN_PANEL_HEIGHT;
+  var SPORTABASE_VIEWPORT_GUTTER, DEFAULT_PREFERENCES, PALETTES, SIZE_PRESETS, EDGE_MARGIN, MIN_PANEL_WIDTH, MIN_PANEL_HEIGHT;
   var init_preferences = __esm({
     "src/ui/preferences.js"() {
+      SPORTABASE_VIEWPORT_GUTTER = 8;
       DEFAULT_PREFERENCES = {
         sportabaseAppearance: "system",
         sportabaseAccentMode: "dynamic",
@@ -327,7 +340,7 @@
         sportabaseLeft: null,
         sportabaseTop: null,
         sportabaseHorizontalAnchor: "right",
-        sportabaseEdgeOffset: 8,
+        sportabaseEdgeOffset: SPORTABASE_VIEWPORT_GUTTER,
         sportabaseRememberPosition: true,
         sportabaseDetailLevel: "full"
       };
@@ -371,7 +384,7 @@
           height: 790
         }
       };
-      EDGE_MARGIN = 8;
+      EDGE_MARGIN = SPORTABASE_VIEWPORT_GUTTER;
       MIN_PANEL_WIDTH = 300;
       MIN_PANEL_HEIGHT = 320;
     }
@@ -658,8 +671,7 @@
       syncControls();
     }
     function resetLayout() {
-      currentPreferences = {
-        ...currentPreferences,
+      const resetPreferences = {
         sportabasePanelPosition: "top-right",
         sportabaseSizeMode: "comfort",
         sportabaseCustomWidth: null,
@@ -667,19 +679,17 @@
         sportabaseLeft: null,
         sportabaseTop: null,
         sportabaseHorizontalAnchor: "right",
-        sportabaseEdgeOffset: 8,
+        sportabaseEdgeOffset: SPORTABASE_VIEWPORT_GUTTER,
         sportabaseRememberPosition: true
       };
+      currentPreferences = {
+        ...currentPreferences,
+        ...resetPreferences
+      };
       applyCurrentPreferences();
-      persist({
-        sportabasePanelPosition: "top-right",
-        sportabaseSizeMode: "comfort",
-        sportabaseCustomWidth: null,
-        sportabaseCustomHeight: null,
-        sportabaseLeft: null,
-        sportabaseTop: null,
-        sportabaseRememberPosition: false
-      });
+      persist(
+        resetPreferences
+      );
     }
     function resetAllSettings() {
       currentPreferences = {
@@ -767,7 +777,7 @@
               sportabaseLeft: null,
               sportabaseTop: null,
               sportabaseHorizontalAnchor: anchor,
-              sportabaseEdgeOffset: 8,
+              sportabaseEdgeOffset: SPORTABASE_VIEWPORT_GUTTER,
               sportabaseRememberPosition: true
             };
             payload.sportabaseLeft = null;
@@ -827,6 +837,18 @@
   });
 
   // src/ui/window-controls.js
+  function getViewportWidth2() {
+    return Math.max(
+      1,
+      document.documentElement?.clientWidth || globalThis.innerWidth || 1
+    );
+  }
+  function getViewportHeight2() {
+    return Math.max(
+      1,
+      document.documentElement?.clientHeight || globalThis.innerHeight || 1
+    );
+  }
   function clamp2(value, minimum, maximum) {
     return Math.max(
       minimum,
@@ -850,11 +872,11 @@
   }) {
     const maximumWidth = Math.max(
       1,
-      window.innerWidth - EDGE_MARGIN2 * 2
+      getViewportWidth2() - EDGE_MARGIN2 * 2
     );
     const maximumHeight = Math.max(
       1,
-      window.innerHeight - EDGE_MARGIN2 * 2
+      getViewportHeight2() - EDGE_MARGIN2 * 2
     );
     const safeWidth = clamp2(
       width,
@@ -877,7 +899,7 @@
       EDGE_MARGIN2,
       Math.max(
         EDGE_MARGIN2,
-        window.innerWidth - safeWidth - EDGE_MARGIN2
+        getViewportWidth2() - safeWidth - EDGE_MARGIN2
       )
     );
     const safeTop = clamp2(
@@ -885,7 +907,7 @@
       EDGE_MARGIN2,
       Math.max(
         EDGE_MARGIN2,
-        window.innerHeight - safeHeight - EDGE_MARGIN2
+        getViewportHeight2() - safeHeight - EDGE_MARGIN2
       )
     );
     return {
@@ -930,8 +952,8 @@
       ".sb-header, .sb-settings-header"
     );
     function saveManualGeometry(geometry, resized) {
-      const anchor = geometry.left + geometry.width / 2 >= window.innerWidth / 2 ? "right" : "left";
-      const edgeOffset = anchor === "right" ? window.innerWidth - geometry.left - geometry.width : geometry.left;
+      const anchor = geometry.left + geometry.width / 2 >= getViewportWidth2() / 2 ? "right" : "left";
+      const edgeOffset = anchor === "right" ? getViewportWidth2() - geometry.left - geometry.width : geometry.left;
       const payload = {
         sportabasePanelPosition: anchor === "right" ? "top-right" : "top-left",
         sportabaseLeft: Math.round(
@@ -1182,7 +1204,7 @@
   var init_window_controls = __esm({
     "src/ui/window-controls.js"() {
       init_preferences();
-      EDGE_MARGIN2 = 8;
+      EDGE_MARGIN2 = SPORTABASE_VIEWPORT_GUTTER;
       MIN_WIDTH = 300;
       MIN_HEIGHT = 320;
     }
@@ -2935,7 +2957,6 @@
           runAnalysis
         );
       }
-      installVisualTestControls(article);
     }
     function renderError(error) {
       stopLoadingTicker();

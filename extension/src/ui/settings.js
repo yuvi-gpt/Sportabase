@@ -3,6 +3,7 @@ import {
   DEFAULT_PREFERENCES,
   resolvePreferences,
   savePreferences,
+  SPORTABASE_VIEWPORT_GUTTER,
 } from "./preferences.js";
 
 export function installSettingsDrawer({
@@ -318,9 +319,7 @@ export function installSettingsDrawer({
   }
 
   function resetLayout() {
-    currentPreferences = {
-      ...currentPreferences,
-
+    const resetPreferences = {
       sportabasePanelPosition:
         "top-right",
 
@@ -343,36 +342,22 @@ export function installSettingsDrawer({
         "right",
 
       sportabaseEdgeOffset:
-        8,
+        SPORTABASE_VIEWPORT_GUTTER,
 
       sportabaseRememberPosition:
         true,
     };
 
+    currentPreferences = {
+      ...currentPreferences,
+      ...resetPreferences,
+    };
+
     applyCurrentPreferences();
 
-    persist({
-      sportabasePanelPosition:
-        "top-right",
-
-      sportabaseSizeMode:
-        "comfort",
-
-      sportabaseCustomWidth:
-        null,
-
-      sportabaseCustomHeight:
-        null,
-
-      sportabaseLeft:
-        null,
-
-      sportabaseTop:
-        null,
-
-      sportabaseRememberPosition:
-        false,
-    });
+    persist(
+      resetPreferences
+    );
   }
 
   function resetAllSettings() {
@@ -508,7 +493,7 @@ export function installSettingsDrawer({
                 anchor,
 
               sportabaseEdgeOffset:
-                8,
+        SPORTABASE_VIEWPORT_GUTTER,
 
               sportabaseRememberPosition:
                 true,
