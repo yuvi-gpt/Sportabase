@@ -1,3 +1,7 @@
+import {
+  getSportabaseLogoMarkup,
+} from "./logo.js";
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -114,11 +118,42 @@ export function createAnalysisLoader({
             class="sb-loader-symbol"
             aria-hidden="true"
           >
-            <div class="sb-loader-orbit"></div>
+            <div
+              class="
+                sb-loader-orbit
+                sb-loader-orbit-outer
+              "
+            ></div>
 
-            <div class="sb-loader-core">
-              SB
-            </div>
+            <div
+              class="
+                sb-loader-orbit
+                sb-loader-orbit-inner
+              "
+            ></div>
+
+            <div
+              class="sb-loader-scan-wave"
+            ></div>
+
+            <span
+              class="
+                sb-loader-signal
+                sb-loader-signal-a
+              "
+            ></span>
+
+            <span
+              class="
+                sb-loader-signal
+                sb-loader-signal-b
+              "
+            ></span>
+
+            ${getSportabaseLogoMarkup({
+              className:
+                "sb-loader-logo",
+            })}
           </div>
 
           <div class="sb-loader-brand-copy">

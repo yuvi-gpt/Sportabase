@@ -4,8 +4,8 @@
 }
 
 #sportabase-root {
-  --sb-accent: #7c3aed;
-  --sb-accent-bright: #9f67ff;
+  --sb-accent: #06b6d4;
+  --sb-accent-bright: #9cff38;
   --sb-panel: #101012;
   --sb-surface: #19191c;
   --sb-raised: #222226;
@@ -48,7 +48,7 @@
   color: var(--sb-text);
   box-shadow:
     0 24px 70px var(--sb-shadow),
-    0 0 30px rgba(124, 58, 237, 0.12);
+    0 0 30px rgba(6, 182, 212, 0.12);
 
   font-family:
     Inter,
@@ -149,7 +149,41 @@
     );
 
   box-shadow:
-    0 10px 24px rgba(124, 58, 237, 0.28);
+    0 10px 24px rgba(6, 182, 212, 0.28);
+}
+
+#sportabase-root .sb-logo-image {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#sportabase-root .sb-logo-image img {
+  position: relative;
+  z-index: 2;
+
+  width: 42px;
+  height: 42px;
+
+  display: block;
+  object-fit: contain;
+
+  user-select: none;
+  pointer-events: none;
+}
+
+#sportabase-root .sb-logo-image
+  .sb-logo-glow {
+  position: absolute;
+  inset: 7px;
+  z-index: 1;
+
+  border-radius: 50%;
+  background:
+    rgba(24, 214, 181, 0.2);
+
+  filter: blur(9px);
 }
 
 #sportabase-root .sb-logo span {
@@ -245,7 +279,7 @@
   background:
     linear-gradient(
       145deg,
-      rgba(124, 58, 237, 0.09),
+      rgba(6, 182, 212, 0.09),
       transparent 52%
     ),
     var(--sb-surface);
@@ -324,7 +358,7 @@
   background: var(--sb-accent-bright);
 
   box-shadow:
-    0 0 10px rgba(159, 103, 255, 0.7);
+    0 0 10px rgba(156, 255, 56, 0.7);
 }
 
 #sportabase-root .sb-page-context {
@@ -1321,4 +1355,1200 @@
 
 .sb-data-disclosure a:hover {
   opacity: 0.82;
+}
+
+
+/* Sportabase dynamic gradient branding */
+
+@property --sb-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #06b6d4;
+}
+
+@property --sb-accent-bright {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #9cff38;
+}
+
+#sportabase-root {
+  transition:
+    opacity 180ms ease,
+    transform 180ms
+      cubic-bezier(.2, .8, .2, 1),
+    --sb-accent 420ms ease,
+    --sb-accent-bright 420ms ease;
+}
+
+#sportabase-root .sb-header::after {
+  background:
+    linear-gradient(
+      90deg,
+      var(--sb-accent),
+      var(--sb-accent-bright) 62%,
+      transparent 94%
+    );
+}
+
+#sportabase-root .sb-logo-image {
+  width: 46px;
+  height: 46px;
+
+  overflow: visible;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  background: none !important;
+  box-shadow: none !important;
+}
+
+#sportabase-root
+  .sb-logo-image
+  .sb-logo-glow {
+  position: absolute;
+  inset: 7px;
+  z-index: 1;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--sb-accent),
+      var(--sb-accent-bright)
+    );
+
+  opacity: 0.32;
+  filter: blur(12px);
+
+  transition:
+    background 420ms ease,
+    opacity 220ms ease;
+}
+
+#sportabase-root
+  .sb-logo-image
+  .sb-logo-mark {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+
+  display: block;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--sb-accent) 8%,
+      var(--sb-accent-bright) 92%
+    );
+
+  -webkit-mask-image:
+    var(--sb-logo-art);
+  mask-image:
+    var(--sb-logo-art);
+
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+
+  -webkit-mask-position: center;
+  mask-position: center;
+
+  -webkit-mask-size: contain;
+  mask-size: contain;
+
+  pointer-events: none;
+
+  filter:
+    drop-shadow(
+      0 0 8px
+      color-mix(
+        in srgb,
+        var(--sb-accent) 46%,
+        transparent
+      )
+    );
+
+  transition:
+    background 420ms ease,
+    filter 420ms ease,
+    transform 220ms ease;
+}
+
+#sportabase-root
+  .sb-logo-image:hover
+  .sb-logo-mark {
+  transform: scale(1.035);
+}
+
+#sportabase-root .sb-primary-button {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(
+        in srgb,
+        var(--sb-accent) 84%,
+        #050608
+      ),
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 72%,
+        #050608
+      )
+    );
+
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    opacity 150ms ease,
+    background 420ms ease,
+    border-color 420ms ease,
+    box-shadow 420ms ease;
+}
+
+#sportabase-root
+  .sb-article-score-track
+  > div,
+#sportabase-root
+  .sb-result-score-track
+  > div {
+  background:
+    linear-gradient(
+      90deg,
+      var(
+        --sb-score-color,
+        var(--sb-accent)
+      ),
+      var(
+        --sb-score-color-bright,
+        var(--sb-accent-bright)
+      )
+    );
+
+  box-shadow:
+    0 0 16px
+    color-mix(
+      in srgb,
+      var(
+        --sb-score-color-bright,
+        var(--sb-accent-bright)
+      ) 48%,
+      transparent
+    );
+}
+
+#sportabase-root[data-sb-motion="none"]
+  .sb-logo-image
+  .sb-logo-mark {
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sportabase-root
+    .sb-logo-image
+    .sb-logo-mark {
+    transform: none !important;
+  }
+}
+
+
+/* Sportabase fixed logo and reactive atmosphere */
+
+#sportabase-root {
+  --sb-brand-start: #06b6d4;
+  --sb-brand-middle: #2dd4bf;
+  --sb-brand-end: #9cff38;
+
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 14%,
+        transparent
+      ),
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 0% 100%,
+      color-mix(
+        in srgb,
+        var(--sb-accent) 9%,
+        transparent
+      ),
+      transparent 48%
+    ),
+    linear-gradient(
+      180deg,
+      var(--sb-panel-top) 0%,
+      var(--sb-panel-bottom) 100%
+    );
+
+  box-shadow:
+    0 24px 70px var(--sb-shadow),
+    0 0 34px
+    color-mix(
+      in srgb,
+      var(--sb-accent) 17%,
+      transparent
+    );
+}
+
+#sportabase-root .sb-header {
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(
+        in srgb,
+        var(--sb-accent) 9%,
+        transparent
+      ),
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 5%,
+        transparent
+      ) 62%,
+      transparent
+    ),
+    var(--sb-header-background);
+}
+
+#sportabase-root .sb-logo-image
+  .sb-logo-glow {
+  background:
+    linear-gradient(
+      135deg,
+      var(--sb-brand-start),
+      var(--sb-brand-middle),
+      var(--sb-brand-end)
+    );
+}
+
+#sportabase-root .sb-logo-image
+  .sb-logo-mark {
+  background:
+    linear-gradient(
+      135deg,
+      var(--sb-brand-start) 4%,
+      var(--sb-brand-middle) 52%,
+      var(--sb-brand-end) 96%
+    );
+
+  filter:
+    drop-shadow(
+      0 0 8px
+      color-mix(
+        in srgb,
+        var(--sb-brand-start) 45%,
+        transparent
+      )
+    );
+}
+
+#sportabase-root.sb-has-analysis-accent
+  .sb-content {
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 8%,
+        transparent
+      ),
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 0% 100%,
+      color-mix(
+        in srgb,
+        var(--sb-accent) 6%,
+        transparent
+      ),
+      transparent 50%
+    );
+}
+
+
+/* Restrained Sportabase ambient lighting */
+
+#sportabase-root {
+  background:
+    linear-gradient(
+      180deg,
+      var(--sb-panel-top) 0%,
+      var(--sb-panel-bottom) 100%
+    );
+
+  box-shadow:
+    0 24px 70px var(--sb-shadow);
+}
+
+/*
+ * The only ambient glow in the interface.
+ * It begins on the right and fades left.
+ */
+#sportabase-root::before {
+  content: "";
+
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      to left,
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 24%,
+        transparent
+      ) 0%,
+      color-mix(
+        in srgb,
+        var(--sb-accent) 12%,
+        transparent
+      ) 28%,
+      transparent 72%
+    );
+
+  opacity:
+    calc(
+      0.28 *
+      var(--sb-glow-strength, 0.35)
+    );
+
+  filter: blur(30px);
+  transform: translateX(8%);
+
+  pointer-events: none;
+
+  transition:
+    opacity 240ms ease,
+    background 420ms ease;
+}
+
+#sportabase-root .sb-header {
+  background:
+    var(--sb-header-background) !important;
+}
+
+#sportabase-root .sb-content {
+  position: relative;
+  z-index: 1;
+
+  background: none !important;
+}
+
+#sportabase-root.sb-has-analysis-accent
+  .sb-content {
+  background: none !important;
+}
+
+/*
+ * Remove local fog and neon halos.
+ * The logo artwork remains fully colored.
+ */
+#sportabase-root .sb-logo-glow,
+#sportabase-root .sb-loader-ambient {
+  display: none !important;
+}
+
+#sportabase-root .sb-loader-symbol,
+#sportabase-root .sb-loader-orbit,
+#sportabase-root .sb-loader-card::before {
+  filter: none !important;
+}
+
+#sportabase-root .sb-primary-button {
+  box-shadow:
+    0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+#sportabase-root .sb-article-ready-icon,
+#sportabase-root .sb-video-ready-icon {
+  box-shadow: none;
+}
+
+#sportabase-root .sb-article-score strong,
+#sportabase-root .sb-result-score strong {
+  text-shadow: none;
+}
+
+#sportabase-root[data-sb-glow="off"]::before {
+  opacity: 0;
+}
+
+
+/* Functional directional glow controls */
+
+/*
+ * One restrained light source positioned
+ * outside the panel on the right.
+ */
+#sportabase-root::before {
+  content: "";
+
+  position: absolute;
+
+  top: 78px;
+  right: -18%;
+  bottom: -8%;
+
+  width: 82%;
+
+  z-index: 0;
+
+  border-radius: 45%;
+
+  background:
+    linear-gradient(
+      to left,
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 36%,
+        transparent
+      ) 0%,
+      color-mix(
+        in srgb,
+        var(--sb-accent) 20%,
+        transparent
+      ) 34%,
+      transparent 78%
+    );
+
+  opacity: 0;
+
+  filter: blur(24px);
+
+  transform: none;
+
+  pointer-events: none;
+
+  transition:
+    opacity 240ms ease,
+    background 420ms ease;
+}
+
+/* Completely clean background. */
+#sportabase-root[data-sb-glow="off"]::before {
+  opacity: 0;
+}
+
+/* Visible, but restrained. */
+#sportabase-root[data-sb-glow="reduced"]::before {
+  opacity: 0.18;
+}
+
+/* Clearly stronger without covering cards. */
+#sportabase-root[data-sb-glow="full"]::before {
+  opacity: 0.42;
+}
+
+/*
+ * Reduced motion keeps movement but makes
+ * it calmer and slower.
+ */
+#sportabase-root[data-sb-motion="reduced"] *,
+#sportabase-root[data-sb-motion="reduced"]::before {
+  animation-duration: 3.2s !important;
+  transition-duration: 280ms !important;
+}
+
+/* None already disables all movement. */
+#sportabase-root[data-sb-motion="none"],
+#sportabase-root[data-sb-motion="none"] * {
+  animation: none !important;
+  transition: none !important;
+}
+
+
+/* Functional settings and restrained atmosphere */
+
+/*
+ * One permanent, restrained directional
+ * light source. No user-facing glow setting.
+ */
+#sportabase-root::before {
+  content: "";
+
+  position: absolute;
+
+  top: 78px;
+  right: -14%;
+  bottom: -6%;
+
+  width: 58%;
+
+  z-index: 0;
+
+  border-radius: 45%;
+
+  background:
+    linear-gradient(
+      to left,
+
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 18%,
+        transparent
+      ) 0%,
+
+      color-mix(
+        in srgb,
+        var(--sb-accent) 9%,
+        transparent
+      ) 34%,
+
+      transparent 78%
+    );
+
+  opacity: 0.2;
+
+  filter: blur(18px);
+
+  pointer-events: none;
+
+  transition:
+    background 420ms ease;
+}
+
+/*
+ * Remove the heavy coloured fog from the
+ * central landing and loader cards.
+ */
+#sportabase-root .sb-article-card,
+#sportabase-root .sb-video-card,
+#sportabase-root .sb-loader-card,
+#sportabase-root .sb-welcome-card {
+  background:
+    var(--sb-surface) !important;
+
+  box-shadow:
+    0 14px 30px
+    rgba(0, 0, 0, 0.24);
+}
+
+#sportabase-root .sb-gradient-lab {
+  background:
+    var(--sb-raised) !important;
+}
+
+/*
+ * Score cards retain only a light result
+ * tint rather than a foggy wash.
+ */
+#sportabase-root .sb-article-score-card,
+#sportabase-root .sb-result-score-card {
+  background:
+    linear-gradient(
+      145deg,
+
+      color-mix(
+        in srgb,
+        var(
+          --sb-score-color,
+          var(--sb-accent)
+        ) 6%,
+        transparent
+      ),
+
+      transparent 58%
+    ),
+    var(--sb-surface);
+}
+
+/* Result detail modes. */
+
+#sportabase-root[data-sb-detail="essential"]
+  .sb-article-reason-card,
+
+#sportabase-root[data-sb-detail="essential"]
+  .sb-article-tags,
+
+#sportabase-root[data-sb-detail="essential"]
+  .sb-article-source-card,
+
+#sportabase-root[data-sb-detail="essential"]
+  .sb-result-detail-card {
+  display: none !important;
+}
+
+/* Functional settings action buttons. */
+
+#sportabase-root .sb-settings-action {
+  width: 100%;
+  min-height: 40px;
+
+  padding: 9px 12px;
+
+  border:
+    1px solid
+    var(--sb-border);
+
+  border-radius: 10px;
+
+  background:
+    var(--sb-raised);
+
+  color:
+    var(--sb-text);
+
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 720;
+
+  cursor: pointer;
+
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 150ms ease;
+}
+
+#sportabase-root
+  .sb-settings-action
+  + .sb-settings-action {
+  margin-top: 8px;
+}
+
+#sportabase-root
+  .sb-settings-action:hover {
+  border-color:
+    var(--sb-accent);
+
+  background:
+    var(--sb-surface);
+
+  transform:
+    translateY(-1px);
+}
+
+#sportabase-root
+  .sb-settings-action-danger {
+  border-color:
+    rgba(239, 68, 68, 0.26);
+
+  color:
+    #fb7185;
+}
+
+/*
+ * High contrast now affects the actual
+ * cards as well as the outer panel.
+ */
+#sportabase-root.sb-high-contrast {
+  border-width: 2px;
+  border-color:
+    var(--sb-text);
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-article-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-video-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-article-score-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-result-score-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-settings-group {
+  border-color:
+    color-mix(
+      in srgb,
+      var(--sb-text) 42%,
+      transparent
+    );
+}
+
+
+/* Final side-anchored atmosphere refinement */
+
+#sportabase-root::before {
+  top: 82px;
+  right: -25%;
+  bottom: -4%;
+
+  width: 46%;
+
+  background:
+    linear-gradient(
+      to left,
+
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 14%,
+        transparent
+      ) 0%,
+
+      color-mix(
+        in srgb,
+        var(--sb-accent) 6%,
+        transparent
+      ) 34%,
+
+      transparent 72%
+    );
+
+  opacity: 0.12;
+  filter: blur(12px);
+}
+
+#sportabase-root .sb-article-card,
+#sportabase-root .sb-video-card,
+#sportabase-root .sb-loader-card,
+#sportabase-root .sb-welcome-card,
+#sportabase-root .sb-gradient-lab {
+  background:
+    var(--sb-surface) !important;
+}
+
+#sportabase-root .sb-article-score-card,
+#sportabase-root .sb-result-score-card {
+  background:
+    linear-gradient(
+      145deg,
+
+      color-mix(
+        in srgb,
+        var(
+          --sb-score-color,
+          var(--sb-accent)
+        ) 3%,
+        transparent
+      ),
+
+      transparent 52%
+    ),
+    var(--sb-surface);
+}
+
+
+/* Pinned screenshot layout refinement */
+
+/*
+ * Square outer edges produce cleaner
+ * screenshots and presentation crops.
+ */
+#sportabase-root {
+  border-radius: 0 !important;
+}
+
+/*
+ * Keep the gradient along the outer-right
+ * background instead of across the centre.
+ */
+#sportabase-root::before {
+  top: 76px;
+  right: -30%;
+  bottom: -5%;
+
+  width: 44%;
+
+  border-radius: 0;
+
+  background:
+    linear-gradient(
+      to left,
+
+      color-mix(
+        in srgb,
+        var(--sb-accent-bright) 13%,
+        transparent
+      ) 0%,
+
+      color-mix(
+        in srgb,
+        var(--sb-accent) 5%,
+        transparent
+      ) 30%,
+
+      transparent 68%
+    );
+
+  opacity: 0.1;
+  filter: blur(8px);
+}
+
+/*
+ * Central content remains crisp and
+ * neutral for screenshots.
+ */
+#sportabase-root .sb-article-card,
+#sportabase-root .sb-video-card,
+#sportabase-root .sb-loader-card,
+#sportabase-root .sb-welcome-card,
+#sportabase-root .sb-gradient-lab {
+  background:
+    var(--sb-surface) !important;
+
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/*
+ * Old resize handles may exist in an
+ * already-open overlay until it reloads.
+ */
+#sportabase-root .sb-resize-handle {
+  display: none !important;
+}
+
+
+/* Restored drag and resize interactions */
+
+#sportabase-root
+  .sb-header,
+
+#sportabase-root
+  .sb-settings-header {
+  cursor: grab;
+  user-select: none;
+}
+
+#sportabase-root
+  .sb-header
+  button,
+
+#sportabase-root
+  .sb-settings-header
+  button {
+  cursor: pointer;
+}
+
+#sportabase-root.sb-is-dragging,
+#sportabase-root.sb-is-dragging
+  .sb-header {
+  cursor: grabbing !important;
+}
+
+html.sb-window-interaction-active {
+  user-select: none !important;
+  cursor: grabbing;
+}
+
+#sportabase-root
+  .sb-resize-handle {
+  display: block !important;
+
+  position: absolute;
+  z-index: 200;
+
+  background: transparent;
+
+  touch-action: none;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="n"] {
+  top: 0;
+  left: 12px;
+  right: 12px;
+
+  height: 7px;
+
+  cursor: ns-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="s"] {
+  bottom: 0;
+  left: 12px;
+  right: 12px;
+
+  height: 7px;
+
+  cursor: ns-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="e"] {
+  top: 12px;
+  right: 0;
+  bottom: 12px;
+
+  width: 7px;
+
+  cursor: ew-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="w"] {
+  top: 12px;
+  left: 0;
+  bottom: 12px;
+
+  width: 7px;
+
+  cursor: ew-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="ne"] {
+  top: 0;
+  right: 0;
+
+  width: 13px;
+  height: 13px;
+
+  cursor: nesw-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="nw"] {
+  top: 0;
+  left: 0;
+
+  width: 13px;
+  height: 13px;
+
+  cursor: nwse-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="se"] {
+  right: 0;
+  bottom: 0;
+
+  width: 13px;
+  height: 13px;
+
+  cursor: nwse-resize;
+}
+
+#sportabase-root
+  .sb-resize-handle[data-direction="sw"] {
+  left: 0;
+  bottom: 0;
+
+  width: 13px;
+  height: 13px;
+
+  cursor: nesw-resize;
+}
+
+
+/* Real high contrast mode */
+
+/* Visible settings toggle */
+
+#sportabase-root
+  input[type="checkbox"]
+  [data-sb-setting] {
+  appearance: none;
+  -webkit-appearance: none;
+
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+
+  width: 38px;
+  height: 22px;
+
+  flex: 0 0 38px;
+  margin: 0 0 0 14px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.32);
+
+  border-radius: 999px;
+
+  background:
+    #111216;
+
+  cursor: pointer;
+
+  position: relative;
+
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+#sportabase-root
+  input[type="checkbox"]
+  [data-sb-setting]::after {
+  content: "";
+
+  position: absolute;
+  top: 3px;
+  left: 3px;
+
+  width: 14px;
+  height: 14px;
+
+  border-radius: 50%;
+
+  background:
+    #c4c7cf;
+
+  transition:
+    transform 150ms ease,
+    background 150ms ease;
+}
+
+#sportabase-root
+  input[type="checkbox"]
+  [data-sb-setting]:checked {
+  border-color:
+    #9cff38;
+
+  background:
+    linear-gradient(
+      90deg,
+      #06b6d4,
+      #9cff38
+    );
+}
+
+#sportabase-root
+  input[type="checkbox"]
+  [data-sb-setting]:checked::after {
+  transform:
+    translateX(16px);
+
+  background:
+    #ffffff;
+}
+
+#sportabase-root
+  input[type="checkbox"]
+  [data-sb-setting]:focus-visible {
+  outline:
+    3px solid
+    rgba(156, 255, 56, 0.48);
+
+  outline-offset: 3px;
+}
+
+
+/* Actual high-contrast interface */
+
+#sportabase-root.sb-high-contrast {
+  border:
+    2px solid
+    #ffffff !important;
+
+  box-shadow:
+    0 0 0 1px
+    #000000 !important;
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-header {
+  border-bottom:
+    2px solid
+    #ffffff !important;
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-settings-panel {
+  border:
+    2px solid
+    #ffffff !important;
+
+  background:
+    #09090b !important;
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-settings-group,
+
+#sportabase-root.sb-high-contrast
+  .sb-setting-row,
+
+#sportabase-root.sb-high-contrast
+  .sb-article-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-video-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-article-score-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-result-score-card,
+
+#sportabase-root.sb-high-contrast
+  .sb-gradient-lab {
+  border:
+    2px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.72
+    ) !important;
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-setting-row {
+  background:
+    #151519 !important;
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-settings-title,
+
+#sportabase-root.sb-high-contrast
+  .sb-settings-group-title,
+
+#sportabase-root.sb-high-contrast
+  .sb-setting-row strong,
+
+#sportabase-root.sb-high-contrast
+  .sb-header-title {
+  color:
+    #ffffff !important;
+}
+
+#sportabase-root.sb-high-contrast
+  .sb-settings-subtitle,
+
+#sportabase-root.sb-high-contrast
+  .sb-setting-row small,
+
+#sportabase-root.sb-high-contrast
+  .sb-muted {
+  color:
+    #d8dbe2 !important;
+}
+
+#sportabase-root.sb-high-contrast
+  button,
+
+#sportabase-root.sb-high-contrast
+  select,
+
+#sportabase-root.sb-high-contrast
+  input {
+  border-color:
+    rgba(
+      255,
+      255,
+      255,
+      0.78
+    ) !important;
+}
+
+#sportabase-root.sb-high-contrast
+  button:focus-visible,
+
+#sportabase-root.sb-high-contrast
+  select:focus-visible,
+
+#sportabase-root.sb-high-contrast
+  input:focus-visible {
+  outline:
+    3px solid
+    #9cff38 !important;
+
+  outline-offset:
+    2px;
 }

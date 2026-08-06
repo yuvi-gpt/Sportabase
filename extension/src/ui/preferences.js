@@ -1,25 +1,39 @@
-﻿export const DEFAULT_PREFERENCES = {
+export const DEFAULT_PREFERENCES = {
   sportabaseAppearance: "system",
+
   sportabaseAccentMode: "dynamic",
-  sportabaseAccentColor: "#7c3aed",
-  sportabaseGlowLevel: "reduced",
-  sportabaseMotionLevel: "full",
+  sportabaseAccentColor: "#06b6d4",
+
   sportabaseHighContrast: false,
-  sportabaseTextScale: "medium",
-  sportabaseDensity: "comfortable",
+
+  /*
+   * New users start comfortable and
+   * pinned to the top-right corner.
+   */
+  sportabasePanelPosition: "top-right",
   sportabaseSizeMode: "comfort",
+
+  /*
+   * These values are populated after the
+   * user manually drags or resizes.
+   */
   sportabaseCustomWidth: null,
   sportabaseCustomHeight: null,
   sportabaseLeft: null,
   sportabaseTop: null,
+
+  sportabaseHorizontalAnchor: "right",
+  sportabaseEdgeOffset: 8,
   sportabaseRememberPosition: true,
+
+  sportabaseDetailLevel: "full",
 };
 
 const PALETTES = {
   dark: {
-    panelTop: "#121214",
-    panelBottom: "#0c0c0e",
-    header: "rgba(16, 16, 18, 0.92)",
+    panelTop: "#101012",
+    panelBottom: "#09090b",
+    header: "rgba(14, 14, 16, 0.96)",
     surface: "#19191c",
     raised: "#222226",
     text: "#f8f8fa",
@@ -32,7 +46,7 @@ const PALETTES = {
   light: {
     panelTop: "#ffffff",
     panelBottom: "#f3f4f7",
-    header: "rgba(255, 255, 255, 0.94)",
+    header: "rgba(255, 255, 255, 0.97)",
     surface: "#ffffff",
     raised: "#eef0f4",
     text: "#15161a",
@@ -43,20 +57,332 @@ const PALETTES = {
   },
 };
 
-export function resolvePreferences(input = {}) {
-  return {
+const SIZE_PRESETS = {
+  compact: {
+    width: 430,
+    height: 580,
+  },
+
+  comfort: {
+    width: 520,
+    height: 680,
+  },
+
+  large: {
+    width: 650,
+    height: 790,
+  },
+};
+
+const EDGE_MARGIN = 8;
+const MIN_PANEL_WIDTH = 300;
+const MIN_PANEL_HEIGHT = 320;
+
+function clamp(
+  value,
+  minimum,
+  maximum
+) {
+  return Math.max(
+    minimum,
+    Math.min(maximum, value)
+  );
+}
+
+function finiteNumber(value) {
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number
+    : null;
+}
+
+function fitDimension(
+  desired,
+  available,
+  minimum
+) {
+  if (available <= minimum) {
+    return Math.max(
+      1,
+      available
+    );
+  }
+
+  return clamp(
+    desired,
+    minimum,
+    available
+  );
+}
+
+export function resolvePreferences(
+  input = {}
+) {
+  const merged = {
     ...DEFAULT_PREFERENCES,
     ...(input || {}),
   };
+
+  const panelPosition =
+    [
+      "top-right",
+      "top-left",
+    ].includes(
+      merged.sportabasePanelPosition
+    )
+      ? merged.sportabasePanelPosition
+      : "top-right";
+
+  const sizeMode =
+    [
+      "compact",
+      "comfort",
+      "large",
+      "custom",
+    ].includes(
+      merged.sportabaseSizeMode
+    )
+      ? merged.sportabaseSizeMode
+      : "comfort";
+
+  const horizontalAnchor =
+    merged.sportabaseHorizontalAnchor ===
+    "left"
+      ? "left"
+      : "right";
+
+  const detailLevel =
+    merged.sportabaseDetailLevel ===
+    "essential"
+      ? "essential"
+      : "full";
+
+  return {
+    ...merged,
+
+    sportabasePanelPosition:
+      panelPosition,
+
+    sportabaseSizeMode:
+      sizeMode,
+
+    sportabaseCustomWidth:
+      finiteNumber(
+        merged.sportabaseCustomWidth
+      ),
+
+    sportabaseCustomHeight:
+      finiteNumber(
+        merged.sportabaseCustomHeight
+      ),
+
+    sportabaseLeft:
+      finiteNumber(
+        merged.sportabaseLeft
+      ),
+
+    sportabaseTop:
+      finiteNumber(
+        merged.sportabaseTop
+      ),
+
+    sportabaseHorizontalAnchor:
+      horizontalAnchor,
+
+    sportabaseEdgeOffset:
+      finiteNumber(
+        merged.sportabaseEdgeOffset
+      ) ?? EDGE_MARGIN,
+
+    sportabaseRememberPosition:
+      merged.sportabaseRememberPosition !==
+      false,
+
+    sportabaseDetailLevel:
+      detailLevel,
+  };
+}
+
+export function applyPanelLayout(
+  overlay,
+  inputPreferences = {}
+) {
+  if (!overlay) return;
+
+  const preferences =
+    resolvePreferences(
+      inputPreferences
+    );
+
+  const preset =
+    SIZE_PRESETS[
+      preferences.sportabaseSizeMode
+    ] ||
+    SIZE_PRESETS.comfort;
+
+  const customSizeAvailable =
+    preferences.sportabaseSizeMode ===
+      "custom" &&
+    preferences.sportabaseCustomWidth !==
+      null &&
+    preferences.sportabaseCustomHeight !==
+      null;
+
+  const desiredWidth =
+    customSizeAvailable
+      ? preferences
+          .sportabaseCustomWidth
+      : preset.width;
+
+  const desiredHeight =
+    customSizeAvailable
+      ? preferences
+          .sportabaseCustomHeight
+      : preset.height;
+
+  const availableWidth =
+    Math.max(
+      1,
+      window.innerWidth -
+        EDGE_MARGIN * 2
+    );
+
+  const availableHeight =
+    Math.max(
+      1,
+      window.innerHeight -
+        EDGE_MARGIN * 2
+    );
+
+  const width =
+    fitDimension(
+      desiredWidth,
+      availableWidth,
+      MIN_PANEL_WIDTH
+    );
+
+  const height =
+    fitDimension(
+      desiredHeight,
+      availableHeight,
+      MIN_PANEL_HEIGHT
+    );
+
+  const hasSavedPosition =
+    preferences
+      .sportabaseRememberPosition &&
+    preferences.sportabaseLeft !== null &&
+    preferences.sportabaseTop !== null;
+
+  let left;
+  let top;
+
+  if (hasSavedPosition) {
+    const maximumEdgeOffset =
+      Math.max(
+        EDGE_MARGIN,
+        window.innerWidth -
+          width -
+          EDGE_MARGIN
+      );
+
+    const edgeOffset =
+      clamp(
+        preferences
+          .sportabaseEdgeOffset,
+        EDGE_MARGIN,
+        maximumEdgeOffset
+      );
+
+    left =
+      preferences
+        .sportabaseHorizontalAnchor ===
+      "right"
+        ? (
+            window.innerWidth -
+            width -
+            edgeOffset
+          )
+        : edgeOffset;
+
+    top =
+      clamp(
+        preferences.sportabaseTop,
+        EDGE_MARGIN,
+        Math.max(
+          EDGE_MARGIN,
+          window.innerHeight -
+            height -
+            EDGE_MARGIN
+        )
+      );
+  } else {
+    top = EDGE_MARGIN;
+
+    left =
+      preferences
+        .sportabasePanelPosition ===
+      "top-left"
+        ? EDGE_MARGIN
+        : (
+            window.innerWidth -
+            width -
+            EDGE_MARGIN
+          );
+  }
+
+  left =
+    clamp(
+      left,
+      EDGE_MARGIN,
+      Math.max(
+        EDGE_MARGIN,
+        window.innerWidth -
+          width -
+          EDGE_MARGIN
+      )
+    );
+
+  overlay.dataset.sbPosition =
+    preferences
+      .sportabasePanelPosition;
+
+  overlay.dataset.sbSize =
+    preferences
+      .sportabaseSizeMode;
+
+  overlay.style.left =
+    `${Math.round(left)}px`;
+
+  overlay.style.right =
+    "auto";
+
+  overlay.style.top =
+    `${Math.round(top)}px`;
+
+  overlay.style.bottom =
+    "auto";
+
+  overlay.style.width =
+    `${Math.round(width)}px`;
+
+  overlay.style.height =
+    `${Math.round(height)}px`;
 }
 
 export function applyPreferences(
   overlay,
   inputPreferences = {}
 ) {
-  if (!overlay) return resolvePreferences(inputPreferences);
+  const preferences =
+    resolvePreferences(
+      inputPreferences
+    );
 
-  const preferences = resolvePreferences(inputPreferences);
+  if (!overlay) {
+    return preferences;
+  }
 
   const systemPrefersLight =
     window.matchMedia?.(
@@ -64,47 +390,33 @@ export function applyPreferences(
     )?.matches || false;
 
   const appearance =
-    preferences.sportabaseAppearance === "system"
-      ? systemPrefersLight
-        ? "light"
-        : "dark"
-      : preferences.sportabaseAppearance;
+    preferences.sportabaseAppearance ===
+    "system"
+      ? (
+          systemPrefersLight
+            ? "light"
+            : "dark"
+        )
+      : preferences
+          .sportabaseAppearance;
 
   const palette =
-    PALETTES[appearance] || PALETTES.dark;
+    PALETTES[appearance] ||
+    PALETTES.dark;
 
-  const accent =
-    preferences.sportabaseAccentMode === "fixed"
-      ? preferences.sportabaseAccentColor || "#7c3aed"
-      : "#7c3aed";
+  overlay.dataset.sbAppearance =
+    appearance;
 
-  const textScaleMap = {
-    small: 0.94,
-    medium: 1,
-    large: 1.08,
-  };
-
-  const densityMap = {
-    compact: 0.88,
-    comfortable: 1,
-    spacious: 1.12,
-  };
-
-  const glowMap = {
-    off: 0,
-    reduced: 0.55,
-    full: 1,
-  };
-
-  overlay.dataset.sbAppearance = appearance;
-  overlay.dataset.sbMotion =
-    preferences.sportabaseMotionLevel;
-  overlay.dataset.sbGlow =
-    preferences.sportabaseGlowLevel;
+  overlay.dataset.sbDetail =
+    preferences
+      .sportabaseDetailLevel;
 
   overlay.classList.toggle(
     "sb-high-contrast",
-    Boolean(preferences.sportabaseHighContrast)
+    Boolean(
+      preferences
+        .sportabaseHighContrast
+    )
   );
 
   overlay.style.setProperty(
@@ -157,45 +469,50 @@ export function applyPreferences(
     palette.shadow
   );
 
-  overlay.style.setProperty(
-    "--sb-accent",
-    accent
+  const resultPaletteActive =
+    overlay.classList.contains(
+      "sb-has-analysis-accent"
+    );
+
+  if (!resultPaletteActive) {
+    overlay.style.setProperty(
+      "--sb-accent",
+      "#06b6d4"
+    );
+
+    overlay.style.setProperty(
+      "--sb-accent-bright",
+      "#9cff38"
+    );
+  }
+
+  applyPanelLayout(
+    overlay,
+    preferences
   );
 
-  overlay.style.setProperty(
-    "--sb-accent-bright",
-    `color-mix(in srgb, ${accent} 72%, white 28%)`
-  );
+  overlay.style.colorScheme =
+    appearance;
 
-  overlay.style.setProperty(
-    "--sb-text-scale",
-    String(
-      textScaleMap[preferences.sportabaseTextScale] || 1
+  overlay.dispatchEvent(
+    new CustomEvent(
+      "sportabase:preferences-changed",
+      {
+        detail: preferences,
+      }
     )
   );
-
-  overlay.style.setProperty(
-    "--sb-density",
-    String(
-      densityMap[preferences.sportabaseDensity] || 1
-    )
-  );
-
-  overlay.style.setProperty(
-    "--sb-glow-strength",
-    String(
-      glowMap[preferences.sportabaseGlowLevel] ?? 0.55
-    )
-  );
-
-  overlay.style.colorScheme = appearance;
 
   return preferences;
 }
 
-export async function savePreferences(payload = {}) {
+export async function savePreferences(
+  payload = {}
+) {
   return chrome.runtime.sendMessage({
-    type: "SPORTABASE_SAVE_OVERLAY_PREFS",
+    type:
+      "SPORTABASE_SAVE_OVERLAY_PREFS",
+
     payload,
   });
 }
