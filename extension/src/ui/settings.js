@@ -1,5 +1,7 @@
-﻿import {
+import {
   applyPreferences,
+  DEFAULT_PREFERENCES,
+  resolvePreferences,
   savePreferences,
 } from "./preferences.js";
 
@@ -14,14 +16,19 @@ export function installSettingsDrawer({
     };
   }
 
-  let currentPreferences = {
-    ...preferences,
-  };
+  let currentPreferences =
+    resolvePreferences(
+      preferences
+    );
 
   let closeTimer = null;
 
-  const layer = document.createElement("div");
-  layer.className = "sb-settings-layer";
+  const layer =
+    document.createElement("div");
+
+  layer.className =
+    "sb-settings-layer";
+
   layer.hidden = true;
 
   layer.innerHTML = `
@@ -48,7 +55,7 @@ export function installSettingsDrawer({
           </div>
 
           <div class="sb-settings-subtitle">
-            Personalize your Sportabase experience
+            Configure your Sportabase workspace
           </div>
         </div>
 
@@ -76,115 +83,167 @@ export function installSettingsDrawer({
       <div class="sb-settings-content">
         <section class="sb-settings-group">
           <div class="sb-settings-group-title">
-            Appearance
+            Display
           </div>
 
           <label class="sb-setting-row">
             <span>
               <strong>Theme</strong>
-              <small>Choose light, dark, or follow your system.</small>
+
+              <small>
+                Follow your system or force
+                a light or dark interface.
+              </small>
             </span>
 
-            <select data-sb-setting="sportabaseAppearance">
-              <option value="system">System</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
+            <select
+              data-sb-setting=
+                "sportabaseAppearance"
+            >
+              <option value="system">
+                System
+              </option>
+
+              <option value="dark">
+                Dark
+              </option>
+
+              <option value="light">
+                Light
+              </option>
             </select>
           </label>
 
           <label class="sb-setting-row">
             <span>
-              <strong>Accent</strong>
-              <small>Use Sportabase purple or your own color.</small>
+              <strong>Panel position</strong>
+
+              <small>
+                Pin Sportabase to your preferred
+                top corner.
+              </small>
             </span>
 
-            <select data-sb-setting="sportabaseAccentMode">
-              <option value="dynamic">Sportabase</option>
-              <option value="fixed">Custom</option>
+            <select
+              data-sb-setting=
+                "sportabasePanelPosition"
+            >
+              <option value="top-right">
+                Top right
+              </option>
+
+              <option value="top-left">
+                Top left
+              </option>
             </select>
           </label>
 
           <label class="sb-setting-row">
             <span>
-              <strong>Accent color</strong>
-              <small>Used when the accent mode is Custom.</small>
+              <strong>Panel size</strong>
+
+              <small>
+                Save a consistent extension
+                size that remains on screen.
+              </small>
             </span>
 
-            <input
-              type="color"
-              data-sb-setting="sportabaseAccentColor"
-            />
-          </label>
+            <select
+              data-sb-setting=
+                "sportabaseSizeMode"
+            >
+              <option value="compact">
+                Compact
+              </option>
 
-          <label class="sb-setting-row">
-            <span>
-              <strong>Glow</strong>
-              <small>Control decorative lighting effects.</small>
-            </span>
+              <option value="comfort">
+                Comfortable
+              </option>
 
-            <select data-sb-setting="sportabaseGlowLevel">
-              <option value="off">Off</option>
-              <option value="reduced">Reduced</option>
-              <option value="full">Full</option>
-            </select>
-          </label>
+              <option value="large">
+                Large
+              </option>
 
-          <label class="sb-setting-row">
-            <span>
-              <strong>Motion</strong>
-              <small>Control transitions and animations.</small>
-            </span>
-
-            <select data-sb-setting="sportabaseMotionLevel">
-              <option value="full">Full</option>
-              <option value="reduced">Reduced</option>
-              <option value="none">None</option>
+              <option
+                value="custom"
+                disabled
+              >
+                Custom
+              </option>
             </select>
           </label>
 
           <label class="sb-setting-row">
             <span>
               <strong>High contrast</strong>
-              <small>Add a stronger boundary around the panel.</small>
+
+              <small>
+                Strengthen panel and card
+                boundaries.
+              </small>
             </span>
 
             <input
               type="checkbox"
-              data-sb-setting="sportabaseHighContrast"
+              data-sb-setting=
+                "sportabaseHighContrast"
             />
           </label>
         </section>
 
         <section class="sb-settings-group">
           <div class="sb-settings-group-title">
-            Reading
+            Analysis
           </div>
 
           <label class="sb-setting-row">
             <span>
-              <strong>Text size</strong>
-              <small>Adjust the interface typography.</small>
+              <strong>Result detail</strong>
+
+              <small>
+                Essential shows the key result.
+                Full includes supporting detail.
+              </small>
             </span>
 
-            <select data-sb-setting="sportabaseTextScale">
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
+            <select
+              data-sb-setting=
+                "sportabaseDetailLevel"
+            >
+              <option value="essential">
+                Essential
+              </option>
+
+              <option value="full">
+                Full
+              </option>
             </select>
           </label>
+        </section>
 
-          <label class="sb-setting-row">
-            <span>
-              <strong>Density</strong>
-              <small>Control spacing between interface elements.</small>
-            </span>
+        <section class="sb-settings-group">
+          <div class="sb-settings-group-title">
+            Reset
+          </div>
 
-            <select data-sb-setting="sportabaseDensity">
-              <option value="compact">Compact</option>
-              <option value="comfortable">Comfortable</option>
-              <option value="spacious">Spacious</option>
-            </select>
-          </label>
+          <button
+            class="sb-settings-action"
+            type="button"
+            data-sb-reset-layout
+          >
+            Reset to comfortable top right
+          </button>
+
+          <button
+            class="
+              sb-settings-action
+              sb-settings-action-danger
+            "
+            type="button"
+            data-sb-reset-all
+          >
+            Reset all settings
+          </button>
         </section>
 
         <div class="sb-settings-footer">
@@ -196,58 +255,157 @@ export function installSettingsDrawer({
 
   overlay.appendChild(layer);
 
-  const settingsButton = overlay.querySelector(
-    "[data-sb-settings]"
-  );
+  const settingsButton =
+    overlay.querySelector(
+      "[data-sb-settings]"
+    );
 
-  const panel = layer.querySelector(
-    ".sb-settings-panel"
-  );
-
-  const accentModeControl = layer.querySelector(
-    '[data-sb-setting="sportabaseAccentMode"]'
-  );
-
-  const accentColorControl = layer.querySelector(
-    '[data-sb-setting="sportabaseAccentColor"]'
-  );
-
-  function updateAccentControlState() {
-    if (!accentColorControl) return;
-
-    const customAccent =
-      currentPreferences.sportabaseAccentMode ===
-      "fixed";
-
-    accentColorControl.disabled = !customAccent;
-    accentColorControl.closest(".sb-setting-row")
-      ?.classList.toggle(
-        "sb-setting-disabled",
-        !customAccent
-      );
-  }
+  const panel =
+    layer.querySelector(
+      ".sb-settings-panel"
+    );
 
   function syncControls() {
     layer
-      .querySelectorAll("[data-sb-setting]")
+      .querySelectorAll(
+        "[data-sb-setting]"
+      )
       .forEach((control) => {
-        const key = control.dataset.sbSetting;
-        const value = currentPreferences[key];
+        const key =
+          control.dataset.sbSetting;
 
-        if (control.type === "checkbox") {
-          control.checked = Boolean(value);
+        const value =
+          currentPreferences[key];
+
+        if (
+          control.type ===
+          "checkbox"
+        ) {
+          control.checked =
+            Boolean(value);
+
           return;
         }
 
-        control.value = value ?? "";
+        control.value =
+          value ?? "";
       });
-
-    updateAccentControlState();
   }
+
+  async function persist(
+    payload
+  ) {
+    try {
+      await savePreferences(
+        payload
+      );
+    } catch (error) {
+      console.error(
+        "[sportabase] Could not save setting:",
+        error
+      );
+    }
+  }
+
+  function applyCurrentPreferences() {
+    currentPreferences =
+      applyPreferences(
+        overlay,
+        currentPreferences
+      );
+
+    syncControls();
+  }
+
+  function resetLayout() {
+    currentPreferences = {
+      ...currentPreferences,
+
+      sportabasePanelPosition:
+        "top-right",
+
+      sportabaseSizeMode:
+        "comfort",
+
+      sportabaseCustomWidth:
+        null,
+
+      sportabaseCustomHeight:
+        null,
+
+      sportabaseLeft:
+        null,
+
+      sportabaseTop:
+        null,
+
+      sportabaseHorizontalAnchor:
+        "right",
+
+      sportabaseEdgeOffset:
+        8,
+
+      sportabaseRememberPosition:
+        true,
+    };
+
+    applyCurrentPreferences();
+
+    persist({
+      sportabasePanelPosition:
+        "top-right",
+
+      sportabaseSizeMode:
+        "comfort",
+
+      sportabaseCustomWidth:
+        null,
+
+      sportabaseCustomHeight:
+        null,
+
+      sportabaseLeft:
+        null,
+
+      sportabaseTop:
+        null,
+
+      sportabaseRememberPosition:
+        false,
+    });
+  }
+
+  function resetAllSettings() {
+    currentPreferences = {
+      ...DEFAULT_PREFERENCES,
+    };
+
+    applyCurrentPreferences();
+
+    persist({
+      ...DEFAULT_PREFERENCES,
+    });
+  }
+
+  overlay.addEventListener(
+    "sportabase:geometry-changed",
+    (event) => {
+      currentPreferences =
+        resolvePreferences({
+          ...currentPreferences,
+          ...(event.detail || {}),
+        });
+
+      syncControls();
+    }
+  );
 
   function open() {
     if (closeTimer) {
-      window.clearTimeout(closeTimer);
+      window.clearTimeout(
+        closeTimer
+      );
+
       closeTimer = null;
     }
 
@@ -261,89 +419,186 @@ export function installSettingsDrawer({
     );
 
     requestAnimationFrame(() => {
-      layer.classList.add("sb-settings-open");
+      layer.classList.add(
+        "sb-settings-open"
+      );
+
       panel?.focus?.();
     });
   }
 
   function close() {
-    layer.classList.remove("sb-settings-open");
+    layer.classList.remove(
+      "sb-settings-open"
+    );
 
     settingsButton?.setAttribute(
       "aria-expanded",
       "false"
     );
 
-    closeTimer = window.setTimeout(() => {
-      layer.hidden = true;
-      closeTimer = null;
-    }, 170);
+    closeTimer =
+      window.setTimeout(() => {
+        layer.hidden = true;
+        closeTimer = null;
+      }, 170);
   }
 
   layer
-    .querySelectorAll("[data-sb-settings-close]")
+    .querySelectorAll(
+      "[data-sb-settings-close]"
+    )
     .forEach((button) => {
-      button.addEventListener("click", close);
+      button.addEventListener(
+        "click",
+        close
+      );
     });
 
-  settingsButton?.addEventListener("click", open);
+  settingsButton?.addEventListener(
+    "click",
+    open
+  );
 
   layer
-    .querySelectorAll("[data-sb-setting]")
+    .querySelectorAll(
+      "[data-sb-setting]"
+    )
     .forEach((control) => {
-      const eventName =
-        control.type === "color"
-          ? "input"
-          : "change";
+      control.addEventListener(
+        "change",
+        () => {
+          const key =
+            control.dataset.sbSetting;
 
-      control.addEventListener(eventName, () => {
-        const key = control.dataset.sbSetting;
+          const value =
+            control.type ===
+            "checkbox"
+              ? control.checked
+              : control.value;
 
-        const value =
-          control.type === "checkbox"
-            ? control.checked
-            : control.value;
+          const payload = {
+            [key]: value,
+          };
 
-        currentPreferences = {
-          ...currentPreferences,
-          [key]: value,
-        };
+          currentPreferences = {
+            ...currentPreferences,
+            [key]: value,
+          };
 
-        if (control === accentModeControl) {
-          updateAccentControlState();
+          if (
+            key ===
+            "sportabasePanelPosition"
+          ) {
+            const anchor =
+              value === "top-left"
+                ? "left"
+                : "right";
+
+            currentPreferences = {
+              ...currentPreferences,
+
+              sportabaseLeft:
+                null,
+
+              sportabaseTop:
+                null,
+
+              sportabaseHorizontalAnchor:
+                anchor,
+
+              sportabaseEdgeOffset:
+                8,
+
+              sportabaseRememberPosition:
+                true,
+            };
+
+            payload.sportabaseLeft =
+              null;
+
+            payload.sportabaseTop =
+              null;
+
+            payload
+              .sportabaseHorizontalAnchor =
+                anchor;
+
+            payload
+              .sportabaseEdgeOffset =
+                8;
+
+            payload
+              .sportabaseRememberPosition =
+                true;
+          }
+
+          if (
+            key ===
+            "sportabaseSizeMode"
+          ) {
+            currentPreferences = {
+              ...currentPreferences,
+
+              sportabaseCustomWidth:
+                null,
+
+              sportabaseCustomHeight:
+                null,
+            };
+
+            payload
+              .sportabaseCustomWidth =
+                null;
+
+            payload
+              .sportabaseCustomHeight =
+                null;
+          }
+
+          applyCurrentPreferences();
+
+          persist(payload);
         }
-
-        applyPreferences(
-          overlay,
-          currentPreferences
-        );
-
-        savePreferences({
-          [key]: value,
-        }).catch((error) => {
-          console.error(
-            "[sportabase] Could not save setting:",
-            error
-          );
-        });
-      });
+      );
     });
 
-  overlay.addEventListener("keydown", (event) => {
-    if (
-      event.key === "Escape" &&
-      !layer.hidden
-    ) {
-      close();
+  layer
+    .querySelector(
+      "[data-sb-reset-layout]"
+    )
+    ?.addEventListener(
+      "click",
+      resetLayout
+    );
+
+  layer
+    .querySelector(
+      "[data-sb-reset-all]"
+    )
+    ?.addEventListener(
+      "click",
+      resetAllSettings
+    );
+
+  overlay.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.key === "Escape" &&
+        !layer.hidden
+      ) {
+        close();
+      }
     }
-  });
+  );
 
   settingsButton?.setAttribute(
     "aria-expanded",
     "false"
   );
 
-  syncControls();
+  applyCurrentPreferences();
 
   return {
     open,

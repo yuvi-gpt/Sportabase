@@ -15,6 +15,11 @@ import {
   createRequestLifecycle,
 } from "./request-lifecycle.js";
 
+import {
+  createAccentTheme,
+  getScorePalette,
+} from "../ui/accent-theme.js";
+
 const ANALYSIS_STEPS = [
   {
     message: "Identifying the article's central story…",
@@ -89,16 +94,6 @@ function humanizeLabel(value) {
     /\b\w/g,
     (character) => character.toUpperCase()
   );
-}
-
-function getScoreColor(score) {
-  if (score < 35) return "#ef4444";
-  if (score < 50) return "#f59e0b";
-  if (score < 65) return "#3b82f6";
-  if (score < 80) return "#8b5cf6";
-  if (score < 90) return "#14b8a6";
-
-  return "#22c55e";
 }
 
 function normalizeStringList(value) {
@@ -519,67 +514,9 @@ export function openArticleMode({
   const analysisRequests =
     createRequestLifecycle();
 
-  const baseAccent =
-    getComputedStyle(shell.overlay)
-      .getPropertyValue("--sb-accent")
-      .trim() || "#7c3aed";
+  const accentTheme =
+    createAccentTheme(shell.overlay);
 
-  const baseAccentBright =
-    getComputedStyle(shell.overlay)
-      .getPropertyValue(
-        "--sb-accent-bright"
-      )
-      .trim() || baseAccent;
-
-  function applyResultAccent(color) {
-    shell.overlay.style.setProperty(
-      "--sb-accent",
-      color
-    );
-
-    shell.overlay.style.setProperty(
-      "--sb-accent-bright",
-      color
-    );
-
-    shell.overlay.style.setProperty(
-      "--sb-score-color",
-      color
-    );
-
-    shell.overlay.style.setProperty(
-      "--sb-analysis-accent",
-      color
-    );
-
-    shell.overlay.classList.add(
-      "sb-has-analysis-accent"
-    );
-  }
-
-  function clearResultAccent() {
-    shell.overlay.style.setProperty(
-      "--sb-accent",
-      baseAccent
-    );
-
-    shell.overlay.style.setProperty(
-      "--sb-accent-bright",
-      baseAccentBright
-    );
-
-    shell.overlay.style.removeProperty(
-      "--sb-score-color"
-    );
-
-    shell.overlay.style.removeProperty(
-      "--sb-analysis-accent"
-    );
-
-    shell.overlay.classList.remove(
-      "sb-has-analysis-accent"
-    );
-  }
 
   function stopLoadingTicker() {
     if (!loadingTicker) return;
@@ -622,7 +559,7 @@ export function openArticleMode({
 
   function renderLanding() {
     stopLoadingTicker();
-    clearResultAccent();
+    accentTheme.clear();
 
     analysisRunning = false;
 
@@ -750,6 +687,8 @@ export function openArticleMode({
               Evidence
             </div>
           </div>
+
+
         </section>
 
         <div class="sb-article-status">
@@ -790,11 +729,13 @@ export function openArticleMode({
           runAnalysis
         );
     }
+
+    installVisualTestControls(article);
   }
 
   function renderError(error) {
     stopLoadingTicker();
-    clearResultAccent();
+    accentTheme.clear();
 
     analysisRunning = false;
 
@@ -890,8 +831,8 @@ export function openArticleMode({
     const meritScore =
       getMeritScore(data);
 
-    const scoreColor =
-      getScoreColor(meritScore);
+    const scorePalette =
+      getScorePalette(meritScore);
 
     const articleType =
       getArticleType(data);
@@ -947,7 +888,7 @@ export function openArticleMode({
           `
         : "";
 
-    applyResultAccent(scoreColor);
+    accentTheme.apply(scorePalette);
 
     shell.setModeLabel(
       `${uiLabels.article_intelligence} ? ${articleType}`
@@ -1087,7 +1028,7 @@ export function openArticleMode({
     analysisRunning = true;
     stopLoadingTicker();
 
-    clearResultAccent();
+    accentTheme.clear();
 
     const article =
       getCurrentArticle();

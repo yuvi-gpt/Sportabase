@@ -1,4 +1,4 @@
-﻿#sportabase-root .sb-analysis-loader {
+#sportabase-root .sb-analysis-loader {
   position: relative;
   min-height: 100%;
 
@@ -482,5 +482,674 @@
       );
 
     transform: scale(1.04);
+  }
+}
+
+
+/* Sportabase circular logo loader */
+
+#sportabase-root .sb-loader-symbol {
+  width: 64px;
+  height: 64px;
+}
+
+#sportabase-root .sb-loader-orbit {
+  inset: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      var(--sb-brand-start) 75deg,
+      var(--sb-brand-middle) 165deg,
+      var(--sb-brand-end) 255deg,
+      transparent 330deg
+    );
+
+  -webkit-mask:
+    radial-gradient(
+      farthest-side,
+      transparent calc(100% - 2px),
+      #000 0
+    );
+
+  mask:
+    radial-gradient(
+      farthest-side,
+      transparent calc(100% - 2px),
+      #000 0
+    );
+
+  filter:
+    drop-shadow(
+      0 0 7px
+      color-mix(
+        in srgb,
+        var(--sb-brand-start) 48%,
+        transparent
+      )
+    );
+
+  animation:
+    sb-loader-orbit
+    1.55s
+    linear
+    infinite;
+}
+
+#sportabase-root .sb-loader-logo {
+  width: 51px;
+  height: 51px;
+}
+
+#sportabase-root
+  .sb-loader-logo
+  .sb-logo-glow {
+  inset: 8px;
+
+  opacity: 0.46;
+
+  animation:
+    sb-loader-logo-glow
+    1.55s
+    ease-in-out
+    infinite;
+}
+
+#sportabase-root
+  .sb-loader-logo
+  .sb-logo-mark {
+  animation:
+    sb-loader-logo-breathe
+    1.55s
+    ease-in-out
+    infinite;
+}
+
+#sportabase-root .sb-loader-ambient {
+  background:
+    radial-gradient(
+      circle at 35% 45%,
+      color-mix(
+        in srgb,
+        var(--sb-brand-start) 22%,
+        transparent
+      ),
+      transparent 54%
+    ),
+    radial-gradient(
+      circle at 66% 55%,
+      color-mix(
+        in srgb,
+        var(--sb-brand-end) 18%,
+        transparent
+      ),
+      transparent 58%
+    );
+}
+
+#sportabase-root .sb-loader-bar {
+  background:
+    linear-gradient(
+      90deg,
+      var(--sb-brand-start),
+      var(--sb-brand-middle),
+      var(--sb-brand-end),
+      var(--sb-brand-middle),
+      var(--sb-brand-start)
+    );
+
+  background-size: 220% 100%;
+}
+
+@keyframes sb-loader-logo-breathe {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+
+  50% {
+    transform: scale(1);
+  }
+}
+
+@keyframes sb-loader-logo-glow {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 0.58;
+    transform: scale(1.08);
+  }
+}
+
+#sportabase-root[data-sb-motion="none"]
+  .sb-loader-logo
+  .sb-logo-mark,
+#sportabase-root[data-sb-motion="none"]
+  .sb-loader-logo
+  .sb-logo-glow {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sportabase-root
+    .sb-loader-logo
+    .sb-logo-mark,
+  #sportabase-root
+    .sb-loader-logo
+    .sb-logo-glow {
+    animation: none !important;
+  }
+}
+
+
+/* Sportabase scanning logo loader */
+
+#sportabase-root .sb-loader-symbol {
+  position: relative;
+  isolation: isolate;
+
+  width: 92px;
+  height: 92px;
+
+  display: grid;
+  place-items: center;
+
+  filter:
+    drop-shadow(
+      0 0 18px
+      color-mix(
+        in srgb,
+        var(--sb-brand-start) 24%,
+        transparent
+      )
+    );
+}
+
+#sportabase-root
+  .sb-loader-symbol
+  .sb-loader-orbit {
+  position: absolute;
+
+  border: 0;
+  border-radius: 50%;
+
+  pointer-events: none;
+}
+
+#sportabase-root .sb-loader-orbit-outer {
+  inset: 1px;
+
+  background:
+    conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      var(--sb-brand-start) 54deg,
+      var(--sb-brand-middle) 128deg,
+      var(--sb-brand-end) 202deg,
+      transparent 278deg,
+      transparent 360deg
+    );
+
+  -webkit-mask:
+    radial-gradient(
+      farthest-side,
+      transparent calc(100% - 2px),
+      #000 0
+    );
+
+  mask:
+    radial-gradient(
+      farthest-side,
+      transparent calc(100% - 2px),
+      #000 0
+    );
+
+  animation:
+    sb-loader-scan-orbit
+    2.45s
+    linear
+    infinite;
+}
+
+#sportabase-root
+  .sb-loader-orbit-outer::after {
+  content: "";
+
+  position: absolute;
+  top: 8px;
+  left: 10px;
+
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: var(--sb-brand-end);
+
+  box-shadow:
+    0 0 5px var(--sb-brand-end),
+    0 0 13px
+    color-mix(
+      in srgb,
+      var(--sb-brand-end) 72%,
+      transparent
+    );
+}
+
+#sportabase-root .sb-loader-orbit-inner {
+  inset: 11px;
+
+  background:
+    conic-gradient(
+      from 180deg,
+      transparent 0deg,
+      var(--sb-brand-end) 65deg,
+      var(--sb-brand-middle) 146deg,
+      var(--sb-brand-start) 224deg,
+      transparent 305deg,
+      transparent 360deg
+    );
+
+  -webkit-mask:
+    radial-gradient(
+      farthest-side,
+      transparent calc(100% - 1.5px),
+      #000 0
+    );
+
+  mask:
+    radial-gradient(
+      farthest-side,
+      transparent calc(100% - 1.5px),
+      #000 0
+    );
+
+  opacity: 0.76;
+
+  animation:
+    sb-loader-scan-orbit-reverse
+    1.8s
+    linear
+    infinite;
+}
+
+#sportabase-root
+  .sb-loader-orbit-inner::after {
+  content: "";
+
+  position: absolute;
+  right: 5px;
+  bottom: 11px;
+
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
+  background: var(--sb-brand-start);
+
+  box-shadow:
+    0 0 5px var(--sb-brand-start),
+    0 0 12px
+    color-mix(
+      in srgb,
+      var(--sb-brand-start) 72%,
+      transparent
+    );
+}
+
+#sportabase-root .sb-loader-scan-wave {
+  position: absolute;
+  inset: 18px;
+  z-index: 1;
+
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--sb-brand-middle) 58%,
+      transparent
+    );
+
+  border-radius: 50%;
+
+  pointer-events: none;
+
+  animation:
+    sb-loader-scan-pulse
+    1.75s
+    ease-out
+    infinite;
+}
+
+#sportabase-root .sb-loader-logo {
+  position: relative;
+  z-index: 4;
+
+  width: 62px;
+  height: 62px;
+}
+
+#sportabase-root
+  .sb-loader-logo
+  .sb-logo-mark {
+  animation:
+    sb-loader-logo-float
+    1.75s
+    ease-in-out
+    infinite;
+}
+
+#sportabase-root
+  .sb-loader-logo
+  .sb-logo-glow {
+  inset: 7px;
+
+  opacity: 0.46;
+
+  animation:
+    sb-loader-logo-energy
+    1.75s
+    ease-in-out
+    infinite;
+}
+
+#sportabase-root .sb-loader-signal {
+  position: absolute;
+  z-index: 5;
+
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
+  background: var(--sb-brand-middle);
+
+  pointer-events: none;
+}
+
+#sportabase-root .sb-loader-signal-a {
+  top: 19px;
+  right: 15px;
+
+  animation:
+    sb-loader-signal-ping
+    1.2s
+    ease-in-out
+    infinite;
+}
+
+#sportabase-root .sb-loader-signal-b {
+  left: 14px;
+  bottom: 22px;
+
+  background: var(--sb-brand-end);
+
+  animation:
+    sb-loader-signal-ping
+    1.2s
+    0.42s
+    ease-in-out
+    infinite;
+}
+
+#sportabase-root .sb-loader-card::before {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  left: -45%;
+
+  width: 42%;
+  height: 2px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      var(--sb-brand-start),
+      var(--sb-brand-middle),
+      var(--sb-brand-end),
+      transparent
+    );
+
+  filter:
+    drop-shadow(
+      0 0 5px
+      var(--sb-brand-middle)
+    );
+
+  animation:
+    sb-loader-card-scan
+    2.4s
+    ease-in-out
+    infinite;
+}
+
+@keyframes sb-loader-scan-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sb-loader-scan-orbit-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes sb-loader-scan-pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.72);
+  }
+
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(1.62);
+  }
+}
+
+@keyframes sb-loader-logo-float {
+  0%,
+  100% {
+    transform:
+      translateY(1px)
+      scale(0.94);
+  }
+
+  50% {
+    transform:
+      translateY(-1px)
+      scale(1);
+  }
+}
+
+@keyframes sb-loader-logo-energy {
+  0%,
+  100% {
+    opacity: 0.24;
+    transform: scale(0.84);
+  }
+
+  50% {
+    opacity: 0.58;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes sb-loader-signal-ping {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.65);
+
+    box-shadow:
+      0 0 0 0
+      color-mix(
+        in srgb,
+        currentColor 0%,
+        transparent
+      );
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+
+    box-shadow:
+      0 0 0 5px
+      color-mix(
+        in srgb,
+        var(--sb-brand-middle) 13%,
+        transparent
+      );
+  }
+}
+
+@keyframes sb-loader-card-scan {
+  0% {
+    left: -45%;
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    left: 104%;
+    opacity: 0;
+  }
+}
+
+#sportabase-root[data-sb-motion="none"]
+  .sb-loader-symbol *,
+#sportabase-root[data-sb-motion="none"]
+  .sb-loader-card::before {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sportabase-root
+    .sb-loader-symbol *,
+  #sportabase-root
+    .sb-loader-card::before {
+    animation: none !important;
+  }
+}
+
+
+/* Calm Sportabase logo animation */
+
+/* Remove the excessive surrounding effects. */
+
+#sportabase-root
+  .sb-loader-orbit-inner,
+
+#sportabase-root
+  .sb-loader-scan-wave,
+
+#sportabase-root
+  .sb-loader-signal,
+
+#sportabase-root
+  .sb-loader-card::before {
+  display: none !important;
+}
+
+
+/* Keep one clean, slow orbit. */
+
+#sportabase-root
+  .sb-loader-orbit-outer {
+  inset: 5px;
+
+  opacity: 0.62;
+
+  filter: none !important;
+
+  animation:
+    sb-loader-calm-orbit
+    3.6s
+    linear
+    infinite !important;
+}
+
+
+/* Remove the neon/fog effect around the logo. */
+
+#sportabase-root
+  .sb-loader-symbol {
+  filter: none !important;
+}
+
+#sportabase-root
+  .sb-loader-logo
+  .sb-logo-glow {
+  display: none !important;
+}
+
+
+/* Keep only a barely visible breathing motion. */
+
+#sportabase-root
+  .sb-loader-logo
+  .sb-logo-mark {
+  animation:
+    sb-loader-calm-breathe
+    2.8s
+    ease-in-out
+    infinite !important;
+}
+
+
+@keyframes sb-loader-calm-orbit {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+
+@keyframes sb-loader-calm-breathe {
+  0%,
+  100% {
+    transform:
+      scale(0.985);
+  }
+
+  50% {
+    transform:
+      scale(1);
+  }
+}
+
+
+@media (
+  prefers-reduced-motion:
+  reduce
+) {
+  #sportabase-root
+    .sb-loader-orbit-outer,
+
+  #sportabase-root
+    .sb-loader-logo
+    .sb-logo-mark {
+    animation:
+      none !important;
   }
 }

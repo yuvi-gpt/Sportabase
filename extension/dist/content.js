@@ -41,10 +41,28 @@
   });
 
   // src/ui/logo.js
-  function getSportabaseLogoMarkup() {
+  function getSportabaseLogoMarkup({
+    className = ""
+  } = {}) {
+    const logoUrl = chrome.runtime.getURL(
+      "assets/sportabase-logo.png"
+    );
+    const extraClass = String(className || "").trim();
     return `
-    <div class="sb-logo" aria-hidden="true">
-      <span>SB</span>
+    <div
+      class="
+        sb-logo
+        sb-logo-image
+        ${extraClass}
+      "
+      style="
+        --sb-logo-art:
+          url('${logoUrl}')
+      "
+      aria-hidden="true"
+    >
+      <span class="sb-logo-glow"></span>
+      <span class="sb-logo-mark"></span>
     </div>
   `;
   }
@@ -54,42 +72,163 @@
   });
 
   // src/ui/preferences.js
+  function clamp(value, minimum, maximum) {
+    return Math.max(
+      minimum,
+      Math.min(maximum, value)
+    );
+  }
+  function finiteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+  function fitDimension(desired, available, minimum) {
+    if (available <= minimum) {
+      return Math.max(
+        1,
+        available
+      );
+    }
+    return clamp(
+      desired,
+      minimum,
+      available
+    );
+  }
   function resolvePreferences(input = {}) {
-    return {
+    const merged = {
       ...DEFAULT_PREFERENCES,
       ...input || {}
     };
+    const panelPosition = [
+      "top-right",
+      "top-left"
+    ].includes(
+      merged.sportabasePanelPosition
+    ) ? merged.sportabasePanelPosition : "top-right";
+    const sizeMode = [
+      "compact",
+      "comfort",
+      "large",
+      "custom"
+    ].includes(
+      merged.sportabaseSizeMode
+    ) ? merged.sportabaseSizeMode : "comfort";
+    const horizontalAnchor = merged.sportabaseHorizontalAnchor === "left" ? "left" : "right";
+    const detailLevel = merged.sportabaseDetailLevel === "essential" ? "essential" : "full";
+    return {
+      ...merged,
+      sportabasePanelPosition: panelPosition,
+      sportabaseSizeMode: sizeMode,
+      sportabaseCustomWidth: finiteNumber(
+        merged.sportabaseCustomWidth
+      ),
+      sportabaseCustomHeight: finiteNumber(
+        merged.sportabaseCustomHeight
+      ),
+      sportabaseLeft: finiteNumber(
+        merged.sportabaseLeft
+      ),
+      sportabaseTop: finiteNumber(
+        merged.sportabaseTop
+      ),
+      sportabaseHorizontalAnchor: horizontalAnchor,
+      sportabaseEdgeOffset: finiteNumber(
+        merged.sportabaseEdgeOffset
+      ) ?? EDGE_MARGIN,
+      sportabaseRememberPosition: merged.sportabaseRememberPosition !== false,
+      sportabaseDetailLevel: detailLevel
+    };
+  }
+  function applyPanelLayout(overlay, inputPreferences = {}) {
+    if (!overlay) return;
+    const preferences = resolvePreferences(
+      inputPreferences
+    );
+    const preset = SIZE_PRESETS[preferences.sportabaseSizeMode] || SIZE_PRESETS.comfort;
+    const customSizeAvailable = preferences.sportabaseSizeMode === "custom" && preferences.sportabaseCustomWidth !== null && preferences.sportabaseCustomHeight !== null;
+    const desiredWidth = customSizeAvailable ? preferences.sportabaseCustomWidth : preset.width;
+    const desiredHeight = customSizeAvailable ? preferences.sportabaseCustomHeight : preset.height;
+    const availableWidth = Math.max(
+      1,
+      window.innerWidth - EDGE_MARGIN * 2
+    );
+    const availableHeight = Math.max(
+      1,
+      window.innerHeight - EDGE_MARGIN * 2
+    );
+    const width = fitDimension(
+      desiredWidth,
+      availableWidth,
+      MIN_PANEL_WIDTH
+    );
+    const height = fitDimension(
+      desiredHeight,
+      availableHeight,
+      MIN_PANEL_HEIGHT
+    );
+    const hasSavedPosition = preferences.sportabaseRememberPosition && preferences.sportabaseLeft !== null && preferences.sportabaseTop !== null;
+    let left;
+    let top;
+    if (hasSavedPosition) {
+      const maximumEdgeOffset = Math.max(
+        EDGE_MARGIN,
+        window.innerWidth - width - EDGE_MARGIN
+      );
+      const edgeOffset = clamp(
+        preferences.sportabaseEdgeOffset,
+        EDGE_MARGIN,
+        maximumEdgeOffset
+      );
+      left = preferences.sportabaseHorizontalAnchor === "right" ? window.innerWidth - width - edgeOffset : edgeOffset;
+      top = clamp(
+        preferences.sportabaseTop,
+        EDGE_MARGIN,
+        Math.max(
+          EDGE_MARGIN,
+          window.innerHeight - height - EDGE_MARGIN
+        )
+      );
+    } else {
+      top = EDGE_MARGIN;
+      left = preferences.sportabasePanelPosition === "top-left" ? EDGE_MARGIN : window.innerWidth - width - EDGE_MARGIN;
+    }
+    left = clamp(
+      left,
+      EDGE_MARGIN,
+      Math.max(
+        EDGE_MARGIN,
+        window.innerWidth - width - EDGE_MARGIN
+      )
+    );
+    overlay.dataset.sbPosition = preferences.sportabasePanelPosition;
+    overlay.dataset.sbSize = preferences.sportabaseSizeMode;
+    overlay.style.left = `${Math.round(left)}px`;
+    overlay.style.right = "auto";
+    overlay.style.top = `${Math.round(top)}px`;
+    overlay.style.bottom = "auto";
+    overlay.style.width = `${Math.round(width)}px`;
+    overlay.style.height = `${Math.round(height)}px`;
   }
   function applyPreferences(overlay, inputPreferences = {}) {
-    if (!overlay) return resolvePreferences(inputPreferences);
-    const preferences = resolvePreferences(inputPreferences);
+    const preferences = resolvePreferences(
+      inputPreferences
+    );
+    if (!overlay) {
+      return preferences;
+    }
     const systemPrefersLight = window.matchMedia?.(
       "(prefers-color-scheme: light)"
     )?.matches || false;
     const appearance = preferences.sportabaseAppearance === "system" ? systemPrefersLight ? "light" : "dark" : preferences.sportabaseAppearance;
     const palette = PALETTES[appearance] || PALETTES.dark;
-    const accent = preferences.sportabaseAccentMode === "fixed" ? preferences.sportabaseAccentColor || "#7c3aed" : "#7c3aed";
-    const textScaleMap = {
-      small: 0.94,
-      medium: 1,
-      large: 1.08
-    };
-    const densityMap = {
-      compact: 0.88,
-      comfortable: 1,
-      spacious: 1.12
-    };
-    const glowMap = {
-      off: 0,
-      reduced: 0.55,
-      full: 1
-    };
     overlay.dataset.sbAppearance = appearance;
-    overlay.dataset.sbMotion = preferences.sportabaseMotionLevel;
-    overlay.dataset.sbGlow = preferences.sportabaseGlowLevel;
+    overlay.dataset.sbDetail = preferences.sportabaseDetailLevel;
     overlay.classList.toggle(
       "sb-high-contrast",
-      Boolean(preferences.sportabaseHighContrast)
+      Boolean(
+        preferences.sportabaseHighContrast
+      )
     );
     overlay.style.setProperty(
       "--sb-panel-top",
@@ -131,33 +270,32 @@
       "--sb-shadow",
       palette.shadow
     );
-    overlay.style.setProperty(
-      "--sb-accent",
-      accent
+    const resultPaletteActive = overlay.classList.contains(
+      "sb-has-analysis-accent"
     );
-    overlay.style.setProperty(
-      "--sb-accent-bright",
-      `color-mix(in srgb, ${accent} 72%, white 28%)`
-    );
-    overlay.style.setProperty(
-      "--sb-text-scale",
-      String(
-        textScaleMap[preferences.sportabaseTextScale] || 1
-      )
-    );
-    overlay.style.setProperty(
-      "--sb-density",
-      String(
-        densityMap[preferences.sportabaseDensity] || 1
-      )
-    );
-    overlay.style.setProperty(
-      "--sb-glow-strength",
-      String(
-        glowMap[preferences.sportabaseGlowLevel] ?? 0.55
-      )
+    if (!resultPaletteActive) {
+      overlay.style.setProperty(
+        "--sb-accent",
+        "#06b6d4"
+      );
+      overlay.style.setProperty(
+        "--sb-accent-bright",
+        "#9cff38"
+      );
+    }
+    applyPanelLayout(
+      overlay,
+      preferences
     );
     overlay.style.colorScheme = appearance;
+    overlay.dispatchEvent(
+      new CustomEvent(
+        "sportabase:preferences-changed",
+        {
+          detail: preferences
+        }
+      )
+    );
     return preferences;
   }
   async function savePreferences(payload = {}) {
@@ -166,30 +304,38 @@
       payload
     });
   }
-  var DEFAULT_PREFERENCES, PALETTES;
+  var DEFAULT_PREFERENCES, PALETTES, SIZE_PRESETS, EDGE_MARGIN, MIN_PANEL_WIDTH, MIN_PANEL_HEIGHT;
   var init_preferences = __esm({
     "src/ui/preferences.js"() {
       DEFAULT_PREFERENCES = {
         sportabaseAppearance: "system",
         sportabaseAccentMode: "dynamic",
-        sportabaseAccentColor: "#7c3aed",
-        sportabaseGlowLevel: "reduced",
-        sportabaseMotionLevel: "full",
+        sportabaseAccentColor: "#06b6d4",
         sportabaseHighContrast: false,
-        sportabaseTextScale: "medium",
-        sportabaseDensity: "comfortable",
+        /*
+         * New users start comfortable and
+         * pinned to the top-right corner.
+         */
+        sportabasePanelPosition: "top-right",
         sportabaseSizeMode: "comfort",
+        /*
+         * These values are populated after the
+         * user manually drags or resizes.
+         */
         sportabaseCustomWidth: null,
         sportabaseCustomHeight: null,
         sportabaseLeft: null,
         sportabaseTop: null,
-        sportabaseRememberPosition: true
+        sportabaseHorizontalAnchor: "right",
+        sportabaseEdgeOffset: 8,
+        sportabaseRememberPosition: true,
+        sportabaseDetailLevel: "full"
       };
       PALETTES = {
         dark: {
-          panelTop: "#121214",
-          panelBottom: "#0c0c0e",
-          header: "rgba(16, 16, 18, 0.92)",
+          panelTop: "#101012",
+          panelBottom: "#09090b",
+          header: "rgba(14, 14, 16, 0.96)",
           surface: "#19191c",
           raised: "#222226",
           text: "#f8f8fa",
@@ -201,7 +347,7 @@
         light: {
           panelTop: "#ffffff",
           panelBottom: "#f3f4f7",
-          header: "rgba(255, 255, 255, 0.94)",
+          header: "rgba(255, 255, 255, 0.97)",
           surface: "#ffffff",
           raised: "#eef0f4",
           text: "#15161a",
@@ -211,6 +357,23 @@
           shadow: "rgba(15, 23, 42, 0.20)"
         }
       };
+      SIZE_PRESETS = {
+        compact: {
+          width: 430,
+          height: 580
+        },
+        comfort: {
+          width: 520,
+          height: 680
+        },
+        large: {
+          width: 650,
+          height: 790
+        }
+      };
+      EDGE_MARGIN = 8;
+      MIN_PANEL_WIDTH = 300;
+      MIN_PANEL_HEIGHT = 320;
     }
   });
 
@@ -227,9 +390,9 @@
         }
       };
     }
-    let currentPreferences = {
-      ...preferences
-    };
+    let currentPreferences = resolvePreferences(
+      preferences
+    );
     let closeTimer = null;
     const layer = document.createElement("div");
     layer.className = "sb-settings-layer";
@@ -258,7 +421,7 @@
           </div>
 
           <div class="sb-settings-subtitle">
-            Personalize your Sportabase experience
+            Configure your Sportabase workspace
           </div>
         </div>
 
@@ -286,115 +449,167 @@
       <div class="sb-settings-content">
         <section class="sb-settings-group">
           <div class="sb-settings-group-title">
-            Appearance
+            Display
           </div>
 
           <label class="sb-setting-row">
             <span>
               <strong>Theme</strong>
-              <small>Choose light, dark, or follow your system.</small>
+
+              <small>
+                Follow your system or force
+                a light or dark interface.
+              </small>
             </span>
 
-            <select data-sb-setting="sportabaseAppearance">
-              <option value="system">System</option>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
+            <select
+              data-sb-setting=
+                "sportabaseAppearance"
+            >
+              <option value="system">
+                System
+              </option>
+
+              <option value="dark">
+                Dark
+              </option>
+
+              <option value="light">
+                Light
+              </option>
             </select>
           </label>
 
           <label class="sb-setting-row">
             <span>
-              <strong>Accent</strong>
-              <small>Use Sportabase purple or your own color.</small>
+              <strong>Panel position</strong>
+
+              <small>
+                Pin Sportabase to your preferred
+                top corner.
+              </small>
             </span>
 
-            <select data-sb-setting="sportabaseAccentMode">
-              <option value="dynamic">Sportabase</option>
-              <option value="fixed">Custom</option>
+            <select
+              data-sb-setting=
+                "sportabasePanelPosition"
+            >
+              <option value="top-right">
+                Top right
+              </option>
+
+              <option value="top-left">
+                Top left
+              </option>
             </select>
           </label>
 
           <label class="sb-setting-row">
             <span>
-              <strong>Accent color</strong>
-              <small>Used when the accent mode is Custom.</small>
+              <strong>Panel size</strong>
+
+              <small>
+                Save a consistent extension
+                size that remains on screen.
+              </small>
             </span>
 
-            <input
-              type="color"
-              data-sb-setting="sportabaseAccentColor"
-            />
-          </label>
+            <select
+              data-sb-setting=
+                "sportabaseSizeMode"
+            >
+              <option value="compact">
+                Compact
+              </option>
 
-          <label class="sb-setting-row">
-            <span>
-              <strong>Glow</strong>
-              <small>Control decorative lighting effects.</small>
-            </span>
+              <option value="comfort">
+                Comfortable
+              </option>
 
-            <select data-sb-setting="sportabaseGlowLevel">
-              <option value="off">Off</option>
-              <option value="reduced">Reduced</option>
-              <option value="full">Full</option>
-            </select>
-          </label>
+              <option value="large">
+                Large
+              </option>
 
-          <label class="sb-setting-row">
-            <span>
-              <strong>Motion</strong>
-              <small>Control transitions and animations.</small>
-            </span>
-
-            <select data-sb-setting="sportabaseMotionLevel">
-              <option value="full">Full</option>
-              <option value="reduced">Reduced</option>
-              <option value="none">None</option>
+              <option
+                value="custom"
+                disabled
+              >
+                Custom
+              </option>
             </select>
           </label>
 
           <label class="sb-setting-row">
             <span>
               <strong>High contrast</strong>
-              <small>Add a stronger boundary around the panel.</small>
+
+              <small>
+                Strengthen panel and card
+                boundaries.
+              </small>
             </span>
 
             <input
               type="checkbox"
-              data-sb-setting="sportabaseHighContrast"
+              data-sb-setting=
+                "sportabaseHighContrast"
             />
           </label>
         </section>
 
         <section class="sb-settings-group">
           <div class="sb-settings-group-title">
-            Reading
+            Analysis
           </div>
 
           <label class="sb-setting-row">
             <span>
-              <strong>Text size</strong>
-              <small>Adjust the interface typography.</small>
+              <strong>Result detail</strong>
+
+              <small>
+                Essential shows the key result.
+                Full includes supporting detail.
+              </small>
             </span>
 
-            <select data-sb-setting="sportabaseTextScale">
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
+            <select
+              data-sb-setting=
+                "sportabaseDetailLevel"
+            >
+              <option value="essential">
+                Essential
+              </option>
+
+              <option value="full">
+                Full
+              </option>
             </select>
           </label>
+        </section>
 
-          <label class="sb-setting-row">
-            <span>
-              <strong>Density</strong>
-              <small>Control spacing between interface elements.</small>
-            </span>
+        <section class="sb-settings-group">
+          <div class="sb-settings-group-title">
+            Reset
+          </div>
 
-            <select data-sb-setting="sportabaseDensity">
-              <option value="compact">Compact</option>
-              <option value="comfortable">Comfortable</option>
-              <option value="spacious">Spacious</option>
-            </select>
-          </label>
+          <button
+            class="sb-settings-action"
+            type="button"
+            data-sb-reset-layout
+          >
+            Reset to comfortable top right
+          </button>
+
+          <button
+            class="
+              sb-settings-action
+              sb-settings-action-danger
+            "
+            type="button"
+            data-sb-reset-all
+          >
+            Reset all settings
+          </button>
         </section>
 
         <div class="sb-settings-footer">
@@ -410,23 +625,10 @@
     const panel = layer.querySelector(
       ".sb-settings-panel"
     );
-    const accentModeControl = layer.querySelector(
-      '[data-sb-setting="sportabaseAccentMode"]'
-    );
-    const accentColorControl = layer.querySelector(
-      '[data-sb-setting="sportabaseAccentColor"]'
-    );
-    function updateAccentControlState() {
-      if (!accentColorControl) return;
-      const customAccent = currentPreferences.sportabaseAccentMode === "fixed";
-      accentColorControl.disabled = !customAccent;
-      accentColorControl.closest(".sb-setting-row")?.classList.toggle(
-        "sb-setting-disabled",
-        !customAccent
-      );
-    }
     function syncControls() {
-      layer.querySelectorAll("[data-sb-setting]").forEach((control) => {
+      layer.querySelectorAll(
+        "[data-sb-setting]"
+      ).forEach((control) => {
         const key = control.dataset.sbSetting;
         const value = currentPreferences[key];
         if (control.type === "checkbox") {
@@ -435,11 +637,74 @@
         }
         control.value = value ?? "";
       });
-      updateAccentControlState();
     }
+    async function persist(payload) {
+      try {
+        await savePreferences(
+          payload
+        );
+      } catch (error) {
+        console.error(
+          "[sportabase] Could not save setting:",
+          error
+        );
+      }
+    }
+    function applyCurrentPreferences() {
+      currentPreferences = applyPreferences(
+        overlay,
+        currentPreferences
+      );
+      syncControls();
+    }
+    function resetLayout() {
+      currentPreferences = {
+        ...currentPreferences,
+        sportabasePanelPosition: "top-right",
+        sportabaseSizeMode: "comfort",
+        sportabaseCustomWidth: null,
+        sportabaseCustomHeight: null,
+        sportabaseLeft: null,
+        sportabaseTop: null,
+        sportabaseHorizontalAnchor: "right",
+        sportabaseEdgeOffset: 8,
+        sportabaseRememberPosition: true
+      };
+      applyCurrentPreferences();
+      persist({
+        sportabasePanelPosition: "top-right",
+        sportabaseSizeMode: "comfort",
+        sportabaseCustomWidth: null,
+        sportabaseCustomHeight: null,
+        sportabaseLeft: null,
+        sportabaseTop: null,
+        sportabaseRememberPosition: false
+      });
+    }
+    function resetAllSettings() {
+      currentPreferences = {
+        ...DEFAULT_PREFERENCES
+      };
+      applyCurrentPreferences();
+      persist({
+        ...DEFAULT_PREFERENCES
+      });
+    }
+    overlay.addEventListener(
+      "sportabase:geometry-changed",
+      (event) => {
+        currentPreferences = resolvePreferences({
+          ...currentPreferences,
+          ...event.detail || {}
+        });
+        syncControls();
+      }
+    );
     function open() {
       if (closeTimer) {
-        window.clearTimeout(closeTimer);
+        window.clearTimeout(
+          closeTimer
+        );
         closeTimer = null;
       }
       syncControls();
@@ -449,12 +714,16 @@
         "true"
       );
       requestAnimationFrame(() => {
-        layer.classList.add("sb-settings-open");
+        layer.classList.add(
+          "sb-settings-open"
+        );
         panel?.focus?.();
       });
     }
     function close() {
-      layer.classList.remove("sb-settings-open");
+      layer.classList.remove(
+        "sb-settings-open"
+      );
       settingsButton?.setAttribute(
         "aria-expanded",
         "false"
@@ -464,46 +733,88 @@
         closeTimer = null;
       }, 170);
     }
-    layer.querySelectorAll("[data-sb-settings-close]").forEach((button) => {
-      button.addEventListener("click", close);
+    layer.querySelectorAll(
+      "[data-sb-settings-close]"
+    ).forEach((button) => {
+      button.addEventListener(
+        "click",
+        close
+      );
     });
-    settingsButton?.addEventListener("click", open);
-    layer.querySelectorAll("[data-sb-setting]").forEach((control) => {
-      const eventName = control.type === "color" ? "input" : "change";
-      control.addEventListener(eventName, () => {
-        const key = control.dataset.sbSetting;
-        const value = control.type === "checkbox" ? control.checked : control.value;
-        currentPreferences = {
-          ...currentPreferences,
-          [key]: value
-        };
-        if (control === accentModeControl) {
-          updateAccentControlState();
+    settingsButton?.addEventListener(
+      "click",
+      open
+    );
+    layer.querySelectorAll(
+      "[data-sb-setting]"
+    ).forEach((control) => {
+      control.addEventListener(
+        "change",
+        () => {
+          const key = control.dataset.sbSetting;
+          const value = control.type === "checkbox" ? control.checked : control.value;
+          const payload = {
+            [key]: value
+          };
+          currentPreferences = {
+            ...currentPreferences,
+            [key]: value
+          };
+          if (key === "sportabasePanelPosition") {
+            const anchor = value === "top-left" ? "left" : "right";
+            currentPreferences = {
+              ...currentPreferences,
+              sportabaseLeft: null,
+              sportabaseTop: null,
+              sportabaseHorizontalAnchor: anchor,
+              sportabaseEdgeOffset: 8,
+              sportabaseRememberPosition: true
+            };
+            payload.sportabaseLeft = null;
+            payload.sportabaseTop = null;
+            payload.sportabaseHorizontalAnchor = anchor;
+            payload.sportabaseEdgeOffset = 8;
+            payload.sportabaseRememberPosition = true;
+          }
+          if (key === "sportabaseSizeMode") {
+            currentPreferences = {
+              ...currentPreferences,
+              sportabaseCustomWidth: null,
+              sportabaseCustomHeight: null
+            };
+            payload.sportabaseCustomWidth = null;
+            payload.sportabaseCustomHeight = null;
+          }
+          applyCurrentPreferences();
+          persist(payload);
         }
-        applyPreferences(
-          overlay,
-          currentPreferences
-        );
-        savePreferences({
-          [key]: value
-        }).catch((error) => {
-          console.error(
-            "[sportabase] Could not save setting:",
-            error
-          );
-        });
-      });
+      );
     });
-    overlay.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !layer.hidden) {
-        close();
+    layer.querySelector(
+      "[data-sb-reset-layout]"
+    )?.addEventListener(
+      "click",
+      resetLayout
+    );
+    layer.querySelector(
+      "[data-sb-reset-all]"
+    )?.addEventListener(
+      "click",
+      resetAllSettings
+    );
+    overlay.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape" && !layer.hidden) {
+          close();
+        }
       }
-    });
+    );
     settingsButton?.setAttribute(
       "aria-expanded",
       "false"
     );
-    syncControls();
+    applyCurrentPreferences();
     return {
       open,
       close
@@ -516,66 +827,11 @@
   });
 
   // src/ui/window-controls.js
-  function clamp(value, minimum, maximum) {
+  function clamp2(value, minimum, maximum) {
     return Math.max(
       minimum,
       Math.min(maximum, value)
     );
-  }
-  function getViewportLimits() {
-    return {
-      maxWidth: Math.max(
-        MIN_WIDTH,
-        Math.min(820, window.innerWidth - EDGE_MARGIN * 2)
-      ),
-      maxHeight: Math.max(
-        MIN_HEIGHT,
-        Math.min(900, window.innerHeight - EDGE_MARGIN * 2)
-      )
-    };
-  }
-  function clampGeometry({
-    left,
-    top,
-    width,
-    height
-  }) {
-    const {
-      maxWidth,
-      maxHeight
-    } = getViewportLimits();
-    const safeWidth = clamp(
-      width,
-      MIN_WIDTH,
-      maxWidth
-    );
-    const safeHeight = clamp(
-      height,
-      MIN_HEIGHT,
-      maxHeight
-    );
-    const safeLeft = clamp(
-      left,
-      EDGE_MARGIN,
-      Math.max(
-        EDGE_MARGIN,
-        window.innerWidth - safeWidth - EDGE_MARGIN
-      )
-    );
-    const safeTop = clamp(
-      top,
-      EDGE_MARGIN,
-      Math.max(
-        EDGE_MARGIN,
-        window.innerHeight - safeHeight - EDGE_MARGIN
-      )
-    );
-    return {
-      left: safeLeft,
-      top: safeTop,
-      width: safeWidth,
-      height: safeHeight
-    };
   }
   function readGeometry(overlay) {
     const rect = overlay.getBoundingClientRect();
@@ -586,80 +842,158 @@
       height: rect.height
     };
   }
+  function clampGeometry({
+    left,
+    top,
+    width,
+    height
+  }) {
+    const maximumWidth = Math.max(
+      1,
+      window.innerWidth - EDGE_MARGIN2 * 2
+    );
+    const maximumHeight = Math.max(
+      1,
+      window.innerHeight - EDGE_MARGIN2 * 2
+    );
+    const safeWidth = clamp2(
+      width,
+      Math.min(
+        MIN_WIDTH,
+        maximumWidth
+      ),
+      maximumWidth
+    );
+    const safeHeight = clamp2(
+      height,
+      Math.min(
+        MIN_HEIGHT,
+        maximumHeight
+      ),
+      maximumHeight
+    );
+    const safeLeft = clamp2(
+      left,
+      EDGE_MARGIN2,
+      Math.max(
+        EDGE_MARGIN2,
+        window.innerWidth - safeWidth - EDGE_MARGIN2
+      )
+    );
+    const safeTop = clamp2(
+      top,
+      EDGE_MARGIN2,
+      Math.max(
+        EDGE_MARGIN2,
+        window.innerHeight - safeHeight - EDGE_MARGIN2
+      )
+    );
+    return {
+      left: safeLeft,
+      top: safeTop,
+      width: safeWidth,
+      height: safeHeight
+    };
+  }
   function applyGeometry(overlay, geometry) {
-    const safeGeometry = clampGeometry(geometry);
-    overlay.style.left = `${Math.round(safeGeometry.left)}px`;
-    overlay.style.top = `${Math.round(safeGeometry.top)}px`;
+    const safeGeometry = clampGeometry(
+      geometry
+    );
+    overlay.style.left = `${Math.round(
+      safeGeometry.left
+    )}px`;
     overlay.style.right = "auto";
-    overlay.style.width = `${Math.round(safeGeometry.width)}px`;
-    overlay.style.height = `${Math.round(safeGeometry.height)}px`;
+    overlay.style.top = `${Math.round(
+      safeGeometry.top
+    )}px`;
+    overlay.style.width = `${Math.round(
+      safeGeometry.width
+    )}px`;
+    overlay.style.height = `${Math.round(
+      safeGeometry.height
+    )}px`;
     return safeGeometry;
-  }
-  function saveGeometry(geometry, preferences) {
-    if (preferences.sportabaseRememberPosition === false) {
-      return;
-    }
-    savePreferences({
-      sportabaseSizeMode: "custom",
-      sportabaseCustomWidth: Math.round(geometry.width),
-      sportabaseCustomHeight: Math.round(geometry.height),
-      sportabaseLeft: Math.round(geometry.left),
-      sportabaseTop: Math.round(geometry.top)
-    }).catch((error) => {
-      console.error(
-        "[sportabase] Could not save panel geometry:",
-        error
-      );
-    });
-  }
-  function restoreGeometry(overlay, preferences) {
-    if (preferences.sportabaseRememberPosition === false) {
-      return;
-    }
-    const current = readGeometry(overlay);
-    const width = Number(
-      preferences.sportabaseCustomWidth
-    );
-    const height = Number(
-      preferences.sportabaseCustomHeight
-    );
-    const left = Number(
-      preferences.sportabaseLeft
-    );
-    const top = Number(
-      preferences.sportabaseTop
-    );
-    const hasSavedSize = Number.isFinite(width) && Number.isFinite(height);
-    const hasSavedPosition = Number.isFinite(left) && Number.isFinite(top);
-    if (!hasSavedSize && !hasSavedPosition) {
-      return;
-    }
-    applyGeometry(overlay, {
-      left: hasSavedPosition ? left : current.left,
-      top: hasSavedPosition ? top : current.top,
-      width: hasSavedSize ? width : current.width,
-      height: hasSavedSize ? height : current.height
-    });
   }
   function installWindowControls({
     overlay,
     preferences = {}
   } = {}) {
     if (!overlay) return;
+    let currentPreferences = resolvePreferences(
+      preferences
+    );
+    applyPanelLayout(
+      overlay,
+      currentPreferences
+    );
     const dragHandles = overlay.querySelectorAll(
       ".sb-header, .sb-settings-header"
     );
-    restoreGeometry(
-      overlay,
-      preferences
-    );
+    function saveManualGeometry(geometry, resized) {
+      const anchor = geometry.left + geometry.width / 2 >= window.innerWidth / 2 ? "right" : "left";
+      const edgeOffset = anchor === "right" ? window.innerWidth - geometry.left - geometry.width : geometry.left;
+      const payload = {
+        sportabasePanelPosition: anchor === "right" ? "top-right" : "top-left",
+        sportabaseLeft: Math.round(
+          geometry.left
+        ),
+        sportabaseTop: Math.round(
+          geometry.top
+        ),
+        sportabaseHorizontalAnchor: anchor,
+        sportabaseEdgeOffset: Math.max(
+          EDGE_MARGIN2,
+          Math.round(
+            edgeOffset
+          )
+        ),
+        sportabaseRememberPosition: true
+      };
+      if (resized) {
+        payload.sportabaseSizeMode = "custom";
+        payload.sportabaseCustomWidth = Math.round(
+          geometry.width
+        );
+        payload.sportabaseCustomHeight = Math.round(
+          geometry.height
+        );
+      }
+      currentPreferences = resolvePreferences({
+        ...currentPreferences,
+        ...payload
+      });
+      overlay.dispatchEvent(
+        new CustomEvent(
+          "sportabase:geometry-changed",
+          {
+            detail: payload
+          }
+        )
+      );
+      applyPanelLayout(
+        overlay,
+        currentPreferences
+      );
+      savePreferences(
+        payload
+      ).catch((error) => {
+        console.error(
+          "[sportabase] Could not save panel geometry:",
+          error
+        );
+      });
+    }
     function beginInteraction({
       event,
       direction = null
     }) {
-      if (event.button !== 0) return;
+      if (event.button !== 0) {
+        return;
+      }
       event.preventDefault();
-      const startGeometry = readGeometry(overlay);
+      const startGeometry = readGeometry(
+        overlay
+      );
       const startX = event.clientX;
       const startY = event.clientY;
       overlay.classList.add(
@@ -696,12 +1030,15 @@
             top += deltaY;
           }
         }
-        applyGeometry(overlay, {
-          left,
-          top,
-          width,
-          height
-        });
+        applyGeometry(
+          overlay,
+          {
+            left,
+            top,
+            width,
+            height
+          }
+        );
       }
       function finishInteraction() {
         document.removeEventListener(
@@ -723,9 +1060,11 @@
         document.documentElement.classList.remove(
           "sb-window-interaction-active"
         );
-        saveGeometry(
-          readGeometry(overlay),
-          preferences
+        saveManualGeometry(
+          readGeometry(
+            overlay
+          ),
+          Boolean(direction)
         );
       }
       document.addEventListener(
@@ -741,21 +1080,23 @@
         finishInteraction
       );
     }
-    dragHandles.forEach((dragHandle) => {
-      dragHandle.addEventListener(
-        "pointerdown",
-        (event) => {
-          if (event.target.closest(
-            "button, a, input, select, textarea"
-          )) {
-            return;
+    dragHandles.forEach(
+      (dragHandle) => {
+        dragHandle.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.target.closest(
+              "button, a, input, select, textarea"
+            )) {
+              return;
+            }
+            beginInteraction({
+              event
+            });
           }
-          beginInteraction({
-            event
-          });
-        }
-      );
-    });
+        );
+      }
+    );
     [
       "n",
       "s",
@@ -766,7 +1107,9 @@
       "se",
       "sw"
     ].forEach((direction) => {
-      const handle = document.createElement("div");
+      const handle = document.createElement(
+        "div"
+      );
       handle.className = "sb-resize-handle";
       handle.dataset.direction = direction;
       handle.setAttribute(
@@ -783,16 +1126,65 @@
           });
         }
       );
-      overlay.appendChild(handle);
+      overlay.appendChild(
+        handle
+      );
     });
+    function handlePreferencesChanged(event) {
+      currentPreferences = resolvePreferences({
+        ...currentPreferences,
+        ...event.detail || {}
+      });
+      applyPanelLayout(
+        overlay,
+        currentPreferences
+      );
+    }
+    function keepInsideViewport() {
+      if (!overlay.isConnected) {
+        window.removeEventListener(
+          "resize",
+          keepInsideViewport
+        );
+        return;
+      }
+      applyPanelLayout(
+        overlay,
+        currentPreferences
+      );
+    }
+    overlay.addEventListener(
+      "sportabase:preferences-changed",
+      handlePreferencesChanged
+    );
+    window.addEventListener(
+      "resize",
+      keepInsideViewport
+    );
+    overlay.addEventListener(
+      "sportabase:before-close",
+      () => {
+        overlay.removeEventListener(
+          "sportabase:preferences-changed",
+          handlePreferencesChanged
+        );
+        window.removeEventListener(
+          "resize",
+          keepInsideViewport
+        );
+      },
+      {
+        once: true
+      }
+    );
   }
-  var MIN_WIDTH, MIN_HEIGHT, EDGE_MARGIN;
+  var EDGE_MARGIN2, MIN_WIDTH, MIN_HEIGHT;
   var init_window_controls = __esm({
     "src/ui/window-controls.js"() {
       init_preferences();
-      MIN_WIDTH = 360;
+      EDGE_MARGIN2 = 8;
+      MIN_WIDTH = 300;
       MIN_HEIGHT = 320;
-      EDGE_MARGIN = 8;
     }
   });
 
@@ -1714,11 +2106,41 @@
             class="sb-loader-symbol"
             aria-hidden="true"
           >
-            <div class="sb-loader-orbit"></div>
+            <div
+              class="
+                sb-loader-orbit
+                sb-loader-orbit-outer
+              "
+            ></div>
 
-            <div class="sb-loader-core">
-              SB
-            </div>
+            <div
+              class="
+                sb-loader-orbit
+                sb-loader-orbit-inner
+              "
+            ></div>
+
+            <div
+              class="sb-loader-scan-wave"
+            ></div>
+
+            <span
+              class="
+                sb-loader-signal
+                sb-loader-signal-a
+              "
+            ></span>
+
+            <span
+              class="
+                sb-loader-signal
+                sb-loader-signal-b
+              "
+            ></span>
+
+            ${getSportabaseLogoMarkup({
+      className: "sb-loader-logo"
+    })}
           </div>
 
           <div class="sb-loader-brand-copy">
@@ -1892,6 +2314,7 @@
   }
   var init_loader2 = __esm({
     "src/ui/loader.js"() {
+      init_logo();
     }
   });
 
@@ -1941,6 +2364,121 @@
     }
   });
 
+  // src/ui/accent-theme.js
+  function getScorePalette(score) {
+    const normalizedScore = Math.max(
+      0,
+      Math.min(100, Number(score) || 0)
+    );
+    if (normalizedScore < 35) {
+      return {
+        accent: "#dc2626",
+        bright: "#fb7185"
+      };
+    }
+    if (normalizedScore < 50) {
+      return {
+        accent: "#ea580c",
+        bright: "#facc15"
+      };
+    }
+    if (normalizedScore < 65) {
+      return {
+        accent: "#2563eb",
+        bright: "#22d3ee"
+      };
+    }
+    if (normalizedScore < 80) {
+      return {
+        accent: "#6d28d9",
+        bright: "#d946ef"
+      };
+    }
+    if (normalizedScore < 90) {
+      return {
+        accent: "#0f766e",
+        bright: "#22d3ee"
+      };
+    }
+    return {
+      accent: "#16a34a",
+      bright: "#bef264"
+    };
+  }
+  function createAccentTheme(overlay) {
+    const baseAccent = SPORTABASE_BRAND_PALETTE.accent;
+    const baseAccentBright = SPORTABASE_BRAND_PALETTE.bright;
+    function apply(palette = {}) {
+      const accent = palette.accent || baseAccent;
+      const bright = palette.bright || accent;
+      overlay.style.setProperty(
+        "--sb-accent",
+        accent
+      );
+      overlay.style.setProperty(
+        "--sb-accent-bright",
+        bright
+      );
+      overlay.style.setProperty(
+        "--sb-score-color",
+        accent
+      );
+      overlay.style.setProperty(
+        "--sb-score-color-bright",
+        bright
+      );
+      overlay.style.setProperty(
+        "--sb-analysis-accent",
+        accent
+      );
+      overlay.style.setProperty(
+        "--sb-analysis-accent-bright",
+        bright
+      );
+      overlay.classList.add(
+        "sb-has-analysis-accent"
+      );
+    }
+    function clear() {
+      overlay.style.setProperty(
+        "--sb-accent",
+        baseAccent
+      );
+      overlay.style.setProperty(
+        "--sb-accent-bright",
+        baseAccentBright
+      );
+      overlay.style.removeProperty(
+        "--sb-score-color"
+      );
+      overlay.style.removeProperty(
+        "--sb-score-color-bright"
+      );
+      overlay.style.removeProperty(
+        "--sb-analysis-accent"
+      );
+      overlay.style.removeProperty(
+        "--sb-analysis-accent-bright"
+      );
+      overlay.classList.remove(
+        "sb-has-analysis-accent"
+      );
+    }
+    return {
+      apply,
+      clear
+    };
+  }
+  var SPORTABASE_BRAND_PALETTE;
+  var init_accent_theme = __esm({
+    "src/ui/accent-theme.js"() {
+      SPORTABASE_BRAND_PALETTE = Object.freeze({
+        accent: "#06b6d4",
+        bright: "#9cff38"
+      });
+    }
+  });
+
   // src/content/article-mode.js
   function escapeHtml2(value) {
     return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
@@ -1975,14 +2513,6 @@
       /\b\w/g,
       (character) => character.toUpperCase()
     );
-  }
-  function getScoreColor(score) {
-    if (score < 35) return "#ef4444";
-    if (score < 50) return "#f59e0b";
-    if (score < 65) return "#3b82f6";
-    if (score < 80) return "#8b5cf6";
-    if (score < 90) return "#14b8a6";
-    return "#22c55e";
   }
   function normalizeStringList(value) {
     if (Array.isArray(value)) {
@@ -2237,50 +2767,7 @@
     let analysisRunning = false;
     let loadingTicker = null;
     const analysisRequests = createRequestLifecycle();
-    const baseAccent = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent").trim() || "#7c3aed";
-    const baseAccentBright = getComputedStyle(shell.overlay).getPropertyValue(
-      "--sb-accent-bright"
-    ).trim() || baseAccent;
-    function applyResultAccent(color) {
-      shell.overlay.style.setProperty(
-        "--sb-accent",
-        color
-      );
-      shell.overlay.style.setProperty(
-        "--sb-accent-bright",
-        color
-      );
-      shell.overlay.style.setProperty(
-        "--sb-score-color",
-        color
-      );
-      shell.overlay.style.setProperty(
-        "--sb-analysis-accent",
-        color
-      );
-      shell.overlay.classList.add(
-        "sb-has-analysis-accent"
-      );
-    }
-    function clearResultAccent() {
-      shell.overlay.style.setProperty(
-        "--sb-accent",
-        baseAccent
-      );
-      shell.overlay.style.setProperty(
-        "--sb-accent-bright",
-        baseAccentBright
-      );
-      shell.overlay.style.removeProperty(
-        "--sb-score-color"
-      );
-      shell.overlay.style.removeProperty(
-        "--sb-analysis-accent"
-      );
-      shell.overlay.classList.remove(
-        "sb-has-analysis-accent"
-      );
-    }
+    const accentTheme = createAccentTheme(shell.overlay);
     function stopLoadingTicker() {
       if (!loadingTicker) return;
       window.clearInterval(
@@ -2308,7 +2795,7 @@
     }
     function renderLanding() {
       stopLoadingTicker();
-      clearResultAccent();
+      accentTheme.clear();
       analysisRunning = false;
       const article = getCurrentArticle();
       const articleDetected = article.characterCount >= 300;
@@ -2413,6 +2900,8 @@
               Evidence
             </div>
           </div>
+
+
         </section>
 
         <div class="sb-article-status">
@@ -2446,10 +2935,11 @@
           runAnalysis
         );
       }
+      installVisualTestControls(article);
     }
     function renderError(error) {
       stopLoadingTicker();
-      clearResultAccent();
+      accentTheme.clear();
       analysisRunning = false;
       shell.setModeLabel(
         "ARTICLE INTELLIGENCE \xB7 UNAVAILABLE"
@@ -2529,7 +3019,7 @@
       stopLoadingTicker();
       analysisRunning = false;
       const meritScore = getMeritScore(data);
-      const scoreColor = getScoreColor(meritScore);
+      const scorePalette = getScorePalette(meritScore);
       const articleType = getArticleType(data);
       const uiLabels = getArticleUiLabels(data);
       const summaryItems = getSummaryItems(data);
@@ -2560,7 +3050,7 @@
       ).join("")}
             </div>
           ` : "";
-      applyResultAccent(scoreColor);
+      accentTheme.apply(scorePalette);
       shell.setModeLabel(
         `${uiLabels.article_intelligence} ? ${articleType}`
       );
@@ -2689,7 +3179,7 @@
       if (analysisRunning) return;
       analysisRunning = true;
       stopLoadingTicker();
-      clearResultAccent();
+      accentTheme.clear();
       const article = getCurrentArticle();
       if (article.characterCount < 300) {
         renderError(
@@ -2825,6 +3315,7 @@
       init_api();
       init_loader2();
       init_request_lifecycle();
+      init_accent_theme();
       ANALYSIS_STEPS = [
         {
           message: "Identifying the article's central story\u2026",
@@ -3144,14 +3635,6 @@
   function getVideoTitle() {
     return document.querySelector("h1 yt-formatted-string")?.textContent?.trim() || document.title.replace(" - YouTube", "") || "YouTube video";
   }
-  function getScoreColor2(score) {
-    if (score < 35) return "#ef4444";
-    if (score < 50) return "#f59e0b";
-    if (score < 65) return "#3b82f6";
-    if (score < 80) return "#8b5cf6";
-    if (score < 90) return "#14b8a6";
-    return "#22c55e";
-  }
   function getAnalyzeButtonMarkup2(label) {
     return `
     <svg
@@ -3218,48 +3701,7 @@
     shell.setModeLabel(
       "VIDEO INTELLIGENCE \xB7 YOUTUBE"
     );
-    const baseAccent = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent").trim() || "#7c3aed";
-    const baseAccentBright = getComputedStyle(shell.overlay).getPropertyValue("--sb-accent-bright").trim() || baseAccent;
-    function applyResultAccent(color) {
-      shell.overlay.style.setProperty(
-        "--sb-accent",
-        color
-      );
-      shell.overlay.style.setProperty(
-        "--sb-accent-bright",
-        color
-      );
-      shell.overlay.style.setProperty(
-        "--sb-score-color",
-        color
-      );
-      shell.overlay.style.setProperty(
-        "--sb-analysis-accent",
-        color
-      );
-      shell.overlay.classList.add(
-        "sb-has-analysis-accent"
-      );
-    }
-    function clearResultAccent() {
-      shell.overlay.style.setProperty(
-        "--sb-accent",
-        baseAccent
-      );
-      shell.overlay.style.setProperty(
-        "--sb-accent-bright",
-        baseAccentBright
-      );
-      shell.overlay.style.removeProperty(
-        "--sb-score-color"
-      );
-      shell.overlay.style.removeProperty(
-        "--sb-analysis-accent"
-      );
-      shell.overlay.classList.remove(
-        "sb-has-analysis-accent"
-      );
-    }
+    const accentTheme = createAccentTheme(shell.overlay);
     function stopLoadingTicker() {
       if (!loadingTicker) return;
       window.clearInterval(
@@ -3280,7 +3722,7 @@
     function renderLanding() {
       stopLoadingTicker();
       analysisRunning = false;
-      clearResultAccent();
+      accentTheme.clear();
       shell.setModeLabel(
         "VIDEO INTELLIGENCE \xB7 YOUTUBE"
       );
@@ -3413,7 +3855,7 @@
     function renderError(error) {
       stopLoadingTicker();
       analysisRunning = false;
-      clearResultAccent();
+      accentTheme.clear();
       const friendlyMessage = getFriendlyErrorMessage2(error);
       shell.setModeLabel(
         "VIDEO INTELLIGENCE \xB7 UNAVAILABLE"
@@ -3514,7 +3956,7 @@
       const supportScore = Math.round(
         (evidenceScore + logicScore) / 2
       );
-      const scoreColor = getScoreColor2(supportScore);
+      const scorePalette = getScorePalette(supportScore);
       const uiLabels = data.ui_labels && typeof data.ui_labels === "object" ? data.ui_labels : {};
       const verdictLabel = String(
         data.localized_verdict || ""
@@ -3538,7 +3980,7 @@
               were returned.
             </li>
           `;
-      applyResultAccent(scoreColor);
+      accentTheme.apply(scorePalette);
       shell.setModeLabel(
         `VIDEO INTELLIGENCE \xB7 ${contentTypeLabel.toUpperCase()}`
       );
@@ -3821,6 +4263,7 @@
       init_api();
       init_loader2();
       init_request_lifecycle();
+      init_accent_theme();
       ANALYSIS_STEPS2 = [
         {
           message: "Identifying the video's central claim\u2026",
