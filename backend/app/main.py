@@ -11,7 +11,7 @@ import sqlite3
 from pathlib import Path
 from concurrent.futures import Future
 from functools import lru_cache
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 import html as ihtml
 from urllib.parse import urlparse
@@ -83,6 +83,16 @@ CLIENT_DAILY_GEMINI_CALL_CAP = int(
         "SPORTABASE_CLIENT_DAILY_GEMINI_CALL_CAP",
         "30",
     )
+)
+
+GEMINI_RESERVATION_TIMEOUT_SECONDS = max(
+    60,
+    int(
+        os.getenv(
+            "SPORTABASE_GEMINI_RESERVATION_TIMEOUT_SECONDS",
+            "900",
+        )
+    ),
 )
 
 ADMIN_API_KEY = os.getenv(
@@ -713,6 +723,60 @@ def request_client_key(
     ).hexdigest()[:32]
 
 
+def expire_stale_gemini_reservations(
+    conn: sqlite3.Connection,
+    *,
+    usage_day: Optional[str] = None,
+    now: Optional[datetime] = None,
+) -> int:
+    current_time = (
+        now
+        if now is not None
+        else datetime.now(timezone.utc)
+    )
+
+    current_usage_day = (
+        str(usage_day)
+        if usage_day
+        else current_time.date().isoformat()
+    )
+
+    cutoff = (
+        current_time
+        - timedelta(
+            seconds=(
+                GEMINI_RESERVATION_TIMEOUT_SECONDS
+            )
+        )
+    ).isoformat()
+
+    cursor = conn.execute(
+        """
+        UPDATE gemini_usage
+        SET
+          status = 'expired',
+          failure_type = 'reservation_timeout',
+          failure_detail = (
+            'Gemini reservation expired before completion.'
+          )
+        WHERE usage_day = ?
+          AND status = 'reserved'
+          AND created_at < ?
+          AND cache_hit = 0
+          AND inflight_join = 0
+        """,
+        (
+            current_usage_day,
+            cutoff,
+        ),
+    )
+
+    return max(
+        0,
+        int(cursor.rowcount or 0),
+    )
+
+
 def reserve_gemini_call(
     client_key: str,
     mode: str,
@@ -728,6 +792,11 @@ def reserve_gemini_call(
     try:
         conn.execute("BEGIN IMMEDIATE")
 
+        expire_stale_gemini_reservations(
+            conn,
+            usage_day=usage_day,
+        )
+
         global_count = int(
             conn.execute(
                 """
@@ -736,6 +805,11 @@ def reserve_gemini_call(
                 WHERE usage_day = ?
                   AND cache_hit = 0
                   AND inflight_join = 0
+                  AND status IN (
+                    'reserved',
+                    'success',
+                    'failed'
+                  )
                 """,
                 (usage_day,),
             ).fetchone()[0]
@@ -750,6 +824,11 @@ def reserve_gemini_call(
                   AND client_key = ?
                   AND cache_hit = 0
                   AND inflight_join = 0
+                  AND status IN (
+                    'reserved',
+                    'success',
+                    'failed'
+                  )
                 """,
                 (
                     usage_day,
@@ -1434,6 +1513,16 @@ def usage_derived_metrics(
         0,
         int(summary.get("failed_calls", 0) or 0),
     )
+    expired_reservations = max(
+        0,
+        int(
+            summary.get(
+                "expired_reservations",
+                0,
+            )
+            or 0
+        ),
+    )
     prompt_tokens = max(
         0,
         int(summary.get("prompt_tokens", 0) or 0),
@@ -1525,6 +1614,9 @@ def usage_derived_metrics(
 
     return {
         "completed_calls": completed_calls,
+        "expired_reservations": (
+            expired_reservations
+        ),
         "cache_hit_rate_percent": round(
             cache_hit_rate * 100,
             2,
@@ -1644,6 +1736,16 @@ def usage_mode_metrics(
             int(
                 summary.get(
                     "reserved_calls",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "expired_reservations": max(
+            0,
+            int(
+                summary.get(
+                    "expired_reservations",
                     0,
                 )
                 or 0
@@ -1811,6 +1913,12 @@ def admin_usage_summary(
     conn = db_conn()
 
     try:
+        expire_stale_gemini_reservations(
+            conn,
+            usage_day=usage_day,
+        )
+        conn.commit()
+
         today_row = conn.execute(
             """
             SELECT
@@ -1841,6 +1949,11 @@ def admin_usage_summary(
                   CASE
                     WHEN cache_hit = 0
                     AND inflight_join = 0
+                    AND status IN (
+                      'reserved',
+                      'success',
+                      'failed'
+                    )
                     THEN 1
                     ELSE 0
                   END
@@ -1880,9 +1993,24 @@ def admin_usage_summary(
               COALESCE(
                 SUM(
                   CASE
+                    WHEN status = 'expired'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS expired_reservations,
+              COALESCE(
+                SUM(
+                  CASE
                     WHEN mode = 'article'
                      AND cache_hit = 0
                      AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
                     THEN 1
                     ELSE 0
                   END
@@ -1895,6 +2023,11 @@ def admin_usage_summary(
                     WHEN mode = 'video'
                      AND cache_hit = 0
                      AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
                     THEN 1
                     ELSE 0
                   END
@@ -1968,6 +2101,11 @@ def admin_usage_summary(
               WHERE usage_day = ?
                 AND cache_hit = 0
                 AND inflight_join = 0
+                AND status IN (
+                  'reserved',
+                  'success',
+                  'failed'
+                )
               GROUP BY client_key
             )
             """,
@@ -2036,6 +2174,11 @@ def admin_usage_summary(
                   CASE
                     WHEN cache_hit = 0
                     AND inflight_join = 0
+                    AND status IN (
+                      'reserved',
+                      'success',
+                      'failed'
+                    )
                     THEN 1
                     ELSE 0
                   END
@@ -2072,6 +2215,16 @@ def admin_usage_summary(
                 ),
                 0
               ) AS reserved_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'expired'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS expired_reservations,
               COALESCE(
                 SUM(prompt_tokens),
                 0
@@ -2213,6 +2366,11 @@ def admin_usage_summary(
                   CASE
                     WHEN cache_hit = 0
                     AND inflight_join = 0
+                    AND status IN (
+                      'reserved',
+                      'success',
+                      'failed'
+                    )
                     THEN 1
                     ELSE 0
                   END
@@ -2239,6 +2397,16 @@ def admin_usage_summary(
                 ),
                 0
               ) AS failed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'expired'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS expired_reservations,
               COALESCE(SUM(total_tokens), 0)
                 AS total_tokens
             FROM gemini_usage
@@ -2347,6 +2515,9 @@ def admin_usage_summary(
         },
         "today_metrics": today_metrics,
         "limits": {
+            "reservation_timeout_seconds": (
+                GEMINI_RESERVATION_TIMEOUT_SECONDS
+            ),
             "global_daily_call_cap": (
                 GLOBAL_DAILY_GEMINI_CALL_CAP
             ),
