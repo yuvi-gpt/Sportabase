@@ -4,10 +4,12 @@ import os
 import re
 import json
 import time
+import threading
 import hashlib
 import hmac
 import sqlite3
 from pathlib import Path
+from concurrent.futures import Future
 from functools import lru_cache
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -101,6 +103,13 @@ GEMINI_OUTPUT_COST_PER_MILLION_USD = float(
         "9.00",
     )
 )
+
+_INFLIGHT_GEMINI_LOCK = threading.Lock()
+
+_INFLIGHT_GEMINI_CALLS: Dict[
+    str,
+    Future,
+] = {}
 
 
 # -----------------------------
@@ -283,6 +292,7 @@ CREATE TABLE IF NOT EXISTS gemini_usage (
   thought_tokens INTEGER NOT NULL DEFAULT 0,
   total_tokens INTEGER NOT NULL DEFAULT 0,
   cache_hit INTEGER NOT NULL DEFAULT 0,
+  inflight_join INTEGER NOT NULL DEFAULT 0,
   latency_ms INTEGER NOT NULL DEFAULT 0,
   failure_status_code INTEGER,
   failure_type TEXT NOT NULL DEFAULT '',
@@ -325,6 +335,9 @@ def init_db():
         }
 
         migration_columns = {
+            "inflight_join": (
+                "INTEGER NOT NULL DEFAULT 0"
+            ),
             "latency_ms": (
                 "INTEGER NOT NULL DEFAULT 0"
             ),
@@ -722,6 +735,7 @@ def reserve_gemini_call(
                 FROM gemini_usage
                 WHERE usage_day = ?
                   AND cache_hit = 0
+                  AND inflight_join = 0
                 """,
                 (usage_day,),
             ).fetchone()[0]
@@ -735,6 +749,7 @@ def reserve_gemini_call(
                 WHERE usage_day = ?
                   AND client_key = ?
                   AND cache_hit = 0
+                  AND inflight_join = 0
                 """,
                 (
                     usage_day,
@@ -1099,6 +1114,86 @@ def finish_gemini_call(
 
 
 
+def record_inflight_gemini_join(
+    *,
+    client_key: str,
+    mode: str,
+    model: str,
+    succeeded: bool,
+) -> None:
+    conn = db_conn()
+
+    try:
+        conn.execute(
+            """
+            INSERT INTO gemini_usage (
+              created_at,
+              usage_day,
+              client_key,
+              mode,
+              model,
+              status,
+              cache_hit,
+              inflight_join
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, 0, 1
+            )
+            """,
+            (
+                datetime.now(
+                    timezone.utc
+                ).isoformat(),
+                utc_usage_day(),
+                str(client_key),
+                str(mode),
+                str(model),
+                (
+                    "inflight_join_success"
+                    if succeeded
+                    else "inflight_join_failed"
+                ),
+            ),
+        )
+
+        conn.commit()
+
+    except Exception:
+        conn.rollback()
+
+    finally:
+        conn.close()
+
+
+def gemini_request_fingerprint(
+    *,
+    mode: str,
+    model: str,
+    contents: Any,
+) -> str:
+    try:
+        serialized_contents = json.dumps(
+            contents,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+    except Exception:
+        serialized_contents = repr(contents)
+
+    raw_key = "|".join(
+        [
+            str(mode or "").strip().lower(),
+            str(model or "").strip().lower(),
+            serialized_contents,
+        ]
+    )
+
+    return hashlib.sha256(
+        raw_key.encode("utf-8")
+    ).hexdigest()
+
+
 def generate_gemini_content(
     *,
     client: Any,
@@ -1107,18 +1202,75 @@ def generate_gemini_content(
     model: str,
     contents: Any,
 ) -> Any:
-    usage_id = reserve_gemini_call(
-        client_key=client_key,
+    request_key = gemini_request_fingerprint(
         mode=mode,
         model=model,
+        contents=contents,
     )
 
-    started_at = time.perf_counter()
+    with _INFLIGHT_GEMINI_LOCK:
+        shared_future = (
+            _INFLIGHT_GEMINI_CALLS.get(
+                request_key
+            )
+        )
+
+        if shared_future is None:
+            shared_future = Future()
+
+            _INFLIGHT_GEMINI_CALLS[
+                request_key
+            ] = shared_future
+
+            is_request_leader = True
+        else:
+            is_request_leader = False
+
+    if not is_request_leader:
+        try:
+            shared_result = (
+                shared_future.result()
+            )
+
+        except Exception:
+            record_inflight_gemini_join(
+                client_key=client_key,
+                mode=mode,
+                model=model,
+                succeeded=False,
+            )
+            raise
+
+        record_inflight_gemini_join(
+            client_key=client_key,
+            mode=mode,
+            model=model,
+            succeeded=True,
+        )
+
+        return shared_result
+
+    usage_id: Optional[int] = None
+    provider_started_at: Optional[
+        float
+    ] = None
 
     try:
-        response = client.models.generate_content(
+        usage_id = reserve_gemini_call(
+            client_key=client_key,
+            mode=mode,
             model=model,
-            contents=contents,
+        )
+
+        provider_started_at = (
+            time.perf_counter()
+        )
+
+        response = (
+            client.models.generate_content(
+                model=model,
+                contents=contents,
+            )
         )
 
         success_latency_ms = max(
@@ -1127,7 +1279,7 @@ def generate_gemini_content(
                 round(
                     (
                         time.perf_counter()
-                        - started_at
+                        - provider_started_at
                     )
                     * 1000
                 )
@@ -1141,43 +1293,79 @@ def generate_gemini_content(
             latency_ms=success_latency_ms,
         )
 
+        shared_future.set_result(
+            response
+        )
+
         return response
 
     except Exception as error:
-        failure = classify_gemini_failure(
+        if (
+            usage_id is not None
+            and provider_started_at
+            is not None
+        ):
+            failure = (
+                classify_gemini_failure(
+                    error
+                )
+            )
+
+            failure_latency_ms = max(
+                0,
+                int(
+                    round(
+                        (
+                            time.perf_counter()
+                            - provider_started_at
+                        )
+                        * 1000
+                    )
+                ),
+            )
+
+            finish_gemini_call(
+                usage_id,
+                "failed",
+                latency_ms=(
+                    failure_latency_ms
+                ),
+                failure_status_code=(
+                    failure[
+                        "failure_status_code"
+                    ]
+                ),
+                failure_type=(
+                    failure["failure_type"]
+                ),
+                failure_detail=(
+                    failure["failure_detail"]
+                ),
+            )
+
+        shared_future.set_exception(
             error
         )
 
-        failure_latency_ms = max(
-            0,
-            int(
-                round(
-                    (
-                        time.perf_counter()
-                        - started_at
-                    )
-                    * 1000
-                )
-            ),
-        )
-
-        finish_gemini_call(
-            usage_id,
-            "failed",
-            latency_ms=failure_latency_ms,
-            failure_status_code=(
-                failure[
-                    "failure_status_code"
-                ]
-            ),
-            failure_type=(
-                failure["failure_type"]
-            ),
-            failure_detail=(
-                failure["failure_detail"]
-            ),
-        )
         raise
+
+    finally:
+        with _INFLIGHT_GEMINI_LOCK:
+            current_future = (
+                _INFLIGHT_GEMINI_CALLS.get(
+                    request_key
+                )
+            )
+
+            if (
+                current_future
+                is shared_future
+            ):
+                _INFLIGHT_GEMINI_CALLS.pop(
+                    request_key,
+                    None,
+                )
+
 
 
 def record_analysis_cache_hit(
@@ -1230,6 +1418,10 @@ def usage_derived_metrics(
         0,
         int(summary.get("cache_hits", 0) or 0),
     )
+    inflight_joins = max(
+        0,
+        int(summary.get("inflight_joins", 0) or 0),
+    )
     gemini_attempts = max(
         0,
         int(summary.get("gemini_attempts", 0) or 0),
@@ -1265,6 +1457,22 @@ def usage_derived_metrics(
 
     cache_hit_rate = (
         cache_hits / total_records
+        if total_records > 0
+        else 0.0
+    )
+
+    deduplication_rate = (
+        inflight_joins / total_records
+        if total_records > 0
+        else 0.0
+    )
+
+    provider_avoidance_rate = (
+        (
+            cache_hits
+            + inflight_joins
+        )
+        / total_records
         if total_records > 0
         else 0.0
     )
@@ -1319,6 +1527,14 @@ def usage_derived_metrics(
         "completed_calls": completed_calls,
         "cache_hit_rate_percent": round(
             cache_hit_rate * 100,
+            2,
+        ),
+        "deduplication_rate_percent": round(
+            deduplication_rate * 100,
+            2,
+        ),
+        "provider_avoidance_rate_percent": round(
+            provider_avoidance_rate * 100,
             2,
         ),
         "success_rate_percent": round(
@@ -1378,6 +1594,16 @@ def usage_mode_metrics(
             int(
                 summary.get(
                     "cache_hits",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "inflight_joins": max(
+            0,
+            int(
+                summary.get(
+                    "inflight_joins",
                     0,
                 )
                 or 0
@@ -1514,6 +1740,16 @@ def usage_mode_metrics(
                 "cache_hit_rate_percent"
             ]
         ),
+        "deduplication_rate_percent": (
+            derived[
+                "deduplication_rate_percent"
+            ]
+        ),
+        "provider_avoidance_rate_percent": (
+            derived[
+                "provider_avoidance_rate_percent"
+            ]
+        ),
         "success_rate_percent": (
             derived[
                 "success_rate_percent"
@@ -1593,7 +1829,18 @@ def admin_usage_summary(
               COALESCE(
                 SUM(
                   CASE
+                    WHEN inflight_join = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS inflight_joins,
+              COALESCE(
+                SUM(
+                  CASE
                     WHEN cache_hit = 0
+                    AND inflight_join = 0
                     THEN 1
                     ELSE 0
                   END
@@ -1635,6 +1882,7 @@ def admin_usage_summary(
                   CASE
                     WHEN mode = 'article'
                      AND cache_hit = 0
+                     AND inflight_join = 0
                     THEN 1
                     ELSE 0
                   END
@@ -1646,6 +1894,7 @@ def admin_usage_summary(
                   CASE
                     WHEN mode = 'video'
                      AND cache_hit = 0
+                     AND inflight_join = 0
                     THEN 1
                     ELSE 0
                   END
@@ -1718,6 +1967,7 @@ def admin_usage_summary(
               FROM gemini_usage
               WHERE usage_day = ?
                 AND cache_hit = 0
+                AND inflight_join = 0
               GROUP BY client_key
             )
             """,
@@ -1731,6 +1981,7 @@ def admin_usage_summary(
               model,
               status,
               cache_hit,
+              inflight_join,
               COUNT(*) AS request_count,
               COALESCE(SUM(prompt_tokens), 0)
                 AS prompt_tokens,
@@ -1773,7 +2024,18 @@ def admin_usage_summary(
               COALESCE(
                 SUM(
                   CASE
+                    WHEN inflight_join = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS inflight_joins,
+              COALESCE(
+                SUM(
+                  CASE
                     WHEN cache_hit = 0
+                    AND inflight_join = 0
                     THEN 1
                     ELSE 0
                   END
@@ -1874,6 +2136,7 @@ def admin_usage_summary(
             FROM gemini_usage
             WHERE usage_day = ?
               AND cache_hit = 0
+              AND inflight_join = 0
               AND status IN (
                 'success',
                 'failed'
@@ -1938,7 +2201,18 @@ def admin_usage_summary(
               COALESCE(
                 SUM(
                   CASE
+                    WHEN inflight_join = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS inflight_joins,
+              COALESCE(
+                SUM(
+                  CASE
                     WHEN cache_hit = 0
+                    AND inflight_join = 0
                     THEN 1
                     ELSE 0
                   END
@@ -2097,6 +2371,9 @@ def admin_usage_summary(
                 "status": row["status"],
                 "cache_hit": bool(
                     row["cache_hit"]
+                ),
+                "inflight_join": bool(
+                    row["inflight_join"]
                 ),
                 "request_count": int(
                     row["request_count"] or 0
