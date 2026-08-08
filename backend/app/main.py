@@ -14,7 +14,7 @@ from functools import lru_cache
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 import html as ihtml
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 import requests
 import feedparser
@@ -414,33 +414,263 @@ def utc_usage_day() -> str:
     ).date().isoformat()
 
 
+TRACKING_QUERY_PARAMETERS = {
+    "dclid",
+    "fbclid",
+    "gclid",
+    "gbraid",
+    "igshid",
+    "mc_cid",
+    "mc_eid",
+    "msclkid",
+    "ref_src",
+    "s_cid",
+    "vero_conv",
+    "vero_id",
+    "wbraid",
+}
+
+YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+    "www.youtu.be",
+    "youtube-nocookie.com",
+    "www.youtube-nocookie.com",
+}
+
+
+def is_tracking_query_parameter(
+    name: str,
+) -> bool:
+    normalized_name = str(
+        name or ""
+    ).strip().lower()
+
+    return (
+        normalized_name.startswith("utm_")
+        or normalized_name
+        in TRACKING_QUERY_PARAMETERS
+    )
+
+
+def youtube_video_id_from_url(
+    parsed: Any,
+) -> str:
+    hostname = str(
+        parsed.hostname or ""
+    ).strip().lower()
+
+    path_parts = [
+        part
+        for part in str(
+            parsed.path or ""
+        ).split("/")
+        if part
+    ]
+
+    query_pairs = parse_qsl(
+        parsed.query or "",
+        keep_blank_values=True,
+    )
+
+    query = {}
+
+    for key, value in query_pairs:
+        normalized_key = str(
+            key or ""
+        ).strip().lower()
+
+        if normalized_key not in query:
+            query[normalized_key] = str(
+                value or ""
+            ).strip()
+
+    candidate = ""
+
+    if hostname in {
+        "youtu.be",
+        "www.youtu.be",
+    }:
+        if path_parts:
+            candidate = path_parts[0]
+
+    elif hostname in YOUTUBE_HOSTS:
+        if (
+            path_parts
+            and path_parts[0].lower()
+            in {
+                "embed",
+                "live",
+                "shorts",
+                "v",
+            }
+            and len(path_parts) >= 2
+        ):
+            candidate = path_parts[1]
+
+        elif (
+            not path_parts
+            or path_parts[0].lower()
+            == "watch"
+        ):
+            candidate = query.get(
+                "v",
+                "",
+            )
+
+    candidate = re.sub(
+        r"[^A-Za-z0-9_-]",
+        "",
+        candidate,
+    )
+
+    if not re.fullmatch(
+        r"[A-Za-z0-9_-]{6,20}",
+        candidate,
+    ):
+        return ""
+
+    return candidate
+
+
 def normalized_analysis_url(url: str) -> str:
     raw_url = str(url or "").strip()
 
     if not raw_url:
         return ""
 
+    raw_url = raw_url.split(
+        "#",
+        1,
+    )[0].strip()
+
     try:
         parsed = urlparse(raw_url)
 
-        scheme = parsed.scheme.lower()
-        hostname = parsed.netloc.lower()
-        path = parsed.path or "/"
-        query = (
-            f"?{parsed.query}"
-            if parsed.query
-            else ""
+        if not parsed.scheme and parsed.netloc:
+            parsed = urlparse(
+                f"https:{raw_url}"
+            )
+
+        elif (
+            not parsed.scheme
+            and not parsed.netloc
+            and re.match(
+                r"^[A-Za-z0-9.-]+/",
+                raw_url,
+            )
+        ):
+            parsed = urlparse(
+                f"https://{raw_url}"
+            )
+
+        scheme = str(
+            parsed.scheme or ""
+        ).strip().lower()
+
+        hostname = str(
+            parsed.hostname or ""
+        ).strip().lower()
+
+        if not scheme or not hostname:
+            return raw_url
+
+        if hostname.startswith("www."):
+            canonical_hostname = (
+                hostname[4:]
+            )
+        else:
+            canonical_hostname = hostname
+
+        youtube_video_id = (
+            youtube_video_id_from_url(
+                parsed
+            )
         )
 
-        if scheme and hostname:
+        if youtube_video_id:
             return (
-                f"{scheme}://{hostname}"
-                f"{path}{query}"
+                "https://youtube.com/watch?v="
+                f"{youtube_video_id}"
             )
-    except Exception:
-        pass
 
-    return raw_url.split("#", 1)[0]
+        port = parsed.port
+
+        include_port = (
+            port is not None
+            and not (
+                scheme == "http"
+                and port == 80
+            )
+            and not (
+                scheme == "https"
+                and port == 443
+            )
+        )
+
+        authority = canonical_hostname
+
+        if include_port:
+            authority = (
+                f"{authority}:{port}"
+            )
+
+        path = re.sub(
+            r"/{2,}",
+            "/",
+            parsed.path or "/",
+        )
+
+        if path != "/":
+            path = path.rstrip("/")
+
+        retained_query_pairs = []
+
+        for key, value in parse_qsl(
+            parsed.query or "",
+            keep_blank_values=True,
+        ):
+            if is_tracking_query_parameter(
+                key
+            ):
+                continue
+
+            retained_query_pairs.append(
+                (
+                    str(key),
+                    str(value),
+                )
+            )
+
+        retained_query_pairs.sort(
+            key=lambda item: (
+                item[0].lower(),
+                item[1],
+            )
+        )
+
+        canonical_query = urlencode(
+            retained_query_pairs,
+            doseq=True,
+        )
+
+        result = (
+            f"{scheme}://{authority}{path}"
+        )
+
+        if canonical_query:
+            result = (
+                f"{result}?{canonical_query}"
+            )
+
+        return result
+
+    except Exception:
+        return raw_url
+
 
 
 def analysis_content_hash(
