@@ -1359,6 +1359,211 @@ def usage_derived_metrics(
     }
 
 
+def usage_mode_metrics(
+    summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    normalized = {
+        "total_records": max(
+            0,
+            int(
+                summary.get(
+                    "total_records",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "cache_hits": max(
+            0,
+            int(
+                summary.get(
+                    "cache_hits",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "gemini_attempts": max(
+            0,
+            int(
+                summary.get(
+                    "gemini_attempts",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "successful_calls": max(
+            0,
+            int(
+                summary.get(
+                    "successful_calls",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "failed_calls": max(
+            0,
+            int(
+                summary.get(
+                    "failed_calls",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "reserved_calls": max(
+            0,
+            int(
+                summary.get(
+                    "reserved_calls",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "prompt_tokens": max(
+            0,
+            int(
+                summary.get(
+                    "prompt_tokens",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "output_tokens": max(
+            0,
+            int(
+                summary.get(
+                    "output_tokens",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "thought_tokens": max(
+            0,
+            int(
+                summary.get(
+                    "thought_tokens",
+                    0,
+                )
+                or 0
+            ),
+        ),
+        "total_tokens": max(
+            0,
+            int(
+                summary.get(
+                    "total_tokens",
+                    0,
+                )
+                or 0
+            ),
+        ),
+    }
+
+    derived = usage_derived_metrics(
+        normalized
+    )
+
+    attempts = normalized[
+        "gemini_attempts"
+    ]
+
+    successful_calls = normalized[
+        "successful_calls"
+    ]
+
+    estimated_cost = float(
+        derived[
+            "estimated_paid_cost_usd"
+        ]
+        or 0.0
+    )
+
+    average_tokens_per_attempt = (
+        normalized["total_tokens"]
+        / attempts
+        if attempts > 0
+        else 0.0
+    )
+
+    average_cost_per_attempt = (
+        estimated_cost / attempts
+        if attempts > 0
+        else 0.0
+    )
+
+    average_cost_per_success = (
+        estimated_cost
+        / successful_calls
+        if successful_calls > 0
+        else 0.0
+    )
+
+    return {
+        **normalized,
+        "completed_calls": (
+            derived["completed_calls"]
+        ),
+        "cache_hit_rate_percent": (
+            derived[
+                "cache_hit_rate_percent"
+            ]
+        ),
+        "success_rate_percent": (
+            derived[
+                "success_rate_percent"
+            ]
+        ),
+        "failure_rate_percent": (
+            derived[
+                "failure_rate_percent"
+            ]
+        ),
+        "average_total_tokens_per_success": (
+            derived[
+                "average_total_tokens_per_success"
+            ]
+        ),
+        "average_total_tokens_per_attempt": round(
+            average_tokens_per_attempt,
+            2,
+        ),
+        "billable_output_tokens": (
+            derived[
+                "billable_output_tokens"
+            ]
+        ),
+        "estimated_paid_cost_usd": (
+            derived[
+                "estimated_paid_cost_usd"
+            ]
+        ),
+        "estimated_input_cost_usd": (
+            derived[
+                "estimated_input_cost_usd"
+            ]
+        ),
+        "estimated_output_cost_usd": (
+            derived[
+                "estimated_output_cost_usd"
+            ]
+        ),
+        "average_estimated_cost_per_attempt_usd": round(
+            average_cost_per_attempt,
+            6,
+        ),
+        "average_estimated_cost_per_success_usd": round(
+            average_cost_per_success,
+            6,
+        ),
+    }
+
+
 @app.get("/admin/usage/summary")
 def admin_usage_summary(
     request: Request,
@@ -1550,6 +1755,85 @@ def admin_usage_summary(
             (usage_day,),
         ).fetchall()
 
+        mode_rows = conn.execute(
+            """
+            SELECT
+              mode,
+              COUNT(*) AS total_records,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS cache_hits,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 0
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS gemini_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'reserved'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS reserved_calls,
+              COALESCE(
+                SUM(prompt_tokens),
+                0
+              ) AS prompt_tokens,
+              COALESCE(
+                SUM(output_tokens),
+                0
+              ) AS output_tokens,
+              COALESCE(
+                SUM(thought_tokens),
+                0
+              ) AS thought_tokens,
+              COALESCE(
+                SUM(total_tokens),
+                0
+              ) AS total_tokens
+            FROM gemini_usage
+            WHERE usage_day = ?
+            GROUP BY mode
+            ORDER BY mode
+            """,
+            (usage_day,),
+        ).fetchall()
+
         latency_rows = conn.execute(
             """
             SELECT
@@ -1727,6 +2011,50 @@ def admin_usage_summary(
         )
     )
 
+    today_metrics = usage_derived_metrics(
+        today
+    )
+
+    today_estimated_cost = float(
+        today_metrics[
+            "estimated_paid_cost_usd"
+        ]
+        or 0.0
+    )
+
+    mode_metrics = []
+
+    for row in mode_rows:
+        payload = usage_mode_metrics(
+            dict(row)
+        )
+
+        mode_cost = float(
+            payload[
+                "estimated_paid_cost_usd"
+            ]
+            or 0.0
+        )
+
+        payload["mode"] = str(
+            row["mode"] or "unknown"
+        )
+
+        payload[
+            "share_of_today_estimated_cost_percent"
+        ] = (
+            round(
+                mode_cost
+                / today_estimated_cost
+                * 100,
+                2,
+            )
+            if today_estimated_cost > 0
+            else 0.0
+        )
+
+        mode_metrics.append(payload)
+
     return {
         "generated_at": datetime.now(
             timezone.utc
@@ -1743,9 +2071,7 @@ def admin_usage_summary(
             ),
             "thinking_tokens_billed_as_output": True,
         },
-        "today_metrics": usage_derived_metrics(
-            today
-        ),
+        "today_metrics": today_metrics,
         "limits": {
             "global_daily_call_cap": (
                 GLOBAL_DAILY_GEMINI_CALL_CAP
@@ -1790,6 +2116,7 @@ def admin_usage_summary(
             }
             for row in breakdown_rows
         ],
+        "mode_metrics": mode_metrics,
         "latency_by_mode": [
             {
                 "mode": row["mode"],
