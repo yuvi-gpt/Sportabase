@@ -88,6 +88,20 @@ ADMIN_API_KEY = os.getenv(
     "",
 ).strip()
 
+GEMINI_INPUT_COST_PER_MILLION_USD = float(
+    os.getenv(
+        "SPORTABASE_GEMINI_INPUT_COST_PER_MILLION_USD",
+        "1.50",
+    )
+)
+
+GEMINI_OUTPUT_COST_PER_MILLION_USD = float(
+    os.getenv(
+        "SPORTABASE_GEMINI_OUTPUT_COST_PER_MILLION_USD",
+        "9.00",
+    )
+)
+
 
 # -----------------------------
 # app
@@ -955,6 +969,146 @@ def record_analysis_cache_hit(
 
 
 
+def usage_derived_metrics(
+    summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    total_records = max(
+        0,
+        int(summary.get("total_records", 0) or 0),
+    )
+    cache_hits = max(
+        0,
+        int(summary.get("cache_hits", 0) or 0),
+    )
+    gemini_attempts = max(
+        0,
+        int(summary.get("gemini_attempts", 0) or 0),
+    )
+    successful_calls = max(
+        0,
+        int(summary.get("successful_calls", 0) or 0),
+    )
+    failed_calls = max(
+        0,
+        int(summary.get("failed_calls", 0) or 0),
+    )
+    prompt_tokens = max(
+        0,
+        int(summary.get("prompt_tokens", 0) or 0),
+    )
+    output_tokens = max(
+        0,
+        int(summary.get("output_tokens", 0) or 0),
+    )
+    thought_tokens = max(
+        0,
+        int(summary.get("thought_tokens", 0) or 0),
+    )
+    total_tokens = max(
+        0,
+        int(summary.get("total_tokens", 0) or 0),
+    )
+
+    completed_calls = (
+        successful_calls + failed_calls
+    )
+
+    cache_hit_rate = (
+        cache_hits / total_records
+        if total_records > 0
+        else 0.0
+    )
+
+    success_rate = (
+        successful_calls / completed_calls
+        if completed_calls > 0
+        else 0.0
+    )
+
+    failure_rate = (
+        failed_calls / completed_calls
+        if completed_calls > 0
+        else 0.0
+    )
+
+    billable_output_tokens = (
+        output_tokens + thought_tokens
+    )
+
+    estimated_input_cost = (
+        prompt_tokens
+        / 1_000_000
+        * GEMINI_INPUT_COST_PER_MILLION_USD
+    )
+
+    estimated_output_cost = (
+        billable_output_tokens
+        / 1_000_000
+        * GEMINI_OUTPUT_COST_PER_MILLION_USD
+    )
+
+    estimated_total_cost = (
+        estimated_input_cost
+        + estimated_output_cost
+    )
+
+    average_tokens_per_success = (
+        total_tokens / successful_calls
+        if successful_calls > 0
+        else 0.0
+    )
+
+    global_capacity_used = (
+        gemini_attempts
+        / GLOBAL_DAILY_GEMINI_CALL_CAP
+        if GLOBAL_DAILY_GEMINI_CALL_CAP > 0
+        else None
+    )
+
+    return {
+        "completed_calls": completed_calls,
+        "cache_hit_rate_percent": round(
+            cache_hit_rate * 100,
+            2,
+        ),
+        "success_rate_percent": round(
+            success_rate * 100,
+            2,
+        ),
+        "failure_rate_percent": round(
+            failure_rate * 100,
+            2,
+        ),
+        "average_total_tokens_per_success": round(
+            average_tokens_per_success,
+            2,
+        ),
+        "billable_output_tokens": (
+            billable_output_tokens
+        ),
+        "estimated_paid_cost_usd": round(
+            estimated_total_cost,
+            6,
+        ),
+        "estimated_input_cost_usd": round(
+            estimated_input_cost,
+            6,
+        ),
+        "estimated_output_cost_usd": round(
+            estimated_output_cost,
+            6,
+        ),
+        "global_capacity_used_percent": (
+            None
+            if global_capacity_used is None
+            else round(
+                global_capacity_used * 100,
+                2,
+            )
+        ),
+    }
+
+
 @app.get("/admin/usage/summary")
 def admin_usage_summary(
     request: Request,
@@ -1203,6 +1357,20 @@ def admin_usage_summary(
             timezone.utc
         ).isoformat(),
         "usage_day_utc": usage_day,
+        "pricing": {
+            "currency": "USD",
+            "estimate_type": "paid_standard",
+            "input_per_million_tokens": (
+                GEMINI_INPUT_COST_PER_MILLION_USD
+            ),
+            "output_per_million_tokens": (
+                GEMINI_OUTPUT_COST_PER_MILLION_USD
+            ),
+            "thinking_tokens_billed_as_output": True,
+        },
+        "today_metrics": usage_derived_metrics(
+            today
+        ),
         "limits": {
             "global_daily_call_cap": (
                 GLOBAL_DAILY_GEMINI_CALL_CAP
