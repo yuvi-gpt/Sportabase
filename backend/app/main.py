@@ -2156,6 +2156,260 @@ def usage_savings_metrics(
     }
 
 
+def usage_scope_savings_summary(
+    mode_metrics: List[Dict[str, Any]],
+    *,
+    actual_estimated_cost: float,
+    estimation_basis: str,
+) -> Dict[str, Any]:
+    provider_calls_avoided = sum(
+        int(
+            row.get(
+                "provider_calls_avoided",
+                0,
+            )
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    cache_calls_avoided = sum(
+        int(
+            row.get(
+                "cache_calls_avoided",
+                0,
+            )
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    inflight_calls_avoided = sum(
+        int(
+            row.get(
+                "inflight_calls_avoided",
+                0,
+            )
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    unpriced_avoided_calls = sum(
+        int(
+            row.get(
+                "unpriced_avoided_calls",
+                0,
+            )
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_cache_cost_avoided = sum(
+        float(
+            row.get(
+                "estimated_cache_cost_avoided_usd",
+                0.0,
+            )
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_inflight_cost_avoided = sum(
+        float(
+            row.get(
+                "estimated_inflight_cost_avoided_usd",
+                0.0,
+            )
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_total_cost_avoided = (
+        estimated_cache_cost_avoided
+        + estimated_inflight_cost_avoided
+    )
+
+    estimated_cost_without_avoidance = (
+        float(actual_estimated_cost or 0.0)
+        + estimated_total_cost_avoided
+    )
+
+    estimated_cost_reduction = (
+        estimated_total_cost_avoided
+        / estimated_cost_without_avoidance
+        if estimated_cost_without_avoidance > 0
+        else 0.0
+    )
+
+    estimated_prompt_tokens_avoided = sum(
+        float(
+            row.get(
+                "estimated_prompt_tokens_avoided",
+                0.0,
+            )
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_output_tokens_avoided = sum(
+        float(
+            row.get(
+                "estimated_output_tokens_avoided",
+                0.0,
+            )
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_thought_tokens_avoided = sum(
+        float(
+            row.get(
+                "estimated_thought_tokens_avoided",
+                0.0,
+            )
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_total_tokens_avoided = sum(
+        float(
+            row.get(
+                "estimated_total_tokens_avoided",
+                0.0,
+            )
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    return {
+        "estimation_basis": estimation_basis,
+        "estimate_complete": (
+            unpriced_avoided_calls == 0
+        ),
+        "cost_savings_estimate_available": (
+            provider_calls_avoided
+            > unpriced_avoided_calls
+        ),
+        "provider_calls_avoided": (
+            provider_calls_avoided
+        ),
+        "cache_calls_avoided": (
+            cache_calls_avoided
+        ),
+        "inflight_calls_avoided": (
+            inflight_calls_avoided
+        ),
+        "unpriced_avoided_calls": (
+            unpriced_avoided_calls
+        ),
+        "estimated_cache_cost_avoided_usd": round(
+            estimated_cache_cost_avoided,
+            6,
+        ),
+        "estimated_inflight_cost_avoided_usd": round(
+            estimated_inflight_cost_avoided,
+            6,
+        ),
+        "estimated_total_cost_avoided_usd": round(
+            estimated_total_cost_avoided,
+            6,
+        ),
+        "estimated_actual_cost_usd": round(
+            float(actual_estimated_cost or 0.0),
+            6,
+        ),
+        "estimated_cost_without_avoidance_usd": round(
+            estimated_cost_without_avoidance,
+            6,
+        ),
+        "estimated_cost_reduction_percent": round(
+            estimated_cost_reduction * 100,
+            2,
+        ),
+        "estimated_prompt_tokens_avoided": round(
+            estimated_prompt_tokens_avoided,
+            2,
+        ),
+        "estimated_output_tokens_avoided": round(
+            estimated_output_tokens_avoided,
+            2,
+        ),
+        "estimated_thought_tokens_avoided": round(
+            estimated_thought_tokens_avoided,
+            2,
+        ),
+        "estimated_total_tokens_avoided": round(
+            estimated_total_tokens_avoided,
+            2,
+        ),
+        "by_mode": [
+            {
+                "mode": row.get(
+                    "mode",
+                    "unknown",
+                ),
+                "cost_savings_estimate_available": (
+                    row.get(
+                        "cost_savings_estimate_available",
+                        False,
+                    )
+                ),
+                "provider_calls_avoided": (
+                    row.get(
+                        "provider_calls_avoided",
+                        0,
+                    )
+                ),
+                "cache_calls_avoided": (
+                    row.get(
+                        "cache_calls_avoided",
+                        0,
+                    )
+                ),
+                "inflight_calls_avoided": (
+                    row.get(
+                        "inflight_calls_avoided",
+                        0,
+                    )
+                ),
+                "unpriced_avoided_calls": (
+                    row.get(
+                        "unpriced_avoided_calls",
+                        0,
+                    )
+                ),
+                "average_success_cost_basis_usd": (
+                    row.get(
+                        "average_success_cost_basis_usd",
+                        0.0,
+                    )
+                ),
+                "estimated_total_cost_avoided_usd": (
+                    row.get(
+                        "estimated_total_cost_avoided_usd",
+                        0.0,
+                    )
+                ),
+                "estimated_total_tokens_avoided": (
+                    row.get(
+                        "estimated_total_tokens_avoided",
+                        0.0,
+                    )
+                ),
+            }
+            for row in mode_metrics
+        ],
+    }
+
+
 def usage_mode_metrics(
     summary: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -2350,6 +2604,14 @@ def admin_usage_summary(
     require_admin(request)
 
     usage_day = utc_usage_day()
+
+    window_end_day = usage_day
+
+    window_start_day = (
+        datetime.now(timezone.utc).date()
+        - timedelta(days=days - 1)
+    ).isoformat()
+
     conn = db_conn()
 
     try:
@@ -2854,6 +3116,479 @@ def admin_usage_summary(
             (usage_day,),
         ).fetchall()
 
+        rolling_row = conn.execute(
+            """
+            SELECT
+              COUNT(*) AS total_records,
+              COUNT(DISTINCT client_key)
+                AS unique_clients,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS cache_hits,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN inflight_join = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS inflight_joins,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS gemini_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'reserved'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS reserved_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'expired'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS expired_reservations,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN mode = 'article'
+                     AND cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS article_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN mode = 'video'
+                     AND cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS video_attempts,
+              COALESCE(
+                SUM(prompt_tokens),
+                0
+              ) AS prompt_tokens,
+              COALESCE(
+                SUM(output_tokens),
+                0
+              ) AS output_tokens,
+              COALESCE(
+                SUM(thought_tokens),
+                0
+              ) AS thought_tokens,
+              COALESCE(
+                SUM(total_tokens),
+                0
+              ) AS total_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN prompt_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_prompt_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN output_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_output_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN thought_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_thought_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN total_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_total_tokens,
+              COALESCE(
+                ROUND(
+                  AVG(
+                    CASE
+                      WHEN cache_hit = 0
+                       AND inflight_join = 0
+                       AND status IN (
+                         'success',
+                         'failed'
+                       )
+                      THEN latency_ms
+                    END
+                  )
+                ),
+                0
+              ) AS average_latency_ms,
+              COALESCE(
+                MIN(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'success',
+                       'failed'
+                     )
+                    THEN latency_ms
+                  END
+                ),
+                0
+              ) AS fastest_latency_ms,
+              COALESCE(
+                MAX(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'success',
+                       'failed'
+                     )
+                    THEN latency_ms
+                  END
+                ),
+                0
+              ) AS slowest_latency_ms
+            FROM gemini_usage
+            WHERE usage_day BETWEEN ? AND ?
+            """,
+            (
+                window_start_day,
+                window_end_day,
+            ),
+        ).fetchone()
+
+        rolling_mode_rows = conn.execute(
+            """
+            SELECT
+              mode,
+              COUNT(*) AS total_records,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS cache_hits,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN inflight_join = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS inflight_joins,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS gemini_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'reserved'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS reserved_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'expired'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS expired_reservations,
+              COALESCE(
+                SUM(prompt_tokens),
+                0
+              ) AS prompt_tokens,
+              COALESCE(
+                SUM(output_tokens),
+                0
+              ) AS output_tokens,
+              COALESCE(
+                SUM(thought_tokens),
+                0
+              ) AS thought_tokens,
+              COALESCE(
+                SUM(total_tokens),
+                0
+              ) AS total_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN prompt_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_prompt_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN output_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_output_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN thought_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_thought_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN total_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_total_tokens
+            FROM gemini_usage
+            WHERE usage_day BETWEEN ? AND ?
+            GROUP BY mode
+            ORDER BY mode
+            """,
+            (
+                window_start_day,
+                window_end_day,
+            ),
+        ).fetchall()
+
+        rolling_day_rows = conn.execute(
+            """
+            SELECT
+              usage_day,
+              COUNT(*) AS total_records,
+              COUNT(DISTINCT client_key)
+                AS unique_clients,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS cache_hits,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN inflight_join = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS inflight_joins,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND inflight_join = 0
+                     AND status IN (
+                       'reserved',
+                       'success',
+                       'failed'
+                     )
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS gemini_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'expired'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS expired_reservations,
+              COALESCE(
+                SUM(prompt_tokens),
+                0
+              ) AS prompt_tokens,
+              COALESCE(
+                SUM(output_tokens),
+                0
+              ) AS output_tokens,
+              COALESCE(
+                SUM(thought_tokens),
+                0
+              ) AS thought_tokens,
+              COALESCE(
+                SUM(total_tokens),
+                0
+              ) AS total_tokens
+            FROM gemini_usage
+            WHERE usage_day BETWEEN ? AND ?
+            GROUP BY usage_day
+            ORDER BY usage_day ASC
+            """,
+            (
+                window_start_day,
+                window_end_day,
+            ),
+        ).fetchall()
+
         recent_rows = conn.execute(
             """
             SELECT
@@ -2930,11 +3665,14 @@ def admin_usage_summary(
               COALESCE(SUM(total_tokens), 0)
                 AS total_tokens
             FROM gemini_usage
+            WHERE usage_day BETWEEN ? AND ?
             GROUP BY usage_day
             ORDER BY usage_day DESC
-            LIMIT ?
             """,
-            (days,),
+            (
+                window_start_day,
+                window_end_day,
+            ),
         ).fetchall()
 
     finally:
@@ -2944,6 +3682,12 @@ def admin_usage_summary(
         key: int(value or 0)
         for key, value
         in dict(today_row).items()
+    }
+
+    rolling = {
+        key: int(value or 0)
+        for key, value
+        in dict(rolling_row).items()
     }
 
     highest_client_attempts = int(
@@ -3245,6 +3989,123 @@ def admin_usage_summary(
         ],
     }
 
+    rolling_metrics = usage_derived_metrics(
+        rolling
+    )
+
+    rolling_estimated_cost = float(
+        rolling_metrics[
+            "estimated_paid_cost_usd"
+        ]
+        or 0.0
+    )
+
+    rolling_mode_metrics = []
+
+    for row in rolling_mode_rows:
+        payload = usage_mode_metrics(
+            dict(row)
+        )
+
+        mode_cost = float(
+            payload[
+                "estimated_paid_cost_usd"
+            ]
+            or 0.0
+        )
+
+        payload["mode"] = str(
+            row["mode"] or "unknown"
+        )
+
+        payload[
+            "share_of_window_estimated_cost_percent"
+        ] = (
+            round(
+                mode_cost
+                / rolling_estimated_cost
+                * 100,
+                2,
+            )
+            if rolling_estimated_cost > 0
+            else 0.0
+        )
+
+        rolling_mode_metrics.append(
+            payload
+        )
+
+    rolling_savings_summary = (
+        usage_scope_savings_summary(
+            rolling_mode_metrics,
+            actual_estimated_cost=(
+                rolling_estimated_cost
+            ),
+            estimation_basis=(
+                "rolling_per_mode_"
+                "average_successful_call"
+            ),
+        )
+    )
+
+    rolling_daily = []
+
+    for row in rolling_day_rows:
+        daily_payload = {
+            key: (
+                value
+                if key == "usage_day"
+                else int(value or 0)
+            )
+            for key, value
+            in dict(row).items()
+        }
+
+        daily_totals = {
+            key: value
+            for key, value
+            in daily_payload.items()
+            if key != "usage_day"
+        }
+
+        rolling_daily.append(
+            {
+                "usage_day": (
+                    daily_payload[
+                        "usage_day"
+                    ]
+                ),
+                "totals": daily_totals,
+                "metrics": (
+                    usage_derived_metrics(
+                        daily_totals
+                    )
+                ),
+            }
+        )
+
+    rolling_window = {
+        "requested_days": int(days),
+        "start_day_utc": (
+            window_start_day
+        ),
+        "end_day_utc": (
+            window_end_day
+        ),
+        "days_with_activity": len(
+            rolling_daily
+        ),
+        "totals": rolling,
+        "metrics": rolling_metrics,
+        "savings_summary": (
+            rolling_savings_summary
+        ),
+        "mode_metrics": (
+            rolling_mode_metrics
+        ),
+        "daily": rolling_daily,
+    }
+
     return {
         "generated_at": datetime.now(
             timezone.utc
@@ -3263,6 +4124,7 @@ def admin_usage_summary(
         },
         "today_metrics": today_metrics,
         "savings_summary": savings_summary,
+        "rolling_window": rolling_window,
         "limits": {
             "reservation_timeout_seconds": (
                 GEMINI_RESERVATION_TIMEOUT_SECONDS
