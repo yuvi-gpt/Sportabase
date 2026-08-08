@@ -282,7 +282,10 @@ CREATE TABLE IF NOT EXISTS gemini_usage (
   output_tokens INTEGER NOT NULL DEFAULT 0,
   thought_tokens INTEGER NOT NULL DEFAULT 0,
   total_tokens INTEGER NOT NULL DEFAULT 0,
-  cache_hit INTEGER NOT NULL DEFAULT 0
+  cache_hit INTEGER NOT NULL DEFAULT 0,
+  failure_status_code INTEGER,
+  failure_type TEXT NOT NULL DEFAULT '',
+  failure_detail TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_gemini_usage_day
@@ -312,6 +315,37 @@ def init_db():
     conn = db_conn()
     try:
         conn.executescript(SCHEMA)
+
+        existing_columns = {
+            str(row["name"])
+            for row in conn.execute(
+                "PRAGMA table_info(gemini_usage)"
+            ).fetchall()
+        }
+
+        migration_columns = {
+            "failure_status_code": "INTEGER",
+            "failure_type": (
+                "TEXT NOT NULL DEFAULT ''"
+            ),
+            "failure_detail": (
+                "TEXT NOT NULL DEFAULT ''"
+            ),
+        }
+
+        for (
+            column_name,
+            column_definition,
+        ) in migration_columns.items():
+            if column_name in existing_columns:
+                continue
+
+            conn.execute(
+                "ALTER TABLE gemini_usage "
+                f"ADD COLUMN {column_name} "
+                f"{column_definition}"
+            )
+
         conn.commit()
     finally:
         conn.close()
@@ -852,10 +886,165 @@ def usage_metadata_counts(
     }
 
 
+def classify_gemini_failure(
+    error: Exception,
+) -> Dict[str, Any]:
+    error_name = type(error).__name__
+
+    raw_detail = re.sub(
+        r"\s+",
+        " ",
+        str(error or ""),
+    ).strip()
+
+    detail = (
+        f"{error_name}: {raw_detail}"
+        if raw_detail
+        else error_name
+    )
+
+    detail = detail[:500]
+    lowered = detail.lower()
+
+    status_code: Optional[int] = None
+
+    for attribute_name in (
+        "status_code",
+        "status",
+        "code",
+    ):
+        value = getattr(
+            error,
+            attribute_name,
+            None,
+        )
+
+        if callable(value):
+            try:
+                value = value()
+            except Exception:
+                value = None
+
+        enum_value = getattr(
+            value,
+            "value",
+            None,
+        )
+
+        if enum_value is not None:
+            value = enum_value
+
+        match = re.search(
+            r"\b([1-5]\d{2})\b",
+            str(value or ""),
+        )
+
+        if match:
+            status_code = int(
+                match.group(1)
+            )
+            break
+
+    if status_code is None:
+        match = re.search(
+            r"\b([1-5]\d{2})\b",
+            detail,
+        )
+
+        if match:
+            status_code = int(
+                match.group(1)
+            )
+
+    if (
+        status_code in {401, 403}
+        or "unauthenticated" in lowered
+        or "permission denied" in lowered
+        or "invalid api key" in lowered
+        or "api key not valid" in lowered
+    ):
+        failure_type = "authentication"
+
+    elif (
+        status_code == 429
+        or "resource_exhausted" in lowered
+        or "resource exhausted" in lowered
+        or "rate limit" in lowered
+        or "quota exceeded" in lowered
+        or "too many requests" in lowered
+    ):
+        failure_type = "rate_limit"
+
+    elif (
+        status_code == 503
+        or "service unavailable" in lowered
+        or "temporarily unavailable" in lowered
+        or "temporarily busy" in lowered
+        or "model capacity" in lowered
+        or "overloaded" in lowered
+    ):
+        failure_type = "provider_capacity"
+
+    elif (
+        isinstance(
+            error,
+            (
+                TimeoutError,
+                requests.Timeout,
+            ),
+        )
+        or "timed out" in lowered
+        or "timeout" in lowered
+        or "deadline exceeded" in lowered
+    ):
+        failure_type = "timeout"
+
+    elif (
+        isinstance(
+            error,
+            (
+                ConnectionError,
+                requests.ConnectionError,
+            ),
+        )
+        or "connection error" in lowered
+        or "connection reset" in lowered
+        or "name resolution" in lowered
+        or "network is unreachable" in lowered
+    ):
+        failure_type = "network"
+
+    elif (
+        status_code in {400, 404, 409, 422}
+        or "invalid argument" in lowered
+        or "bad request" in lowered
+        or "malformed" in lowered
+    ):
+        failure_type = "invalid_request"
+
+    elif (
+        status_code is not None
+        and status_code >= 500
+    ):
+        failure_type = "provider_error"
+
+    else:
+        failure_type = "unknown"
+
+    return {
+        "failure_status_code": status_code,
+        "failure_type": failure_type,
+        "failure_detail": detail,
+    }
+
+
 def finish_gemini_call(
     usage_id: int,
     status: str,
     response: Any = None,
+    failure_status_code: Optional[int] = None,
+    failure_type: str = "",
+    failure_detail: str = "",
 ) -> Dict[str, int]:
     counts = usage_metadata_counts(
         response
@@ -872,7 +1061,10 @@ def finish_gemini_call(
               prompt_tokens = ?,
               output_tokens = ?,
               thought_tokens = ?,
-              total_tokens = ?
+              total_tokens = ?,
+              failure_status_code = ?,
+              failure_type = ?,
+              failure_detail = ?
             WHERE id = ?
             """,
             (
@@ -881,6 +1073,9 @@ def finish_gemini_call(
                 counts["output_tokens"],
                 counts["thought_tokens"],
                 counts["total_tokens"],
+                failure_status_code,
+                str(failure_type or ""),
+                str(failure_detail or "")[:500],
                 int(usage_id),
             ),
         )
@@ -922,10 +1117,25 @@ def generate_gemini_content(
 
         return response
 
-    except Exception:
+    except Exception as error:
+        failure = classify_gemini_failure(
+            error
+        )
+
         finish_gemini_call(
             usage_id,
             "failed",
+            failure_status_code=(
+                failure[
+                    "failure_status_code"
+                ]
+            ),
+            failure_type=(
+                failure["failure_type"]
+            ),
+            failure_detail=(
+                failure["failure_detail"]
+            ),
         )
         raise
 
@@ -1259,6 +1469,40 @@ def admin_usage_summary(
             (usage_day,),
         ).fetchall()
 
+        failure_rows = conn.execute(
+            """
+            SELECT
+              mode,
+              COALESCE(
+                failure_status_code,
+                0
+              ) AS failure_status_code,
+              COALESCE(
+                NULLIF(failure_type, ''),
+                'unknown'
+              ) AS failure_type,
+              COUNT(*) AS failure_count
+            FROM gemini_usage
+            WHERE usage_day = ?
+              AND status = 'failed'
+            GROUP BY
+              mode,
+              COALESCE(
+                failure_status_code,
+                0
+              ),
+              COALESCE(
+                NULLIF(failure_type, ''),
+                'unknown'
+              )
+            ORDER BY
+              failure_count DESC,
+              mode,
+              failure_type
+            """,
+            (usage_day,),
+        ).fetchall()
+
         recent_rows = conn.execute(
             """
             SELECT
@@ -1414,6 +1658,26 @@ def admin_usage_summary(
                 ),
             }
             for row in breakdown_rows
+        ],
+        "failure_breakdown": [
+            {
+                "mode": row["mode"],
+                "failure_status_code": (
+                    int(
+                        row[
+                            "failure_status_code"
+                        ]
+                        or 0
+                    )
+                ),
+                "failure_type": (
+                    row["failure_type"]
+                ),
+                "failure_count": int(
+                    row["failure_count"] or 0
+                ),
+            }
+            for row in failure_rows
         ],
         "recent_days": [
             {
