@@ -5,6 +5,7 @@ import re
 import json
 import time
 import hashlib
+import hmac
 import sqlite3
 from pathlib import Path
 from functools import lru_cache
@@ -81,6 +82,11 @@ CLIENT_DAILY_GEMINI_CALL_CAP = int(
         "30",
     )
 )
+
+ADMIN_API_KEY = os.getenv(
+    "SPORTABASE_ADMIN_API_KEY",
+    "",
+).strip()
 
 
 # -----------------------------
@@ -303,6 +309,30 @@ init_db()
 # -----------------------------
 # analysis cache + usage limits
 # -----------------------------
+def require_admin(request: Request) -> None:
+    if not ADMIN_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="The Sportabase admin API is not configured.",
+        )
+
+    provided_key = str(
+        request.headers.get(
+            "x-sportabase-admin-key",
+            "",
+        )
+    ).strip()
+
+    if not provided_key or not hmac.compare_digest(
+        provided_key,
+        ADMIN_API_KEY,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid Sportabase admin key.",
+        )
+
+
 def utc_usage_day() -> str:
     return datetime.now(
         timezone.utc
@@ -922,6 +952,314 @@ def record_analysis_cache_hit(
 
     finally:
         conn.close()
+
+
+
+@app.get("/admin/usage/summary")
+def admin_usage_summary(
+    request: Request,
+    days: int = Query(7, ge=1, le=30),
+):
+    require_admin(request)
+
+    usage_day = utc_usage_day()
+    conn = db_conn()
+
+    try:
+        today_row = conn.execute(
+            """
+            SELECT
+              COUNT(*) AS total_records,
+              COUNT(DISTINCT client_key) AS unique_clients,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS cache_hits,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 0
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS gemini_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'reserved'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS reserved_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN mode = 'article'
+                     AND cache_hit = 0
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS article_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN mode = 'video'
+                     AND cache_hit = 0
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS video_attempts,
+              COALESCE(SUM(prompt_tokens), 0)
+                AS prompt_tokens,
+              COALESCE(SUM(output_tokens), 0)
+                AS output_tokens,
+              COALESCE(SUM(thought_tokens), 0)
+                AS thought_tokens,
+              COALESCE(SUM(total_tokens), 0)
+                AS total_tokens
+            FROM gemini_usage
+            WHERE usage_day = ?
+            """,
+            (usage_day,),
+        ).fetchone()
+
+        top_client_row = conn.execute(
+            """
+            SELECT COALESCE(
+              MAX(client_attempts),
+              0
+            ) AS highest_client_attempts
+            FROM (
+              SELECT COUNT(*) AS client_attempts
+              FROM gemini_usage
+              WHERE usage_day = ?
+                AND cache_hit = 0
+              GROUP BY client_key
+            )
+            """,
+            (usage_day,),
+        ).fetchone()
+
+        breakdown_rows = conn.execute(
+            """
+            SELECT
+              mode,
+              model,
+              status,
+              cache_hit,
+              COUNT(*) AS request_count,
+              COALESCE(SUM(prompt_tokens), 0)
+                AS prompt_tokens,
+              COALESCE(SUM(output_tokens), 0)
+                AS output_tokens,
+              COALESCE(SUM(thought_tokens), 0)
+                AS thought_tokens,
+              COALESCE(SUM(total_tokens), 0)
+                AS total_tokens
+            FROM gemini_usage
+            WHERE usage_day = ?
+            GROUP BY
+              mode,
+              model,
+              status,
+              cache_hit
+            ORDER BY
+              mode,
+              status,
+              model
+            """,
+            (usage_day,),
+        ).fetchall()
+
+        recent_rows = conn.execute(
+            """
+            SELECT
+              usage_day,
+              COUNT(*) AS total_records,
+              COUNT(DISTINCT client_key)
+                AS unique_clients,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 1
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS cache_hits,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN cache_hit = 0
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS gemini_attempts,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(SUM(total_tokens), 0)
+                AS total_tokens
+            FROM gemini_usage
+            GROUP BY usage_day
+            ORDER BY usage_day DESC
+            LIMIT ?
+            """,
+            (days,),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    today = {
+        key: int(value or 0)
+        for key, value
+        in dict(today_row).items()
+    }
+
+    highest_client_attempts = int(
+        top_client_row[
+            "highest_client_attempts"
+        ]
+        or 0
+    )
+
+    global_remaining = (
+        None
+        if GLOBAL_DAILY_GEMINI_CALL_CAP <= 0
+        else max(
+            0,
+            GLOBAL_DAILY_GEMINI_CALL_CAP
+            - today["gemini_attempts"],
+        )
+    )
+
+    highest_client_remaining = (
+        None
+        if CLIENT_DAILY_GEMINI_CALL_CAP <= 0
+        else max(
+            0,
+            CLIENT_DAILY_GEMINI_CALL_CAP
+            - highest_client_attempts,
+        )
+    )
+
+    return {
+        "generated_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+        "usage_day_utc": usage_day,
+        "limits": {
+            "global_daily_call_cap": (
+                GLOBAL_DAILY_GEMINI_CALL_CAP
+            ),
+            "client_daily_call_cap": (
+                CLIENT_DAILY_GEMINI_CALL_CAP
+            ),
+            "global_calls_remaining": (
+                global_remaining
+            ),
+            "highest_client_attempts_today": (
+                highest_client_attempts
+            ),
+            "highest_client_calls_remaining": (
+                highest_client_remaining
+            ),
+        },
+        "today": today,
+        "today_breakdown": [
+            {
+                "mode": row["mode"],
+                "model": row["model"],
+                "status": row["status"],
+                "cache_hit": bool(
+                    row["cache_hit"]
+                ),
+                "request_count": int(
+                    row["request_count"] or 0
+                ),
+                "prompt_tokens": int(
+                    row["prompt_tokens"] or 0
+                ),
+                "output_tokens": int(
+                    row["output_tokens"] or 0
+                ),
+                "thought_tokens": int(
+                    row["thought_tokens"] or 0
+                ),
+                "total_tokens": int(
+                    row["total_tokens"] or 0
+                ),
+            }
+            for row in breakdown_rows
+        ],
+        "recent_days": [
+            {
+                key: (
+                    value
+                    if key == "usage_day"
+                    else int(value or 0)
+                )
+                for key, value
+                in dict(row).items()
+            }
+            for row in recent_rows
+        ],
+    }
 
 
 # -----------------------------
