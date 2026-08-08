@@ -1897,133 +1897,341 @@ def usage_derived_metrics(
     }
 
 
+def usage_savings_metrics(
+    summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    def read_int(
+        name: str,
+        fallback: int = 0,
+    ) -> int:
+        try:
+            return max(
+                0,
+                int(
+                    summary.get(
+                        name,
+                        fallback,
+                    )
+                    or 0
+                ),
+            )
+        except Exception:
+            return max(
+                0,
+                int(fallback or 0),
+            )
+
+    cache_hits = read_int(
+        "cache_hits"
+    )
+    inflight_joins = read_int(
+        "inflight_joins"
+    )
+    successful_calls = read_int(
+        "successful_calls"
+    )
+
+    prompt_tokens = read_int(
+        "prompt_tokens"
+    )
+    output_tokens = read_int(
+        "output_tokens"
+    )
+    thought_tokens = read_int(
+        "thought_tokens"
+    )
+
+    successful_prompt_tokens = read_int(
+        "successful_prompt_tokens",
+        (
+            prompt_tokens
+            if successful_calls > 0
+            else 0
+        ),
+    )
+
+    successful_output_tokens = read_int(
+        "successful_output_tokens",
+        (
+            output_tokens
+            if successful_calls > 0
+            else 0
+        ),
+    )
+
+    successful_thought_tokens = read_int(
+        "successful_thought_tokens",
+        (
+            thought_tokens
+            if successful_calls > 0
+            else 0
+        ),
+    )
+
+    successful_total_tokens = read_int(
+        "successful_total_tokens",
+        (
+            successful_prompt_tokens
+            + successful_output_tokens
+            + successful_thought_tokens
+        ),
+    )
+
+    provider_calls_avoided = (
+        cache_hits + inflight_joins
+    )
+
+    successful_billable_output_tokens = (
+        successful_output_tokens
+        + successful_thought_tokens
+    )
+
+    successful_input_cost = (
+        successful_prompt_tokens
+        / 1_000_000
+        * GEMINI_INPUT_COST_PER_MILLION_USD
+    )
+
+    successful_output_cost = (
+        successful_billable_output_tokens
+        / 1_000_000
+        * GEMINI_OUTPUT_COST_PER_MILLION_USD
+    )
+
+    successful_cost = (
+        successful_input_cost
+        + successful_output_cost
+    )
+
+    savings_basis_available = (
+        successful_calls > 0
+        and successful_total_tokens > 0
+    )
+
+    average_success_cost = (
+        successful_cost
+        / successful_calls
+        if savings_basis_available
+        else 0.0
+    )
+
+    average_success_prompt_tokens = (
+        successful_prompt_tokens
+        / successful_calls
+        if savings_basis_available
+        else 0.0
+    )
+
+    average_success_output_tokens = (
+        successful_output_tokens
+        / successful_calls
+        if savings_basis_available
+        else 0.0
+    )
+
+    average_success_thought_tokens = (
+        successful_thought_tokens
+        / successful_calls
+        if savings_basis_available
+        else 0.0
+    )
+
+    average_success_total_tokens = (
+        successful_total_tokens
+        / successful_calls
+        if savings_basis_available
+        else 0.0
+    )
+
+    estimated_cache_cost_avoided = (
+        average_success_cost
+        * cache_hits
+    )
+
+    estimated_inflight_cost_avoided = (
+        average_success_cost
+        * inflight_joins
+    )
+
+    estimated_total_cost_avoided = (
+        estimated_cache_cost_avoided
+        + estimated_inflight_cost_avoided
+    )
+
+    actual_estimated_cost = (
+        prompt_tokens
+        / 1_000_000
+        * GEMINI_INPUT_COST_PER_MILLION_USD
+        + (
+            output_tokens
+            + thought_tokens
+        )
+        / 1_000_000
+        * GEMINI_OUTPUT_COST_PER_MILLION_USD
+    )
+
+    estimated_cost_without_avoidance = (
+        actual_estimated_cost
+        + estimated_total_cost_avoided
+    )
+
+    estimated_cost_reduction = (
+        estimated_total_cost_avoided
+        / estimated_cost_without_avoidance
+        if estimated_cost_without_avoidance > 0
+        else 0.0
+    )
+
+    unpriced_avoided_calls = (
+        0
+        if savings_basis_available
+        else provider_calls_avoided
+    )
+
+    return {
+        "estimation_basis": (
+            "average_successful_call_in_scope"
+        ),
+        "cost_savings_estimate_available": (
+            savings_basis_available
+        ),
+        "provider_calls_avoided": (
+            provider_calls_avoided
+        ),
+        "cache_calls_avoided": cache_hits,
+        "inflight_calls_avoided": (
+            inflight_joins
+        ),
+        "unpriced_avoided_calls": (
+            unpriced_avoided_calls
+        ),
+        "average_success_cost_basis_usd": round(
+            average_success_cost,
+            6,
+        ),
+        "estimated_cache_cost_avoided_usd": round(
+            estimated_cache_cost_avoided,
+            6,
+        ),
+        "estimated_inflight_cost_avoided_usd": round(
+            estimated_inflight_cost_avoided,
+            6,
+        ),
+        "estimated_total_cost_avoided_usd": round(
+            estimated_total_cost_avoided,
+            6,
+        ),
+        "estimated_actual_cost_usd": round(
+            actual_estimated_cost,
+            6,
+        ),
+        "estimated_cost_without_avoidance_usd": round(
+            estimated_cost_without_avoidance,
+            6,
+        ),
+        "estimated_cost_reduction_percent": round(
+            estimated_cost_reduction * 100,
+            2,
+        ),
+        "estimated_prompt_tokens_avoided": round(
+            average_success_prompt_tokens
+            * provider_calls_avoided,
+            2,
+        ),
+        "estimated_output_tokens_avoided": round(
+            average_success_output_tokens
+            * provider_calls_avoided,
+            2,
+        ),
+        "estimated_thought_tokens_avoided": round(
+            average_success_thought_tokens
+            * provider_calls_avoided,
+            2,
+        ),
+        "estimated_total_tokens_avoided": round(
+            average_success_total_tokens
+            * provider_calls_avoided,
+            2,
+        ),
+    }
+
+
 def usage_mode_metrics(
     summary: Dict[str, Any],
 ) -> Dict[str, Any]:
+    def read_int(
+        name: str,
+    ) -> int:
+        try:
+            return max(
+                0,
+                int(
+                    summary.get(
+                        name,
+                        0,
+                    )
+                    or 0
+                ),
+            )
+        except Exception:
+            return 0
+
     normalized = {
-        "total_records": max(
-            0,
-            int(
-                summary.get(
-                    "total_records",
-                    0,
-                )
-                or 0
-            ),
+        "total_records": read_int(
+            "total_records"
         ),
-        "cache_hits": max(
-            0,
-            int(
-                summary.get(
-                    "cache_hits",
-                    0,
-                )
-                or 0
-            ),
+        "cache_hits": read_int(
+            "cache_hits"
         ),
-        "inflight_joins": max(
-            0,
-            int(
-                summary.get(
-                    "inflight_joins",
-                    0,
-                )
-                or 0
-            ),
+        "inflight_joins": read_int(
+            "inflight_joins"
         ),
-        "gemini_attempts": max(
-            0,
-            int(
-                summary.get(
-                    "gemini_attempts",
-                    0,
-                )
-                or 0
-            ),
+        "gemini_attempts": read_int(
+            "gemini_attempts"
         ),
-        "successful_calls": max(
-            0,
-            int(
-                summary.get(
-                    "successful_calls",
-                    0,
-                )
-                or 0
-            ),
+        "successful_calls": read_int(
+            "successful_calls"
         ),
-        "failed_calls": max(
-            0,
-            int(
-                summary.get(
-                    "failed_calls",
-                    0,
-                )
-                or 0
-            ),
+        "failed_calls": read_int(
+            "failed_calls"
         ),
-        "reserved_calls": max(
-            0,
-            int(
-                summary.get(
-                    "reserved_calls",
-                    0,
-                )
-                or 0
-            ),
+        "reserved_calls": read_int(
+            "reserved_calls"
         ),
-        "expired_reservations": max(
-            0,
-            int(
-                summary.get(
-                    "expired_reservations",
-                    0,
-                )
-                or 0
-            ),
+        "expired_reservations": read_int(
+            "expired_reservations"
         ),
-        "prompt_tokens": max(
-            0,
-            int(
-                summary.get(
-                    "prompt_tokens",
-                    0,
-                )
-                or 0
-            ),
+        "prompt_tokens": read_int(
+            "prompt_tokens"
         ),
-        "output_tokens": max(
-            0,
-            int(
-                summary.get(
-                    "output_tokens",
-                    0,
-                )
-                or 0
-            ),
+        "output_tokens": read_int(
+            "output_tokens"
         ),
-        "thought_tokens": max(
-            0,
-            int(
-                summary.get(
-                    "thought_tokens",
-                    0,
-                )
-                or 0
-            ),
+        "thought_tokens": read_int(
+            "thought_tokens"
         ),
-        "total_tokens": max(
-            0,
-            int(
-                summary.get(
-                    "total_tokens",
-                    0,
-                )
-                or 0
-            ),
+        "total_tokens": read_int(
+            "total_tokens"
+        ),
+        "successful_prompt_tokens": read_int(
+            "successful_prompt_tokens"
+        ),
+        "successful_output_tokens": read_int(
+            "successful_output_tokens"
+        ),
+        "successful_thought_tokens": read_int(
+            "successful_thought_tokens"
+        ),
+        "successful_total_tokens": read_int(
+            "successful_total_tokens"
         ),
     }
 
     derived = usage_derived_metrics(
+        normalized
+    )
+
+    savings = usage_savings_metrics(
         normalized
     )
 
@@ -2129,7 +2337,9 @@ def usage_mode_metrics(
             average_cost_per_success,
             6,
         ),
+        **savings,
     }
+
 
 
 @app.get("/admin/usage/summary")
@@ -2270,6 +2480,46 @@ def admin_usage_summary(
                 AS output_tokens,
               COALESCE(SUM(thought_tokens), 0)
                 AS thought_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN prompt_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_prompt_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN output_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_output_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN thought_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_thought_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN total_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_total_tokens,
               COALESCE(SUM(total_tokens), 0)
                 AS total_tokens,
               COALESCE(
@@ -2467,6 +2717,46 @@ def admin_usage_summary(
                 SUM(thought_tokens),
                 0
               ) AS thought_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN prompt_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_prompt_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN output_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_output_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN thought_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_thought_tokens,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN total_tokens
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_total_tokens,
               COALESCE(
                 SUM(total_tokens),
                 0
@@ -2727,6 +3017,234 @@ def admin_usage_summary(
 
         mode_metrics.append(payload)
 
+    provider_calls_avoided = sum(
+        int(
+            row[
+                "provider_calls_avoided"
+            ]
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    cache_calls_avoided = sum(
+        int(
+            row[
+                "cache_calls_avoided"
+            ]
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    inflight_calls_avoided = sum(
+        int(
+            row[
+                "inflight_calls_avoided"
+            ]
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    unpriced_avoided_calls = sum(
+        int(
+            row[
+                "unpriced_avoided_calls"
+            ]
+            or 0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_cache_cost_avoided = sum(
+        float(
+            row[
+                "estimated_cache_cost_avoided_usd"
+            ]
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_inflight_cost_avoided = sum(
+        float(
+            row[
+                "estimated_inflight_cost_avoided_usd"
+            ]
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_total_cost_avoided = (
+        estimated_cache_cost_avoided
+        + estimated_inflight_cost_avoided
+    )
+
+    estimated_cost_without_avoidance = (
+        today_estimated_cost
+        + estimated_total_cost_avoided
+    )
+
+    estimated_cost_reduction = (
+        estimated_total_cost_avoided
+        / estimated_cost_without_avoidance
+        if estimated_cost_without_avoidance > 0
+        else 0.0
+    )
+
+    estimated_prompt_tokens_avoided = sum(
+        float(
+            row[
+                "estimated_prompt_tokens_avoided"
+            ]
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_output_tokens_avoided = sum(
+        float(
+            row[
+                "estimated_output_tokens_avoided"
+            ]
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_thought_tokens_avoided = sum(
+        float(
+            row[
+                "estimated_thought_tokens_avoided"
+            ]
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    estimated_total_tokens_avoided = sum(
+        float(
+            row[
+                "estimated_total_tokens_avoided"
+            ]
+            or 0.0
+        )
+        for row in mode_metrics
+    )
+
+    savings_summary = {
+        "estimation_basis": (
+            "per_mode_average_successful_call"
+        ),
+        "estimate_complete": (
+            unpriced_avoided_calls == 0
+        ),
+        "cost_savings_estimate_available": (
+            provider_calls_avoided
+            > unpriced_avoided_calls
+        ),
+        "provider_calls_avoided": (
+            provider_calls_avoided
+        ),
+        "cache_calls_avoided": (
+            cache_calls_avoided
+        ),
+        "inflight_calls_avoided": (
+            inflight_calls_avoided
+        ),
+        "unpriced_avoided_calls": (
+            unpriced_avoided_calls
+        ),
+        "estimated_cache_cost_avoided_usd": round(
+            estimated_cache_cost_avoided,
+            6,
+        ),
+        "estimated_inflight_cost_avoided_usd": round(
+            estimated_inflight_cost_avoided,
+            6,
+        ),
+        "estimated_total_cost_avoided_usd": round(
+            estimated_total_cost_avoided,
+            6,
+        ),
+        "estimated_actual_cost_usd": round(
+            today_estimated_cost,
+            6,
+        ),
+        "estimated_cost_without_avoidance_usd": round(
+            estimated_cost_without_avoidance,
+            6,
+        ),
+        "estimated_cost_reduction_percent": round(
+            estimated_cost_reduction * 100,
+            2,
+        ),
+        "estimated_prompt_tokens_avoided": round(
+            estimated_prompt_tokens_avoided,
+            2,
+        ),
+        "estimated_output_tokens_avoided": round(
+            estimated_output_tokens_avoided,
+            2,
+        ),
+        "estimated_thought_tokens_avoided": round(
+            estimated_thought_tokens_avoided,
+            2,
+        ),
+        "estimated_total_tokens_avoided": round(
+            estimated_total_tokens_avoided,
+            2,
+        ),
+        "by_mode": [
+            {
+                "mode": row["mode"],
+                "cost_savings_estimate_available": (
+                    row[
+                        "cost_savings_estimate_available"
+                    ]
+                ),
+                "provider_calls_avoided": (
+                    row[
+                        "provider_calls_avoided"
+                    ]
+                ),
+                "cache_calls_avoided": (
+                    row[
+                        "cache_calls_avoided"
+                    ]
+                ),
+                "inflight_calls_avoided": (
+                    row[
+                        "inflight_calls_avoided"
+                    ]
+                ),
+                "unpriced_avoided_calls": (
+                    row[
+                        "unpriced_avoided_calls"
+                    ]
+                ),
+                "average_success_cost_basis_usd": (
+                    row[
+                        "average_success_cost_basis_usd"
+                    ]
+                ),
+                "estimated_total_cost_avoided_usd": (
+                    row[
+                        "estimated_total_cost_avoided_usd"
+                    ]
+                ),
+                "estimated_total_tokens_avoided": (
+                    row[
+                        "estimated_total_tokens_avoided"
+                    ]
+                ),
+            }
+            for row in mode_metrics
+        ],
+    }
+
     return {
         "generated_at": datetime.now(
             timezone.utc
@@ -2744,6 +3262,7 @@ def admin_usage_summary(
             "thinking_tokens_billed_as_output": True,
         },
         "today_metrics": today_metrics,
+        "savings_summary": savings_summary,
         "limits": {
             "reservation_timeout_seconds": (
                 GEMINI_RESERVATION_TIMEOUT_SECONDS
