@@ -283,6 +283,7 @@ CREATE TABLE IF NOT EXISTS gemini_usage (
   thought_tokens INTEGER NOT NULL DEFAULT 0,
   total_tokens INTEGER NOT NULL DEFAULT 0,
   cache_hit INTEGER NOT NULL DEFAULT 0,
+  latency_ms INTEGER NOT NULL DEFAULT 0,
   failure_status_code INTEGER,
   failure_type TEXT NOT NULL DEFAULT '',
   failure_detail TEXT NOT NULL DEFAULT ''
@@ -324,6 +325,9 @@ def init_db():
         }
 
         migration_columns = {
+            "latency_ms": (
+                "INTEGER NOT NULL DEFAULT 0"
+            ),
             "failure_status_code": "INTEGER",
             "failure_type": (
                 "TEXT NOT NULL DEFAULT ''"
@@ -1042,6 +1046,7 @@ def finish_gemini_call(
     usage_id: int,
     status: str,
     response: Any = None,
+    latency_ms: int = 0,
     failure_status_code: Optional[int] = None,
     failure_type: str = "",
     failure_detail: str = "",
@@ -1062,6 +1067,7 @@ def finish_gemini_call(
               output_tokens = ?,
               thought_tokens = ?,
               total_tokens = ?,
+              latency_ms = ?,
               failure_status_code = ?,
               failure_type = ?,
               failure_detail = ?
@@ -1073,6 +1079,10 @@ def finish_gemini_call(
                 counts["output_tokens"],
                 counts["thought_tokens"],
                 counts["total_tokens"],
+                max(
+                    0,
+                    int(latency_ms or 0),
+                ),
                 failure_status_code,
                 str(failure_type or ""),
                 str(failure_detail or "")[:500],
@@ -1103,16 +1113,32 @@ def generate_gemini_content(
         model=model,
     )
 
+    started_at = time.perf_counter()
+
     try:
         response = client.models.generate_content(
             model=model,
             contents=contents,
         )
 
+        success_latency_ms = max(
+            0,
+            int(
+                round(
+                    (
+                        time.perf_counter()
+                        - started_at
+                    )
+                    * 1000
+                )
+            ),
+        )
+
         finish_gemini_call(
             usage_id,
             "success",
             response,
+            latency_ms=success_latency_ms,
         )
 
         return response
@@ -1122,9 +1148,23 @@ def generate_gemini_content(
             error
         )
 
+        failure_latency_ms = max(
+            0,
+            int(
+                round(
+                    (
+                        time.perf_counter()
+                        - started_at
+                    )
+                    * 1000
+                )
+            ),
+        )
+
         finish_gemini_call(
             usage_id,
             "failed",
+            latency_ms=failure_latency_ms,
             failure_status_code=(
                 failure[
                     "failure_status_code"
@@ -1414,7 +1454,48 @@ def admin_usage_summary(
               COALESCE(SUM(thought_tokens), 0)
                 AS thought_tokens,
               COALESCE(SUM(total_tokens), 0)
-                AS total_tokens
+                AS total_tokens,
+              COALESCE(
+                ROUND(
+                  AVG(
+                    CASE
+                      WHEN cache_hit = 0
+                       AND status IN (
+                         'success',
+                         'failed'
+                       )
+                      THEN latency_ms
+                    END
+                  )
+                ),
+                0
+              ) AS average_latency_ms,
+              COALESCE(
+                MIN(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND status IN (
+                       'success',
+                       'failed'
+                     )
+                    THEN latency_ms
+                  END
+                ),
+                0
+              ) AS fastest_latency_ms,
+              COALESCE(
+                MAX(
+                  CASE
+                    WHEN cache_hit = 0
+                     AND status IN (
+                       'success',
+                       'failed'
+                     )
+                    THEN latency_ms
+                  END
+                ),
+                0
+              ) AS slowest_latency_ms
             FROM gemini_usage
             WHERE usage_day = ?
             """,
@@ -1465,6 +1546,56 @@ def admin_usage_summary(
               mode,
               status,
               model
+            """,
+            (usage_day,),
+        ).fetchall()
+
+        latency_rows = conn.execute(
+            """
+            SELECT
+              mode,
+              COUNT(*) AS completed_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'success'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS successful_calls,
+              COALESCE(
+                SUM(
+                  CASE
+                    WHEN status = 'failed'
+                    THEN 1
+                    ELSE 0
+                  END
+                ),
+                0
+              ) AS failed_calls,
+              COALESCE(
+                ROUND(AVG(latency_ms)),
+                0
+              ) AS average_latency_ms,
+              COALESCE(
+                MIN(latency_ms),
+                0
+              ) AS fastest_latency_ms,
+              COALESCE(
+                MAX(latency_ms),
+                0
+              ) AS slowest_latency_ms
+            FROM gemini_usage
+            WHERE usage_day = ?
+              AND cache_hit = 0
+              AND status IN (
+                'success',
+                'failed'
+              )
+            GROUP BY mode
+            ORDER BY mode
             """,
             (usage_day,),
         ).fetchall()
@@ -1658,6 +1789,30 @@ def admin_usage_summary(
                 ),
             }
             for row in breakdown_rows
+        ],
+        "latency_by_mode": [
+            {
+                "mode": row["mode"],
+                "completed_calls": int(
+                    row["completed_calls"] or 0
+                ),
+                "successful_calls": int(
+                    row["successful_calls"] or 0
+                ),
+                "failed_calls": int(
+                    row["failed_calls"] or 0
+                ),
+                "average_latency_ms": int(
+                    row["average_latency_ms"] or 0
+                ),
+                "fastest_latency_ms": int(
+                    row["fastest_latency_ms"] or 0
+                ),
+                "slowest_latency_ms": int(
+                    row["slowest_latency_ms"] or 0
+                ),
+            }
+            for row in latency_rows
         ],
         "failure_breakdown": [
             {
