@@ -20,6 +20,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 
 import requests
 import feedparser
+from bs4 import BeautifulSoup
 from dateutil import parser as dtparser
 
 from fastapi import FastAPI, Query, Request, HTTPException
@@ -939,6 +940,256 @@ def fetch_safe_article_html(
             }
         finally:
             response.close()
+
+
+def _normalize_extracted_text(
+    value: Any,
+) -> str:
+    return re.sub(
+        r"\s+",
+        " ",
+        ihtml.unescape(
+            str(value or "")
+        ),
+    ).strip()
+
+
+def extract_article_content(
+    html: str,
+    *,
+    max_chars: int = 12_000,
+    min_chars: int = 80,
+) -> Dict[str, Any]:
+    raw_html = str(
+        html or ""
+    )
+
+    if not raw_html.strip():
+        raise ValueError(
+            "The article page is empty."
+        )
+
+    if max_chars <= 0:
+        raise ValueError(
+            "The article text limit must "
+            "be greater than zero."
+        )
+
+    if min_chars < 0:
+        raise ValueError(
+            "The article minimum length "
+            "cannot be negative."
+        )
+
+    if min_chars > max_chars:
+        raise ValueError(
+            "The article minimum length "
+            "cannot exceed its text limit."
+        )
+
+    soup = BeautifulSoup(
+        raw_html,
+        "lxml",
+    )
+
+    title = ""
+
+    metadata_titles: Dict[
+        str,
+        str,
+    ] = {}
+
+    for tag in soup.find_all("meta"):
+        key = _normalize_extracted_text(
+            tag.get("property")
+            or tag.get("name")
+            or ""
+        ).lower()
+
+        content = _normalize_extracted_text(
+            tag.get("content")
+            or ""
+        )
+
+        if (
+            key
+            and content
+            and key not in metadata_titles
+        ):
+            metadata_titles[key] = content
+
+    for key in (
+        "og:title",
+        "twitter:title",
+    ):
+        candidate = metadata_titles.get(
+            key,
+            "",
+        )
+
+        if candidate:
+            title = candidate
+            break
+
+    if not title:
+        heading = soup.find("h1")
+
+        if heading is not None:
+            title = _normalize_extracted_text(
+                heading.get_text(
+                    " ",
+                    strip=True,
+                )
+            )
+
+    if (
+        not title
+        and soup.title is not None
+    ):
+        title = _normalize_extracted_text(
+            soup.title.get_text(
+                " ",
+                strip=True,
+            )
+        )
+
+    title = title[:300].strip()
+
+    for tag_name in (
+        "script",
+        "style",
+        "noscript",
+        "template",
+        "svg",
+        "canvas",
+        "nav",
+        "header",
+        "footer",
+        "aside",
+        "form",
+        "button",
+    ):
+        for tag in soup.find_all(
+            tag_name
+        ):
+            tag.decompose()
+
+    article_root = soup.find(
+        "article"
+    )
+
+    main_root = soup.find(
+        "main"
+    )
+
+    if article_root is not None:
+        content_root = article_root
+        extraction_method = "article"
+    elif main_root is not None:
+        content_root = main_root
+        extraction_method = "main"
+    elif soup.body is not None:
+        content_root = soup.body
+        extraction_method = "body"
+    else:
+        content_root = soup
+        extraction_method = "document"
+
+    paragraphs: List[str] = []
+    seen_paragraphs = set()
+
+    for paragraph_tag in (
+        content_root.find_all("p")
+    ):
+        paragraph = (
+            _normalize_extracted_text(
+                paragraph_tag.get_text(
+                    " ",
+                    strip=True,
+                )
+            )
+        )
+
+        if not paragraph:
+            continue
+
+        duplicate_key = paragraph.lower()
+
+        if duplicate_key in seen_paragraphs:
+            continue
+
+        seen_paragraphs.add(
+            duplicate_key
+        )
+
+        paragraphs.append(
+            paragraph
+        )
+
+    if paragraphs:
+        article_text = "\n\n".join(
+            paragraphs
+        )
+    else:
+        article_text = (
+            _normalize_extracted_text(
+                content_root.get_text(
+                    " ",
+                    strip=True,
+                )
+            )
+        )
+
+        paragraphs = (
+            [article_text]
+            if article_text
+            else []
+        )
+
+    if len(article_text) > max_chars:
+        clipped_text = article_text[
+            :max_chars
+        ].rstrip()
+
+        final_space = (
+            clipped_text.rfind(" ")
+        )
+
+        safe_boundary = int(
+            max_chars * 0.75
+        )
+
+        if final_space >= safe_boundary:
+            clipped_text = clipped_text[
+                :final_space
+            ].rstrip()
+
+        article_text = clipped_text
+
+    if len(article_text) < min_chars:
+        raise ValueError(
+            "The page does not contain enough "
+            "meaningful article text."
+        )
+
+    if not title:
+        title = (
+            article_text[:120].rstrip()
+        )
+
+    return {
+        "title": title,
+        "text": article_text,
+        "extraction_method": (
+            extraction_method
+        ),
+        "paragraph_count": len(
+            paragraphs
+        ),
+        "character_count": len(
+            article_text
+        ),
+    }
 
 
 def detect_content_source(
