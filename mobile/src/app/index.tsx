@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
+import { getApiHealth } from '../lib/api';
 import {
   Image,
   Pressable,
@@ -56,6 +57,33 @@ export default function HomeScreen() {
 
   const [link, setLink] = useState('');
   const [message, setMessage] = useState('');
+  const [apiState, setApiState] = useState<
+    'checking' | 'online' | 'offline'
+  >('checking');
+
+  useEffect(() => {
+    let active = true;
+
+    getApiHealth()
+      .then((health) => {
+        if (!active) {
+          return;
+        }
+
+        setApiState(
+          health.ok ? 'online' : 'offline',
+        );
+      })
+      .catch(() => {
+        if (active) {
+          setApiState('offline');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     const sharedValue = Array.isArray(params.shared)
@@ -149,10 +177,20 @@ export default function HomeScreen() {
               </View>
 
               <View style={styles.alphaBadge}>
-                <View style={styles.statusDot} />
+                <View
+                  style={[
+                    styles.statusDot,
+                    apiState === 'offline' &&
+                      styles.statusDotOffline,
+                  ]}
+                />
 
                 <Text style={styles.alphaText}>
-                  MOBILE ALPHA
+                  {apiState === 'checking'
+                    ? 'API CHECKING'
+                    : apiState === 'online'
+                      ? 'API ONLINE'
+                      : 'API OFFLINE'}
                 </Text>
               </View>
             </View>
@@ -502,6 +540,9 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 999,
     backgroundColor: COLORS.accent,
+  },
+  statusDotOffline: {
+    backgroundColor: COLORS.error,
   },
   alphaText: {
     color: COLORS.muted,
