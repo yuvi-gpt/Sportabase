@@ -12,7 +12,7 @@ from pathlib import Path
 from concurrent.futures import Future
 from functools import lru_cache
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 import html as ihtml
 from urllib.parse import parse_qsl, urlencode, urlparse
 
@@ -247,6 +247,42 @@ class VideoAnalyzeResponse(BaseModel):
     debug: Dict[str, Any] = Field(
         default_factory=dict
     )
+
+
+
+class ContentResolveRequest(BaseModel):
+    url: str = Field(
+        ...,
+        min_length=8,
+        max_length=2048,
+    )
+
+
+class ContentResolveResponse(BaseModel):
+    url: str
+    normalized_url: str
+
+    source: Literal[
+        "article",
+        "youtube",
+    ]
+
+    mode: Literal[
+        "article",
+        "video",
+    ]
+
+    title: str = ""
+    content: str = Field(..., min_length=1)
+    content_characters: int = Field(..., ge=1)
+
+    metadata: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
 
 
 # -----------------------------
@@ -534,6 +570,83 @@ def youtube_video_id_from_url(
         return ""
 
     return candidate
+
+
+def detect_content_source(
+    url: str,
+) -> Dict[str, str]:
+    raw_url = str(url or "").strip()
+
+    if not raw_url:
+        raise ValueError(
+            "A content URL is required."
+        )
+
+    normalized_url = normalized_analysis_url(
+        raw_url
+    )
+
+    try:
+        parsed = urlparse(normalized_url)
+    except ValueError as error:
+        raise ValueError(
+            "The content URL is invalid."
+        ) from error
+
+    scheme = str(
+        parsed.scheme or ""
+    ).strip().lower()
+
+    hostname = str(
+        parsed.hostname or ""
+    ).strip().lower()
+
+    if (
+        scheme not in {"http", "https"}
+        or not hostname
+    ):
+        raise ValueError(
+            "The content URL must use HTTP or HTTPS."
+        )
+
+    canonical_hostname = hostname.removeprefix(
+        "www."
+    )
+
+    youtube_hosts = {
+        host.removeprefix("www.")
+        for host in YOUTUBE_HOSTS
+    }
+
+    is_youtube_host = (
+        canonical_hostname in youtube_hosts
+    )
+
+    youtube_video_id = (
+        youtube_video_id_from_url(parsed)
+    )
+
+    if (
+        is_youtube_host
+        and not youtube_video_id
+    ):
+        raise ValueError(
+            "The YouTube URL does not contain "
+            "a valid video ID."
+        )
+
+    if youtube_video_id:
+        return {
+            "source": "youtube",
+            "mode": "video",
+            "normalized_url": normalized_url,
+        }
+
+    return {
+        "source": "article",
+        "mode": "article",
+        "normalized_url": normalized_url,
+    }
 
 
 def normalized_analysis_url(url: str) -> str:
