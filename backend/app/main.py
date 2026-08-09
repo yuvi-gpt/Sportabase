@@ -10400,6 +10400,106 @@ def video_analysis_cache_decision(
     }
 
 
+def resolve_youtube_content(
+    normalized_url: str,
+) -> Dict[str, Any]:
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "YouTube content resolution "
+            "is not implemented yet."
+        ),
+    )
+
+
+def resolve_article_content(
+    normalized_url: str,
+) -> Dict[str, Any]:
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Article content resolution "
+            "is not implemented yet."
+        ),
+    )
+
+
+@app.post(
+    "/resolve-content",
+    response_model=ContentResolveResponse,
+)
+def resolve_content(
+    req: ContentResolveRequest,
+):
+    try:
+        detected = detect_content_source(
+            req.url
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+
+    normalized_url = detected[
+        "normalized_url"
+    ]
+
+    if detected["source"] == "youtube":
+        resolved = resolve_youtube_content(
+            normalized_url
+        )
+    else:
+        resolved = resolve_article_content(
+            normalized_url
+        )
+
+    if not isinstance(resolved, dict):
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The content resolver returned "
+                "an invalid response."
+            ),
+        )
+
+    title = str(
+        resolved.get("title") or ""
+    ).strip()
+
+    content = str(
+        resolved.get("content") or ""
+    ).strip()
+
+    metadata = resolved.get(
+        "metadata",
+        {},
+    )
+
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    if not content:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The content resolver returned "
+                "no usable content."
+            ),
+        )
+
+    return ContentResolveResponse(
+        url=req.url,
+        normalized_url=normalized_url,
+        source=detected["source"],
+        mode=detected["mode"],
+        title=title,
+        content=content,
+        content_characters=len(content),
+        metadata=metadata,
+    )
+
+
 @app.post("/analyze/video", response_model=VideoAnalyzeResponse)
 def analyze_video(
     req: VideoAnalyzeRequest,
