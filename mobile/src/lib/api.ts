@@ -1,4 +1,4 @@
-﻿const API_BASE_URL =
+const API_BASE_URL =
   'https://sportabase-api.onrender.com';
 
 const REQUEST_TIMEOUT_MS = 22000;
@@ -6,6 +6,35 @@ const REQUEST_TIMEOUT_MS = 22000;
 export type ApiHealthResponse = {
   ok: boolean;
   version: string;
+};
+
+export type VideoAnalyzeRequest = {
+  title: string;
+  transcript: string;
+  url: string;
+  transcript_metadata: {
+    segment_count: number;
+    character_count: number;
+    language?: string;
+    extraction_method: string;
+  };
+};
+
+export type VideoAnalyzeResponse = {
+  content_type: string;
+  claim: string;
+  evidence_used: string[];
+  logic_check: string;
+  hype_check: string;
+  evidence_score: number;
+  logic_score: number;
+  verdict: string;
+
+  language: Record<string, unknown>;
+  localized_content_type: string;
+  localized_verdict: string;
+  ui_labels: Record<string, string>;
+  debug: Record<string, unknown>;
 };
 
 export class SportabaseApiError extends Error {
@@ -78,4 +107,19 @@ async function requestJson<T>(
 
 export function getApiHealth() {
   return requestJson<ApiHealthResponse>('/health');
+}
+
+export function analyzeVideo(
+  request: VideoAnalyzeRequest,
+) {
+  return requestJson<VideoAnalyzeResponse>(
+    '/analyze/video',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  );
 }
