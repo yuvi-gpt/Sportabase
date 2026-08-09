@@ -53,6 +53,13 @@
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "backgroundColor": "#050807"
+    "backgroundColor": "#050807",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e868b0ee-a5e2-441f-86e6-333abebd9565"
+      }
+    },
+    "owner": "yuvigpt"
   }
 }
