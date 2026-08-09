@@ -7,7 +7,10 @@ import {
   type VideoAnalyzeResponse,
 } from '../lib/api';
 import { VideoAnalysisResults } from '../components/video-analysis-results';
-import { fetchYouTubeTranscript } from '../lib/youtube-transcript';
+import {
+  fetchYouTubeTranscript,
+  fetchYouTubeVideoTitle,
+} from '../lib/youtube-transcript';
 import {
   Image,
   Pressable,
@@ -176,15 +179,22 @@ export default function HomeScreen() {
     );
 
     try {
-      const transcript =
-        await fetchYouTubeTranscript(value);
+      const [
+        transcript,
+        videoTitle,
+      ] = await Promise.all([
+        fetchYouTubeTranscript(value),
+        fetchYouTubeVideoTitle(value).catch(
+          () => 'Shared YouTube video',
+        ),
+      ]);
 
       setMessage(
         'Transcript ready. Analyzing the video...',
       );
 
       const result = await analyzeVideo({
-        title: 'Shared YouTube video',
+        title: videoTitle,
         transcript: transcript.transcript,
         url: value,
         transcript_metadata: {
@@ -339,7 +349,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
 
-                <Text style={styles.shareStepArrow}>?</Text>
+                <Text style={styles.shareStepArrow}>→</Text>
 
                 <View style={styles.shareStep}>
                   <Text style={styles.shareStepNumber}>2</Text>
@@ -349,7 +359,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
 
-                <Text style={styles.shareStepArrow}>?</Text>
+                <Text style={styles.shareStepArrow}>→</Text>
 
                 <View style={styles.shareStep}>
                   <Text style={styles.shareStepNumber}>3</Text>
@@ -495,7 +505,7 @@ export default function HomeScreen() {
                     : `Analyze ${mode}`}
                 </Text>
 
-                <Text style={styles.arrow}>↑</Text>
+                <Text style={styles.arrow}>â†‘</Text>
               </Pressable>
 
               {message ? (
@@ -555,7 +565,7 @@ export default function HomeScreen() {
               <View style={styles.footerLine} />
 
               <Text style={styles.footerText}>
-                SPORTABASE · ARTICLE AND VIDEO INTELLIGENCE
+                SPORTABASE Â· ARTICLE AND VIDEO INTELLIGENCE
               </Text>
             </View>
           </View>

@@ -1,4 +1,4 @@
-﻿import { YoutubeTranscript } from 'youtube-transcript';
+import { YoutubeTranscript } from 'youtube-transcript';
 
 export type YouTubeTranscriptSegment = {
   text: string;
@@ -65,4 +65,57 @@ export async function fetchYouTubeTranscript(
         return Boolean(segment.lang);
       })?.lang ?? '',
   };
+}
+
+type YouTubeOEmbedResponse = {
+  title?: string;
+};
+
+export async function fetchYouTubeVideoTitle(
+  url: string,
+): Promise<string> {
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 8000);
+
+  try {
+    const endpoint =
+      'https://www.youtube.com/oembed' +
+      `?url=${encodeURIComponent(url)}` +
+      '&format=json';
+
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `YouTube title request returned HTTP ${response.status}.`,
+      );
+    }
+
+    const payload =
+      (await response.json()) as YouTubeOEmbedResponse;
+
+    const title = String(
+      payload.title ?? '',
+    )
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!title) {
+      throw new Error(
+        'YouTube returned an empty video title.',
+      );
+    }
+
+    return title.slice(0, 300);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
