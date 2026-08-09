@@ -11035,13 +11035,113 @@ def resolve_youtube_content(
 def resolve_article_content(
     normalized_url: str,
 ) -> Dict[str, Any]:
-    raise HTTPException(
-        status_code=501,
-        detail=(
-            "Article content resolution "
-            "is not implemented yet."
-        ),
+    try:
+        fetched = fetch_safe_article_html(
+            normalized_url
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=502,
+            detail=str(error),
+        ) from error
+
+    if not isinstance(fetched, dict):
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The article fetcher returned "
+                "an invalid response."
+            ),
+        )
+
+    article_html = str(
+        fetched.get("html")
+        or ""
     )
+
+    if not article_html.strip():
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The article fetcher returned "
+                "an empty HTML page."
+            ),
+        )
+
+    try:
+        extracted = extract_article_content(
+            article_html
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
+
+    if not isinstance(extracted, dict):
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "The article extractor returned "
+                "an invalid response."
+            ),
+        )
+
+    title = str(
+        extracted.get("title")
+        or ""
+    ).strip()
+
+    content = str(
+        extracted.get("text")
+        or ""
+    ).strip()
+
+    if not content:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "The page does not contain enough "
+                "meaningful article text."
+            ),
+        )
+
+    return {
+        "title": title,
+        "content": content,
+        "metadata": {
+            "final_url": str(
+                fetched.get("final_url")
+                or normalized_url
+            ).strip(),
+            "redirect_count": int(
+                fetched.get("redirect_count")
+                or 0
+            ),
+            "content_type": str(
+                fetched.get("content_type")
+                or ""
+            ).strip(),
+            "byte_count": int(
+                fetched.get("byte_count")
+                or 0
+            ),
+            "extraction_method": str(
+                extracted.get(
+                    "extraction_method"
+                )
+                or ""
+            ).strip(),
+            "paragraph_count": int(
+                extracted.get(
+                    "paragraph_count"
+                )
+                or 0
+            ),
+            "character_count": len(content),
+        },
+    }
+
 
 
 @app.post(
