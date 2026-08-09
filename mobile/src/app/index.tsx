@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
-import { getApiHealth } from '../lib/api';
+import {
+  analyzeVideo,
+  getApiHealth,
+  type VideoAnalyzeResponse,
+} from '../lib/api';
+import { VideoAnalysisResults } from '../components/video-analysis-results';
 import { fetchYouTubeTranscript } from '../lib/youtube-transcript';
 import {
   Image,
@@ -61,6 +66,17 @@ export default function HomeScreen() {
   const [isResolving, setIsResolving] =
     useState(false);
 
+  const [videoResult, setVideoResult] =
+    useState<VideoAnalyzeResponse | null>(null);
+
+  const [
+    videoTranscriptMeta,
+    setVideoTranscriptMeta,
+  ] = useState<{
+    segmentCount: number;
+    characterCount: number;
+  } | null>(null);
+
   const [apiState, setApiState] = useState<
     'checking' | 'online' | 'offline'
   >('checking');
@@ -117,6 +133,8 @@ export default function HomeScreen() {
   function selectMode(nextMode: AnalysisMode) {
     setMode(nextMode);
     setMessage('');
+    setVideoResult(null);
+    setVideoTranscriptMeta(null);
   }
 
   async function validateLink() {
@@ -149,7 +167,10 @@ export default function HomeScreen() {
       return;
     }
 
+    setVideoResult(null);
+    setVideoTranscriptMeta(null);
     setIsResolving(true);
+
     setMessage(
       'Locating the YouTube transcript...',
     );
@@ -159,19 +180,48 @@ export default function HomeScreen() {
         await fetchYouTubeTranscript(value);
 
       setMessage(
-        `Transcript ready: ${transcript.segmentCount} ` +
-          `segments and ` +
-          `${transcript.characterCount.toLocaleString()} ` +
-          `characters. Backend analysis comes next.`,
+        'Transcript ready. Analyzing the video...',
+      );
+
+      const result = await analyzeVideo({
+        title: 'Shared YouTube video',
+        transcript: transcript.transcript,
+        url: value,
+        transcript_metadata: {
+          segment_count:
+            transcript.segmentCount,
+          character_count:
+            transcript.characterCount,
+          language:
+            transcript.language || undefined,
+          extraction_method:
+            'youtube-transcript-mobile',
+        },
+      });
+
+      setVideoResult(result);
+
+      setVideoTranscriptMeta({
+        segmentCount:
+          transcript.segmentCount,
+        characterCount:
+          transcript.characterCount,
+      });
+
+      setMessage(
+        'Video analysis complete.',
       );
     } catch (error) {
+      setVideoResult(null);
+      setVideoTranscriptMeta(null);
+
       const detail =
         error instanceof Error
           ? error.message
-          : 'The transcript could not be retrieved.';
+          : 'The video could not be analyzed.';
 
       setMessage(
-        `Transcript unavailable: ${detail}`,
+        `Video analysis unavailable: ${detail}`,
       );
     } finally {
       setIsResolving(false);
@@ -441,7 +491,7 @@ export default function HomeScreen() {
               >
                 <Text style={styles.analyzeButtonText}>
                   {isResolving
-                    ? 'Reading transcript...'
+                    ? 'Analyzing video...'
                     : `Analyze ${mode}`}
                 </Text>
 
@@ -454,7 +504,8 @@ export default function HomeScreen() {
                     styles.message,
                     message.startsWith('Link accepted') ||
                     message.startsWith('Article link accepted') ||
-                    message.startsWith('Transcript ready')
+                    message.startsWith('Transcript ready') ||
+                    message.startsWith('Video analysis complete')
                       ? styles.successMessage
                       : styles.errorMessage,
                   ]}
@@ -469,6 +520,15 @@ export default function HomeScreen() {
                 Sportabase backend as the extension.
               </Text>
             </View>
+
+            {videoResult && videoTranscriptMeta ? (
+              <View style={styles.resultsSection}>
+                <VideoAnalysisResults
+                  result={videoResult}
+                  transcript={videoTranscriptMeta}
+                />
+              </View>
+            ) : null}
 
             <View style={styles.featureGrid}>
               {FEATURES.map((feature) => (
@@ -852,6 +912,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     textAlign: 'center',
+  },
+  resultsSection: {
+    marginTop: 18,
   },
   featureGrid: {
     marginTop: 18,
