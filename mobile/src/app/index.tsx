@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import {
   Image,
   Pressable,
@@ -44,11 +45,39 @@ const FEATURES = [
 ];
 
 export default function HomeScreen() {
+  const params = useLocalSearchParams<{
+    shared?: string | string[];
+    mode?: string | string[];
+  }>();
+
   const [mode, setMode] =
     useState<AnalysisMode>('article');
 
   const [link, setLink] = useState('');
   const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    const sharedValue = Array.isArray(params.shared)
+      ? params.shared[0]
+      : params.shared;
+
+    const sharedMode = Array.isArray(params.mode)
+      ? params.mode[0]
+      : params.mode;
+
+    if (!sharedValue) {
+      return;
+    }
+
+    setLink(sharedValue);
+    setMessage('Shared content is ready for review.');
+
+    if (sharedMode === 'video') {
+      setMode('video');
+    } else {
+      setMode('article');
+    }
+  }, [params.mode, params.shared]);
 
   function selectMode(nextMode: AnalysisMode) {
     setMode(nextMode);
