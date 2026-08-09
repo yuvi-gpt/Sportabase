@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
 import { getApiHealth } from '../lib/api';
+import { fetchYouTubeTranscript } from '../lib/youtube-transcript';
 import {
   Image,
   Pressable,
@@ -57,6 +58,9 @@ export default function HomeScreen() {
 
   const [link, setLink] = useState('');
   const [message, setMessage] = useState('');
+  const [isResolving, setIsResolving] =
+    useState(false);
+
   const [apiState, setApiState] = useState<
     'checking' | 'online' | 'offline'
   >('checking');
@@ -115,7 +119,7 @@ export default function HomeScreen() {
     setMessage('');
   }
 
-  function validateLink() {
+  async function validateLink() {
     const value = link.trim();
 
     if (!/^https?:\/\/\S+$/i.test(value)) {
@@ -137,9 +141,41 @@ export default function HomeScreen() {
       return;
     }
 
+    if (mode === 'article') {
+      setMessage(
+        'Article link accepted. Article extraction comes next.',
+      );
+
+      return;
+    }
+
+    setIsResolving(true);
     setMessage(
-      'Link accepted. Backend analysis connection comes next.',
+      'Locating the YouTube transcript...',
     );
+
+    try {
+      const transcript =
+        await fetchYouTubeTranscript(value);
+
+      setMessage(
+        `Transcript ready: ${transcript.segmentCount} ` +
+          `segments and ` +
+          `${transcript.characterCount.toLocaleString()} ` +
+          `characters. Backend analysis comes next.`,
+      );
+    } catch (error) {
+      const detail =
+        error instanceof Error
+          ? error.message
+          : 'The transcript could not be retrieved.';
+
+      setMessage(
+        `Transcript unavailable: ${detail}`,
+      );
+    } finally {
+      setIsResolving(false);
+    }
   }
 
   const hasLink = link.trim().length > 0;
@@ -391,19 +427,22 @@ export default function HomeScreen() {
 
               <Pressable
                 accessibilityRole="button"
-                disabled={!hasLink}
+                disabled={!hasLink || isResolving}
                 onPress={validateLink}
                 style={({ pressed }) => [
                   styles.analyzeButton,
-                  !hasLink &&
+                  (!hasLink || isResolving) &&
                     styles.analyzeButtonDisabled,
                   pressed &&
                     hasLink &&
+                    !isResolving &&
                     styles.analyzeButtonPressed,
                 ]}
               >
                 <Text style={styles.analyzeButtonText}>
-                  Analyze {mode}
+                  {isResolving
+                    ? 'Reading transcript...'
+                    : `Analyze ${mode}`}
                 </Text>
 
                 <Text style={styles.arrow}>↑</Text>
@@ -413,7 +452,9 @@ export default function HomeScreen() {
                 <Text
                   style={[
                     styles.message,
-                    message.startsWith('Link accepted')
+                    message.startsWith('Link accepted') ||
+                    message.startsWith('Article link accepted') ||
+                    message.startsWith('Transcript ready')
                       ? styles.successMessage
                       : styles.errorMessage,
                   ]}
