@@ -1,4 +1,4 @@
-﻿import { useIncomingShare } from 'expo-sharing';
+import { useIncomingShare } from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
@@ -114,20 +114,28 @@ export default function HandleShareScreen() {
       return;
     }
 
+    const sharedContent = content;
+    const sharedMode = source.mode;
+
     clearSharedPayloads();
 
-    router.replace({
-      pathname: '/',
-      params: {
-        shared: content,
-        mode: source.mode,
-      },
-    });
+    setTimeout(() => {
+      router.replace({
+        pathname: '/',
+        params: {
+          shared: sharedContent,
+          mode: sharedMode,
+        },
+      });
+    }, 100);
   }
 
   function returnHome() {
-    clearSharedPayloads();
     router.replace('/');
+
+    setTimeout(() => {
+      clearSharedPayloads();
+    }, 0);
   }
 
   return (

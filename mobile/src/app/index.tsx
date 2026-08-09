@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
 import {
   Image,
@@ -77,6 +78,8 @@ export default function HomeScreen() {
     } else {
       setMode('article');
     }
+
+    Sharing.clearSharedPayloads();
   }, [params.mode, params.shared]);
 
   function selectMode(nextMode: AnalysisMode) {
@@ -166,11 +169,98 @@ export default function HomeScreen() {
               </Text>
 
               <Text style={styles.subtitle}>
-                Paste a sports article or YouTube link.
-                Sportabase will surface the summary, evidence,
-                merit and reasoning behind it.
+                Share sports content directly from the app
+                you are using. Sportabase receives the link,
+                identifies the source and prepares it for
+                analysis.
               </Text>
             </View>
+
+            <View style={styles.shareFirstCard}>
+              <View style={styles.shareCardTop}>
+                <View style={styles.shareIcon}>
+                  <Image
+                    source={require(
+                      '../../assets/images/sportabase-logo.png'
+                    )}
+                    style={styles.shareIconImage}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                <View style={styles.shareCardHeading}>
+                  <Text style={styles.shareBadge}>
+                    PRIMARY EXPERIENCE
+                  </Text>
+
+                  <Text style={styles.shareTitle}>
+                    Share it with Sportabase
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.shareDescription}>
+                Open the Share menu on an article, video or
+                social post and choose Sportabase. You will
+                review the detected content before anything
+                is analyzed.
+              </Text>
+
+              <View style={styles.shareSteps}>
+                <View style={styles.shareStep}>
+                  <Text style={styles.shareStepNumber}>1</Text>
+
+                  <Text style={styles.shareStepText}>
+                    Open any sports story
+                  </Text>
+                </View>
+
+                <Text style={styles.shareStepArrow}>?</Text>
+
+                <View style={styles.shareStep}>
+                  <Text style={styles.shareStepNumber}>2</Text>
+
+                  <Text style={styles.shareStepText}>
+                    Tap Share
+                  </Text>
+                </View>
+
+                <Text style={styles.shareStepArrow}>?</Text>
+
+                <View style={styles.shareStep}>
+                  <Text style={styles.shareStepNumber}>3</Text>
+
+                  <Text style={styles.shareStepText}>
+                    Choose Sportabase
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.sourceList}>
+                {[
+                  'Articles',
+                  'YouTube',
+                  'Reddit',
+                  'X',
+                  'Instagram',
+                  'TikTok',
+                  'Facebook',
+                ].map((source) => (
+                  <View
+                    key={source}
+                    style={styles.sourceChip}
+                  >
+                    <Text style={styles.sourceChipText}>
+                      {source}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <Text style={styles.manualLabel}>
+              OR PASTE A LINK MANUALLY
+            </Text>
 
             <View style={styles.analysisCard}>
               <View style={styles.modeSelector}>
@@ -445,6 +535,124 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 25,
     fontWeight: '500',
+  },
+  shareFirstCard: {
+    padding: 22,
+    marginBottom: 18,
+    borderRadius: 24,
+    backgroundColor: COLORS.accentSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(118, 245, 63, 0.34)',
+  },
+  shareCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  shareIcon: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: '#07100a',
+    borderWidth: 1,
+    borderColor: 'rgba(118, 245, 63, 0.58)',
+    shadowColor: COLORS.accent,
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    elevation: 4,
+  },
+  shareIconImage: {
+    width: 39,
+    height: 39,
+  },
+  shareCardHeading: {
+    flex: 1,
+  },
+  shareBadge: {
+    color: COLORS.accent,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.3,
+  },
+  shareTitle: {
+    marginTop: 5,
+    color: COLORS.text,
+    fontSize: 21,
+    lineHeight: 25,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+  },
+  shareDescription: {
+    marginTop: 18,
+    color: COLORS.muted,
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  shareSteps: {
+    marginTop: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shareStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  shareStepNumber: {
+    width: 22,
+    height: 22,
+    color: '#071004',
+    backgroundColor: COLORS.accent,
+    borderRadius: 999,
+    fontSize: 11,
+    lineHeight: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  shareStepText: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  shareStepArrow: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  sourceList: {
+    marginTop: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sourceChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sourceChipText: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  manualLabel: {
+    marginBottom: 10,
+    color: COLORS.muted,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    textAlign: 'center',
   },
   analysisCard: {
     padding: 20,
