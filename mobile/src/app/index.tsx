@@ -505,7 +505,7 @@ export default function HomeScreen() {
                     : `Analyze ${mode}`}
                 </Text>
 
-                <Text style={styles.arrow}>â†‘</Text>
+                <Text style={styles.arrow}>↑</Text>
               </Pressable>
 
               {message ? (
@@ -565,7 +565,7 @@ export default function HomeScreen() {
               <View style={styles.footerLine} />
 
               <Text style={styles.footerText}>
-                SPORTABASE Â· ARTICLE AND VIDEO INTELLIGENCE
+                SPORTABASE · ARTICLE AND VIDEO INTELLIGENCE
               </Text>
             </View>
           </View>
