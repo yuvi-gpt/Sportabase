@@ -16,7 +16,7 @@ from functools import lru_cache
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Literal, Optional
 import html as ihtml
-from urllib.parse import parse_qsl, urlencode, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 
 import requests
 import feedparser
@@ -714,6 +714,231 @@ def validate_safe_remote_url(
         )
 
     return candidate
+
+
+def fetch_safe_article_html(
+    url: str,
+    *,
+    max_bytes: int = 1_500_000,
+    timeout_seconds: float = 10.0,
+    max_redirects: int = 3,
+) -> Dict[str, Any]:
+    if max_bytes <= 0:
+        raise ValueError(
+            "The article response limit must "
+            "be greater than zero."
+        )
+
+    if timeout_seconds <= 0:
+        raise ValueError(
+            "The article timeout must be "
+            "greater than zero."
+        )
+
+    if max_redirects < 0:
+        raise ValueError(
+            "The redirect limit cannot "
+            "be negative."
+        )
+
+    current_url = validate_safe_remote_url(
+        url
+    )
+
+    redirect_count = 0
+
+    while True:
+        response = None
+
+        try:
+            response = requests.get(
+                current_url,
+                headers={
+                    "Accept": (
+                        "text/html,"
+                        "application/xhtml+xml"
+                    ),
+                    "User-Agent": (
+                        "Sportabase/0.2 "
+                        "(article resolver)"
+                    ),
+                },
+                timeout=(
+                    3.05,
+                    timeout_seconds,
+                ),
+                allow_redirects=False,
+                stream=True,
+            )
+        except requests.Timeout as error:
+            raise ValueError(
+                "The article request timed out."
+            ) from error
+        except requests.RequestException as error:
+            raise ValueError(
+                "The article could not be fetched."
+            ) from error
+
+        try:
+            status_code = int(
+                response.status_code
+            )
+
+            if status_code in {
+                301,
+                302,
+                303,
+                307,
+                308,
+            }:
+                if redirect_count >= max_redirects:
+                    raise ValueError(
+                        "The article exceeded the "
+                        "redirect limit."
+                    )
+
+                location = str(
+                    response.headers.get(
+                        "Location",
+                        "",
+                    )
+                ).strip()
+
+                if not location:
+                    raise ValueError(
+                        "The article redirect did "
+                        "not include a destination."
+                    )
+
+                redirect_url = urljoin(
+                    current_url,
+                    location,
+                )
+
+                current_url = (
+                    validate_safe_remote_url(
+                        redirect_url
+                    )
+                )
+
+                redirect_count += 1
+                continue
+
+            if (
+                status_code < 200
+                or status_code >= 300
+            ):
+                raise ValueError(
+                    "The article request returned "
+                    f"HTTP {status_code}."
+                )
+
+            content_type = str(
+                response.headers.get(
+                    "Content-Type",
+                    "",
+                )
+            ).strip().lower()
+
+            media_type = content_type.split(
+                ";",
+                1,
+            )[0].strip()
+
+            if media_type not in {
+                "text/html",
+                "application/xhtml+xml",
+            }:
+                raise ValueError(
+                    "The remote response is not "
+                    "an HTML article."
+                )
+
+            declared_length = str(
+                response.headers.get(
+                    "Content-Length",
+                    "",
+                )
+            ).strip()
+
+            if declared_length:
+                try:
+                    declared_bytes = int(
+                        declared_length
+                    )
+                except ValueError as error:
+                    raise ValueError(
+                        "The article response has "
+                        "an invalid content length."
+                    ) from error
+
+                if declared_bytes < 0:
+                    raise ValueError(
+                        "The article response has "
+                        "an invalid content length."
+                    )
+
+                if declared_bytes > max_bytes:
+                    raise ValueError(
+                        "The article response is "
+                        "too large."
+                    )
+
+            body = bytearray()
+
+            for chunk in response.iter_content(
+                chunk_size=65_536
+            ):
+                if not chunk:
+                    continue
+
+                if isinstance(
+                    chunk,
+                    str,
+                ):
+                    chunk = chunk.encode(
+                        "utf-8"
+                    )
+
+                body.extend(chunk)
+
+                if len(body) > max_bytes:
+                    raise ValueError(
+                        "The article response is "
+                        "too large."
+                    )
+
+            encoding = str(
+                getattr(
+                    response,
+                    "encoding",
+                    "",
+                )
+                or "utf-8"
+            ).strip()
+
+            try:
+                html = bytes(body).decode(
+                    encoding,
+                    errors="replace",
+                )
+            except LookupError:
+                html = bytes(body).decode(
+                    "utf-8",
+                    errors="replace",
+                )
+
+            return {
+                "html": html,
+                "final_url": current_url,
+                "redirect_count": (
+                    redirect_count
+                ),
+                "content_type": media_type,
+                "byte_count": len(body),
+            }
+        finally:
+            response.close()
 
 
 def detect_content_source(
