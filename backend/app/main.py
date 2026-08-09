@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import re
 import json
+import socket
+import ipaddress
 import time
 import threading
 import hashlib
@@ -568,6 +570,148 @@ def youtube_video_id_from_url(
         candidate,
     ):
         return ""
+
+    return candidate
+
+
+def _validate_public_ip_address(
+    address: str,
+) -> None:
+    clean_address = str(
+        address or ""
+    ).split(
+        "%",
+        1,
+    )[0].strip()
+
+    try:
+        parsed_address = ipaddress.ip_address(
+            clean_address
+        )
+    except ValueError as error:
+        raise ValueError(
+            "The remote hostname resolved "
+            "to an invalid IP address."
+        ) from error
+
+    if not parsed_address.is_global:
+        raise ValueError(
+            "Private, local, reserved, and "
+            "non-public network addresses "
+            "are not allowed."
+        )
+
+
+def validate_safe_remote_url(
+    url: str,
+) -> str:
+    candidate = str(
+        url or ""
+    ).strip()
+
+    if not candidate:
+        raise ValueError(
+            "A remote URL is required."
+        )
+
+    parsed = urlparse(candidate)
+    scheme = parsed.scheme.lower()
+
+    if scheme not in {
+        "http",
+        "https",
+    }:
+        raise ValueError(
+            "Only HTTP and HTTPS URLs "
+            "are allowed."
+        )
+
+    if (
+        parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(
+            "URLs containing credentials "
+            "are not allowed."
+        )
+
+    hostname = str(
+        parsed.hostname or ""
+    ).strip().rstrip(".").lower()
+
+    if not hostname:
+        raise ValueError(
+            "The URL must contain a hostname."
+        )
+
+    if (
+        hostname == "localhost"
+        or hostname.endswith(
+            ".localhost"
+        )
+    ):
+        raise ValueError(
+            "Localhost URLs are not allowed."
+        )
+
+    try:
+        port = parsed.port
+    except ValueError as error:
+        raise ValueError(
+            "The URL contains an invalid port."
+        ) from error
+
+    if port is None:
+        port = (
+            443
+            if scheme == "https"
+            else 80
+        )
+
+    try:
+        ipaddress.ip_address(
+            hostname.split(
+                "%",
+                1,
+            )[0]
+        )
+    except ValueError:
+        try:
+            resolved = socket.getaddrinfo(
+                hostname,
+                port,
+                type=socket.SOCK_STREAM,
+            )
+        except OSError as error:
+            raise ValueError(
+                "The remote hostname could "
+                "not be resolved."
+            ) from error
+
+        addresses = {
+            str(result[4][0]).split(
+                "%",
+                1,
+            )[0]
+            for result in resolved
+            if len(result) >= 5
+            and result[4]
+        }
+
+        if not addresses:
+            raise ValueError(
+                "The remote hostname did not "
+                "resolve to an IP address."
+            )
+
+        for address in addresses:
+            _validate_public_ip_address(
+                address
+            )
+    else:
+        _validate_public_ip_address(
+            hostname
+        )
 
     return candidate
 
