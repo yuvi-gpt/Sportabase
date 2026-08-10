@@ -8,6 +8,17 @@ export type ApiHealthResponse = {
   version: string;
 };
 
+export type ContentResolveResponse = {
+  url: string;
+  normalized_url: string;
+  source: 'article' | 'youtube';
+  mode: 'article' | 'video';
+  title: string;
+  content: string;
+  content_characters: number;
+  metadata: Record<string, unknown>;
+};
+
 export type VideoAnalyzeRequest = {
   title: string;
   transcript: string;
@@ -107,6 +118,21 @@ async function requestJson<T>(
 
 export function getApiHealth() {
   return requestJson<ApiHealthResponse>('/health');
+}
+
+export function resolveContent(
+  url: string,
+) {
+  return requestJson<ContentResolveResponse>(
+    '/resolve-content',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url }),
+    },
+  );
 }
 
 export function analyzeVideo(

@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import {
   analyzeVideo,
   getApiHealth,
+  resolveContent,
   type VideoAnalyzeResponse,
 } from '../lib/api';
 import { VideoAnalysisResults } from '../components/video-analysis-results';
@@ -163,9 +164,41 @@ export default function HomeScreen() {
     }
 
     if (mode === 'article') {
-      setMessage(
-        'Article link accepted. Article extraction comes next.',
-      );
+      setIsResolving(true);
+      setMessage('Reading the article...');
+
+      try {
+        const resolved = await resolveContent(value);
+
+        if (
+          resolved.source !== 'article' ||
+          resolved.mode !== 'article'
+        ) {
+          throw new Error(
+            'The shared link was not resolved as an article.',
+          );
+        }
+
+        const articleTitle =
+          resolved.title.trim() || 'Untitled article';
+
+        setMessage(
+          `Article ready: ${articleTitle} · ` +
+            `${resolved.content_characters.toLocaleString()} ` +
+            'characters extracted.',
+        );
+      } catch (error) {
+        const detail =
+          error instanceof Error
+            ? error.message
+            : 'The article could not be resolved.';
+
+        setMessage(
+          `Article resolution unavailable: ${detail}`,
+        );
+      } finally {
+        setIsResolving(false);
+      }
 
       return;
     }
@@ -501,7 +534,9 @@ export default function HomeScreen() {
               >
                 <Text style={styles.analyzeButtonText}>
                   {isResolving
-                    ? 'Analyzing video...'
+                    ? mode === 'article'
+                      ? 'Reading article...'
+                      : 'Analyzing video...'
                     : `Analyze ${mode}`}
                 </Text>
 
@@ -513,7 +548,8 @@ export default function HomeScreen() {
                   style={[
                     styles.message,
                     message.startsWith('Link accepted') ||
-                    message.startsWith('Article link accepted') ||
+                    message.startsWith('Reading the article') ||
+                    message.startsWith('Article ready') ||
                     message.startsWith('Transcript ready') ||
                     message.startsWith('Video analysis complete')
                       ? styles.successMessage
