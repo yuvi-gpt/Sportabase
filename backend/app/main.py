@@ -909,25 +909,64 @@ def fetch_safe_article_html(
                         "too large."
                     )
 
-            encoding = str(
-                getattr(
-                    response,
-                    "encoding",
-                    "",
-                )
-                or "utf-8"
-            ).strip()
+            charset = ""
 
-            try:
-                html = bytes(body).decode(
-                    encoding,
-                    errors="replace",
+            for parameter in content_type.split(
+                ";"
+            )[1:]:
+                name, separator, value = (
+                    parameter.partition("=")
                 )
-            except LookupError:
-                html = bytes(body).decode(
-                    "utf-8",
-                    errors="replace",
-                )
+
+                if (
+                    separator
+                    and name.strip() == "charset"
+                ):
+                    charset = (
+                        value.strip()
+                        .strip('"')
+                        .strip("'")
+                    )
+                    break
+
+            raw_body = bytes(body)
+
+            if charset:
+                try:
+                    html = raw_body.decode(
+                        charset,
+                        errors="replace",
+                    )
+                except LookupError:
+                    html = raw_body.decode(
+                        "utf-8",
+                        errors="replace",
+                    )
+            else:
+                try:
+                    html = raw_body.decode(
+                        "utf-8"
+                    )
+                except UnicodeDecodeError:
+                    fallback_encoding = str(
+                        getattr(
+                            response,
+                            "encoding",
+                            "",
+                        )
+                        or "utf-8"
+                    ).strip()
+
+                    try:
+                        html = raw_body.decode(
+                            fallback_encoding,
+                            errors="replace",
+                        )
+                    except LookupError:
+                        html = raw_body.decode(
+                            "utf-8",
+                            errors="replace",
+                        )
 
             return {
                 "html": html,
@@ -1074,23 +1113,84 @@ def extract_article_content(
         ):
             tag.decompose()
 
-    article_root = soup.find(
+    def content_root_score(
+        node: Any,
+    ):
+        paragraph_characters = sum(
+            len(
+                _normalize_extracted_text(
+                    paragraph.get_text(
+                        " ",
+                        strip=True,
+                    )
+                )
+            )
+            for paragraph in node.find_all("p")
+        )
+
+        total_characters = len(
+            _normalize_extracted_text(
+                node.get_text(
+                    " ",
+                    strip=True,
+                )
+            )
+        )
+
+        return (
+            paragraph_characters,
+            total_characters,
+        )
+
+    candidate_roots = []
+
+    for article_candidate in soup.find_all(
         "article"
-    )
+    ):
+        candidate_roots.append(
+            (
+                "article",
+                article_candidate,
+            )
+        )
 
-    main_root = soup.find(
+    for main_candidate in soup.find_all(
         "main"
-    )
+    ):
+        candidate_roots.append(
+            (
+                "main",
+                main_candidate,
+            )
+        )
 
-    if article_root is not None:
-        content_root = article_root
-        extraction_method = "article"
-    elif main_root is not None:
-        content_root = main_root
-        extraction_method = "main"
+    if candidate_roots:
+        (
+            extraction_method,
+            content_root,
+        ) = max(
+            candidate_roots,
+            key=lambda item: (
+                content_root_score(
+                    item[1]
+                )
+            ),
+        )
+
+        if content_root_score(
+            content_root
+        ) == (0, 0):
+            if soup.body is not None:
+                content_root = soup.body
+                extraction_method = "body"
+            else:
+                content_root = soup
+                extraction_method = "document"
+
     elif soup.body is not None:
         content_root = soup.body
         extraction_method = "body"
+
     else:
         content_root = soup
         extraction_method = "document"
@@ -1311,12 +1411,7 @@ def normalized_analysis_url(url: str) -> str:
         if not scheme or not hostname:
             return raw_url
 
-        if hostname.startswith("www."):
-            canonical_hostname = (
-                hostname[4:]
-            )
-        else:
-            canonical_hostname = hostname
+        canonical_hostname = hostname
 
         youtube_video_id = (
             youtube_video_id_from_url(

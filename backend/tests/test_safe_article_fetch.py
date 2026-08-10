@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import unittest
 
 from pathlib import Path
@@ -314,6 +314,61 @@ class SafeArticleFetchTests(unittest.TestCase):
                     main.fetch_safe_article_html(
                         "https://example.com/story"
                     )
+
+
+    def test_prefers_utf8_when_html_has_no_declared_charset(
+        self,
+    ):
+        expected_text = (
+            "Atl\u00e9tico "
+            "Bar\u00e7a "
+            "Ara\u00fajo "
+            "\u20ac "
+            "\u00a3"
+        )
+
+        response = FakeResponse(
+            headers={
+                "Content-Type": "text/html",
+            },
+            chunks=[
+                (
+                    "<html><body>"
+                    + expected_text
+                    + "</body></html>"
+                ).encode("utf-8"),
+            ],
+        )
+
+        response.encoding = "ISO-8859-1"
+
+        with patch.object(
+            main,
+            "validate_safe_remote_url",
+            return_value=(
+                "https://example.com/story"
+            ),
+        ):
+            with patch.object(
+                main.requests,
+                "get",
+                return_value=response,
+            ):
+                result = (
+                    main.fetch_safe_article_html(
+                        "https://example.com/story"
+                    )
+                )
+
+        self.assertIn(
+            expected_text,
+            result["html"],
+        )
+
+        self.assertNotIn(
+            "Atl\u00c3\u00a9tico",
+            result["html"],
+        )
 
 
 if __name__ == "__main__":

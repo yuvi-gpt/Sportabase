@@ -330,5 +330,65 @@ class ArticleExtractionTests(unittest.TestCase):
         )
 
 
+    def test_chooses_meaningful_article_when_first_is_empty(
+        self,
+    ):
+        html = """
+        <html>
+          <body>
+            <article>
+            </article>
+
+            <article>
+              <h1>
+                Transfer race intensifies
+              </h1>
+
+              <p>
+                Barcelona are preparing a new move
+                for the midfielder after further
+                discussions with club officials.
+              </p>
+
+              <p>
+                The negotiations are expected to
+                continue during the coming week as
+                both sides assess the situation.
+              </p>
+            </article>
+          </body>
+        </html>
+        """
+
+        result = main.extract_article_content(
+            html
+        )
+
+        self.assertEqual(
+            result["title"],
+            "Transfer race intensifies",
+        )
+
+        self.assertIn(
+            "Barcelona are preparing",
+            result["text"],
+        )
+
+        self.assertIn(
+            "negotiations are expected",
+            result["text"],
+        )
+
+        self.assertEqual(
+            result["extraction_method"],
+            "article",
+        )
+
+        self.assertEqual(
+            result["paragraph_count"],
+            2,
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
