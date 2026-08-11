@@ -706,6 +706,99 @@ class IntelligenceHistoryPersistenceTests(
             0,
         )
 
+    def test_find_analysis_snapshot_returns_match(
+        self,
+    ):
+        media_item = main.upsert_media_item(
+            url=(
+                "https://example.com/"
+                "snapshot-lookup"
+            ),
+            mode="article",
+            title="Snapshot lookup",
+            content_hash="lookup-hash",
+        )
+
+        created = main.persist_analysis_snapshot(
+            media_item_id=media_item["id"],
+            mode="article",
+            content_hash="lookup-hash",
+            response={
+                "merit_score": 63,
+            },
+            merit_score=63,
+        )
+
+        found = main.find_analysis_snapshot(
+            media_item_id=media_item["id"],
+            mode="article",
+            content_hash="lookup-hash",
+        )
+
+        self.assertIsNotNone(
+            found
+        )
+
+        self.assertEqual(
+            found["id"],
+            created["snapshot"]["id"],
+        )
+
+        self.assertEqual(
+            found["merit_score"],
+            63,
+        )
+
+    def test_find_analysis_snapshot_rejects_mismatch(
+        self,
+    ):
+        media_item = main.upsert_media_item(
+            url=(
+                "https://example.com/"
+                "snapshot-mismatch"
+            ),
+            mode="article",
+            title="Snapshot mismatch",
+            content_hash="stable-hash",
+        )
+
+        main.persist_analysis_snapshot(
+            media_item_id=media_item["id"],
+            mode="article",
+            content_hash="stable-hash",
+            response={
+                "merit_score": 57,
+            },
+            merit_score=57,
+        )
+
+        wrong_content = (
+            main.find_analysis_snapshot(
+                media_item_id=media_item["id"],
+                mode="article",
+                content_hash="different-hash",
+            )
+        )
+
+        wrong_scoring_version = (
+            main.find_analysis_snapshot(
+                media_item_id=media_item["id"],
+                mode="article",
+                content_hash="stable-hash",
+                scoring_version=(
+                    "merit-v999-test"
+                ),
+            )
+        )
+
+        self.assertIsNone(
+            wrong_content
+        )
+
+        self.assertIsNone(
+            wrong_scoring_version
+        )
+
 if __name__ == "__main__":
     unittest.main(
         verbosity=2

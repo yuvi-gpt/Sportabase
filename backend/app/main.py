@@ -1870,6 +1870,75 @@ def upsert_media_item(
 
     return dict(row)
 
+def find_analysis_snapshot(
+    *,
+    media_item_id: str,
+    mode: str,
+    content_hash: str,
+    analysis_version: Optional[str] = None,
+    scoring_version: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    normalized_mode = str(
+        mode or ""
+    ).strip().lower()
+
+    normalized_content_hash = str(
+        content_hash or ""
+    ).strip()
+
+    normalized_analysis_version = str(
+        analysis_version
+        or ANALYSIS_VERSION
+    ).strip()
+
+    normalized_scoring_version = str(
+        scoring_version
+        or SCORING_VERSION
+    ).strip()
+
+    if (
+        not normalized_media_item_id
+        or not normalized_mode
+        or not normalized_content_hash
+        or not normalized_analysis_version
+        or not normalized_scoring_version
+    ):
+        return None
+
+    conn = db_conn()
+
+    try:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM analysis_snapshots
+            WHERE media_item_id = ?
+              AND mode = ?
+              AND content_hash = ?
+              AND analysis_version = ?
+              AND scoring_version = ?
+            LIMIT 1
+            """,
+            (
+                normalized_media_item_id,
+                normalized_mode,
+                normalized_content_hash,
+                normalized_analysis_version,
+                normalized_scoring_version,
+            ),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        return None
+
+    return dict(row)
+
 def persist_analysis_snapshot(
     *,
     media_item_id: str,
