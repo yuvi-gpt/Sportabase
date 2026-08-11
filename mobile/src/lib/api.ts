@@ -2,6 +2,7 @@ const API_BASE_URL =
   'https://sportabase-api.onrender.com';
 
 const REQUEST_TIMEOUT_MS = 22000;
+const ANALYSIS_TIMEOUT_MS = 60000;
 
 export type ApiHealthResponse = {
   ok: boolean;
@@ -96,12 +97,13 @@ export class SportabaseApiError extends Error {
 async function requestJson<T>(
   path: string,
   init: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController();
 
   const timeout = setTimeout(() => {
     controller.abort();
-  }, REQUEST_TIMEOUT_MS);
+  }, timeoutMs);
 
   try {
     const response = await fetch(
@@ -179,8 +181,10 @@ export function analyzeArticle(
       },
       body: JSON.stringify(request),
     },
+    ANALYSIS_TIMEOUT_MS,
   );
 }
+
 export function analyzeVideo(
   request: VideoAnalyzeRequest,
 ) {
@@ -193,5 +197,6 @@ export function analyzeVideo(
       },
       body: JSON.stringify(request),
     },
+    ANALYSIS_TIMEOUT_MS,
   );
 }
