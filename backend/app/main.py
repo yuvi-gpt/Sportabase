@@ -12774,6 +12774,51 @@ def analyze(
         },
     )
 
+    try:
+        media_item = upsert_media_item(
+            url=req.url,
+            mode="article",
+            title=req.title,
+            content_hash=content_hash,
+        )
+
+        snapshot_result = (
+            persist_analysis_snapshot(
+                media_item_id=media_item["id"],
+                mode="article",
+                content_hash=content_hash,
+                response=response.model_dump(),
+                merit_score=response.merit_score,
+                badge=response.badge,
+                article_type=response.article_type,
+                score_components=(
+                    response.score_components
+                ),
+                score_calculation=(
+                    response.score_calculation
+                ),
+                reasons=response.reasons,
+            )
+        )
+
+        snapshot = snapshot_result[
+            "snapshot"
+        ]
+
+        record_user_history(
+            client_key=client_key,
+            media_item_id=media_item["id"],
+            snapshot_id=int(
+                snapshot["id"]
+            ),
+        )
+
+    except Exception as error:
+        print(
+            "article history persistence skipped:",
+            str(error),
+        )
+
     set_cached_analysis(
         cache_key=cache_key,
         mode="article",
