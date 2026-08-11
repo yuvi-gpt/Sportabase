@@ -353,6 +353,153 @@ ON gemini_usage(usage_day);
 
 CREATE INDEX IF NOT EXISTS idx_gemini_usage_client_day
 ON gemini_usage(client_key, usage_day);
+
+CREATE TABLE IF NOT EXISTS intelligence_sources (
+  id TEXT PRIMARY KEY,
+  source_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  source_type TEXT NOT NULL DEFAULT 'publisher',
+  canonical_domain TEXT,
+  publication_founded_at TEXT,
+  domain_registered_at TEXT,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_sources_domain
+ON intelligence_sources(canonical_domain);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_sources_type
+ON intelligence_sources(source_type);
+
+CREATE TABLE IF NOT EXISTS intelligence_reporters (
+  id TEXT PRIMARY KEY,
+  identity_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_reporters_name
+ON intelligence_reporters(display_name);
+
+CREATE TABLE IF NOT EXISTS media_items (
+  id TEXT PRIMARY KEY,
+  canonical_url TEXT NOT NULL UNIQUE,
+  mode TEXT NOT NULL,
+  source_id TEXT,
+  reporter_id TEXT,
+  title TEXT NOT NULL DEFAULT '',
+  published_at TEXT,
+  latest_content_hash TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id),
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_source
+ON media_items(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_reporter
+ON media_items(reporter_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_mode
+ON media_items(mode);
+
+CREATE TABLE IF NOT EXISTS intelligence_stories (
+  id TEXT PRIMARY KEY,
+  canonical_key TEXT NOT NULL UNIQUE,
+  canonical_title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'developing',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_stories_status
+ON intelligence_stories(status);
+
+CREATE TABLE IF NOT EXISTS story_media_links (
+  story_id TEXT NOT NULL,
+  media_item_id TEXT NOT NULL,
+  relationship_type TEXT NOT NULL DEFAULT 'reports',
+  confidence REAL NOT NULL DEFAULT 0.0,
+  linked_at TEXT NOT NULL,
+  PRIMARY KEY(story_id, media_item_id),
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_story_media_links_media
+ON story_media_links(media_item_id);
+
+CREATE TABLE IF NOT EXISTS analysis_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  media_item_id TEXT NOT NULL,
+  story_id TEXT,
+  analyzed_at TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  analysis_version TEXT NOT NULL,
+  scoring_version TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  merit_score INTEGER,
+  evidence_score INTEGER,
+  logic_score INTEGER,
+  badge TEXT NOT NULL DEFAULT '',
+  verdict TEXT NOT NULL DEFAULT '',
+  article_type TEXT NOT NULL DEFAULT '',
+  score_components_json TEXT NOT NULL DEFAULT '{}',
+  score_calculation_json TEXT NOT NULL DEFAULT '{}',
+  reasons_json TEXT NOT NULL DEFAULT '[]',
+  response_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_media_time
+ON analysis_snapshots(media_item_id, analyzed_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_story_time
+ON analysis_snapshots(story_id, analyzed_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_analysis_version
+ON analysis_snapshots(analysis_version);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_scoring_version
+ON analysis_snapshots(scoring_version);
+
+CREATE TABLE IF NOT EXISTS user_history (
+  client_key TEXT NOT NULL,
+  media_item_id TEXT NOT NULL,
+  first_analyzed_at TEXT NOT NULL,
+  last_analyzed_at TEXT NOT NULL,
+  analysis_count INTEGER NOT NULL DEFAULT 1,
+  last_snapshot_id INTEGER,
+  PRIMARY KEY(client_key, media_item_id),
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(last_snapshot_id)
+    REFERENCES analysis_snapshots(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_history_recent
+ON user_history(client_key, last_analyzed_at);
 """
 
 
@@ -367,6 +514,7 @@ def db_conn() -> sqlite3.Connection:
     conn.execute("PRAGMA busy_timeout=30000;")
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
 
     return conn
 
