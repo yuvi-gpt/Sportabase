@@ -12353,6 +12353,10 @@ def analyze(
         ),
     )
 
+    content_hash = analysis_content_hash(
+        cache_content
+    )
+
     cached = get_cached_analysis(cache_key)
 
     if cached is not None:
@@ -12360,6 +12364,35 @@ def analyze(
             client_key,
             "article",
         )
+
+        try:
+            media_item = upsert_media_item(
+                url=req.url,
+                mode="article",
+                title=req.title,
+                content_hash=content_hash,
+            )
+
+            snapshot = find_analysis_snapshot(
+                media_item_id=media_item["id"],
+                mode="article",
+                content_hash=content_hash,
+            )
+
+            record_user_history(
+                client_key=client_key,
+                media_item_id=media_item["id"],
+                snapshot_id=(
+                    int(snapshot["id"])
+                    if snapshot is not None
+                    else None
+                ),
+            )
+        except Exception as error:
+            print(
+                "article history persistence skipped:",
+                str(error),
+            )
 
         return AnalyzeResponse(
             **cached
