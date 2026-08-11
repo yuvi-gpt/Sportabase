@@ -2340,20 +2340,33 @@ def make_analysis_cache_key(
     content: str,
     variant: str = "",
 ) -> str:
+    normalized_mode = str(
+        mode or ""
+    ).strip().lower()
+
+    key_parts = [
+        ANALYSIS_VERSION,
+        normalized_mode,
+        normalized_analysis_url(url),
+        analysis_content_hash(content),
+        str(
+            variant or ""
+        ).strip().lower(),
+    ]
+
+    if normalized_mode == "article":
+        key_parts.insert(
+            1,
+            SCORING_VERSION,
+        )
+
     raw_key = "|".join(
-        [
-            ANALYSIS_VERSION,
-            str(mode or "").strip().lower(),
-            normalized_analysis_url(url),
-            analysis_content_hash(content),
-            str(variant or "").strip().lower(),
-        ]
+        key_parts
     )
 
     return hashlib.sha256(
         raw_key.encode("utf-8")
     ).hexdigest()
-
 
 def cache_ttl_for_analysis(
     mode: str,
