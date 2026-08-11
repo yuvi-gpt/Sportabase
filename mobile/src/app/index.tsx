@@ -9,6 +9,7 @@ import {
   type ArticleAnalyzeResponse,
   type VideoAnalyzeResponse,
 } from '../lib/api';
+import { ArticleAnalysisResults } from '../components/article-analysis-results';
 import { VideoAnalysisResults } from '../components/video-analysis-results';
 import {
   fetchYouTubeTranscript,
@@ -585,6 +586,14 @@ export default function HomeScreen() {
                 Sportabase backend as the extension.
               </Text>
             </View>
+
+            {articleResult ? (
+              <View style={styles.resultsSection}>
+                <ArticleAnalysisResults
+                  result={articleResult}
+                />
+              </View>
+            ) : null}
 
             {videoResult && videoTranscriptMeta ? (
               <View style={styles.resultsSection}>
