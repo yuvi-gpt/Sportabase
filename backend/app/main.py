@@ -1910,6 +1910,7 @@ def find_analysis_snapshot(
     media_item_id: str,
     mode: str,
     content_hash: str,
+    context_hash: str = "",
     analysis_version: Optional[str] = None,
     scoring_version: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
@@ -1923,6 +1924,10 @@ def find_analysis_snapshot(
 
     normalized_content_hash = str(
         content_hash or ""
+    ).strip()
+
+    normalized_context_hash = str(
+        context_hash or ""
     ).strip()
 
     normalized_analysis_version = str(
@@ -1954,6 +1959,7 @@ def find_analysis_snapshot(
             WHERE media_item_id = ?
               AND mode = ?
               AND content_hash = ?
+              AND context_hash = ?
               AND analysis_version = ?
               AND scoring_version = ?
             LIMIT 1
@@ -1962,6 +1968,7 @@ def find_analysis_snapshot(
                 normalized_media_item_id,
                 normalized_mode,
                 normalized_content_hash,
+                normalized_context_hash,
                 normalized_analysis_version,
                 normalized_scoring_version,
             ),
@@ -1980,6 +1987,7 @@ def persist_analysis_snapshot(
     mode: str,
     content_hash: str,
     response: Dict[str, Any],
+    context_hash: str = "",
     analyzed_at: Optional[str] = None,
     analysis_version: Optional[str] = None,
     scoring_version: Optional[str] = None,
@@ -2024,6 +2032,10 @@ def persist_analysis_snapshot(
         raise ValueError(
             "Snapshot content hash is required."
         )
+
+    normalized_context_hash = str(
+        context_hash or ""
+    ).strip()
 
     normalized_analysis_version = str(
         analysis_version
@@ -2088,6 +2100,7 @@ def persist_analysis_snapshot(
         normalized_media_item_id,
         normalized_mode,
         normalized_content_hash,
+        normalized_context_hash,
         normalized_analysis_version,
         normalized_scoring_version,
     )
@@ -2102,6 +2115,7 @@ def persist_analysis_snapshot(
             WHERE media_item_id = ?
               AND mode = ?
               AND content_hash = ?
+              AND context_hash = ?
               AND analysis_version = ?
               AND scoring_version = ?
             LIMIT 1
@@ -2126,6 +2140,7 @@ def persist_analysis_snapshot(
                   analysis_version,
                   scoring_version,
                   content_hash,
+                  context_hash,
                   merit_score,
                   evidence_score,
                   logic_score,
@@ -2138,7 +2153,7 @@ def persist_analysis_snapshot(
                   response_json
                 )
                 VALUES (
-                  ?, ?, ?, ?, ?, ?, ?,
+                  ?, ?, ?, ?, ?, ?, ?, ?,
                   ?, ?, ?, ?, ?, ?, ?,
                   ?, ?, ?
                 )
@@ -2151,6 +2166,7 @@ def persist_analysis_snapshot(
                     normalized_analysis_version,
                     normalized_scoring_version,
                     normalized_content_hash,
+                    normalized_context_hash,
                     merit_score,
                     evidence_score,
                     logic_score,
@@ -2197,6 +2213,7 @@ def persist_analysis_snapshot(
                 WHERE media_item_id = ?
                   AND mode = ?
                   AND content_hash = ?
+                  AND context_hash = ?
                   AND analysis_version = ?
                   AND scoring_version = ?
                 LIMIT 1
