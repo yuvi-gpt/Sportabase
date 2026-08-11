@@ -4,9 +4,16 @@ import {
   View,
 } from 'react-native';
 
+import { LinearGradient } from 'expo-linear-gradient';
+
 import type {
   ArticleAnalyzeResponse,
 } from '../lib/api';
+
+import {
+  clampScore,
+  getScoreTheme,
+} from '../theme/score-theme';
 
 type ArticleAnalysisResultsProps = {
   result: ArticleAnalyzeResponse;
@@ -22,19 +29,6 @@ const COLORS = {
   accentSoft: 'rgba(118, 245, 63, 0.12)',
 };
 
-function clampScore(value: number) {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(
-      100,
-      Math.round(value),
-    ),
-  );
-}
 
 function humanizeLabel(value: string) {
   const normalized = String(
@@ -55,6 +49,10 @@ export function ArticleAnalysisResults({
 }: ArticleAnalysisResultsProps) {
   const meritScore = clampScore(
     result.merit_score,
+  );
+
+  const scoreTheme = getScoreTheme(
+    meritScore,
   );
 
   const articleType =
@@ -90,10 +88,31 @@ export function ArticleAnalysisResults({
 
   return (
     <View style={styles.container}>
-      <View style={styles.scoreCard}>
+      <LinearGradient
+        colors={[
+          `${scoreTheme.start}30`,
+          `${scoreTheme.end}18`,
+          COLORS.surface,
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[
+          styles.scoreCard,
+          {
+            borderColor: `${scoreTheme.start}88`,
+          },
+        ]}
+      >
         <View style={styles.scoreTop}>
           <View>
-            <Text style={styles.eyebrow}>
+            <Text
+              style={[
+                styles.eyebrow,
+                {
+                  color: scoreTheme.start,
+                },
+              ]}
+            >
               MERIT SCORE
             </Text>
 
@@ -108,7 +127,14 @@ export function ArticleAnalysisResults({
             </View>
           </View>
 
-          <View style={styles.badgePill}>
+          <View
+            style={[
+              styles.badgePill,
+              {
+                borderColor: `${scoreTheme.end}66`,
+              },
+            ]}
+          >
             <Text style={styles.badgeText}>
               {badge}
             </Text>
@@ -116,7 +142,13 @@ export function ArticleAnalysisResults({
         </View>
 
         <View style={styles.scoreTrack}>
-          <View
+          <LinearGradient
+            colors={[
+              scoreTheme.start,
+              scoreTheme.end,
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
             style={[
               styles.scoreFill,
               {
@@ -130,15 +162,29 @@ export function ArticleAnalysisResults({
           {result.title}
         </Text>
 
-        <View style={styles.typePill}>
+        <View
+          style={[
+            styles.typePill,
+            {
+              borderColor: `${scoreTheme.start}66`,
+            },
+          ]}
+        >
           <Text style={styles.typeText}>
             {articleType}
           </Text>
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.detailCard}>
-        <Text style={styles.sectionLabel}>
+        <Text
+          style={[
+            styles.sectionLabel,
+            {
+              color: scoreTheme.start,
+            },
+          ]}
+        >
           TLDR
         </Text>
 
@@ -148,7 +194,15 @@ export function ArticleAnalysisResults({
               key={`${index}-${item}`}
               style={styles.listItem}
             >
-              <View style={styles.dot} />
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor:
+                      scoreTheme.start,
+                  },
+                ]}
+              />
 
               <Text style={styles.detailText}>
                 {item}
@@ -163,7 +217,14 @@ export function ArticleAnalysisResults({
       </View>
 
       <View style={styles.detailCard}>
-        <Text style={styles.sectionLabel}>
+        <Text
+          style={[
+            styles.sectionLabel,
+            {
+              color: scoreTheme.start,
+            },
+          ]}
+        >
           WHY THIS SCORE
         </Text>
 
@@ -173,7 +234,15 @@ export function ArticleAnalysisResults({
               key={`${index}-${item}`}
               style={styles.listItem}
             >
-              <View style={styles.dot} />
+              <View
+                style={[
+                  styles.dot,
+                  {
+                    backgroundColor:
+                      scoreTheme.start,
+                  },
+                ]}
+              />
 
               <Text style={styles.detailText}>
                 {item}
@@ -228,9 +297,10 @@ const styles = StyleSheet.create({
   scoreCard: {
     padding: 22,
     borderRadius: 24,
-    backgroundColor: COLORS.accentSoft,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: 'rgba(118, 245, 63, 0.36)',
+    borderColor: COLORS.border,
+    elevation: 5,
   },
   scoreTop: {
     flexDirection: 'row',
@@ -288,7 +358,6 @@ const styles = StyleSheet.create({
   scoreFill: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: COLORS.accent,
   },
   articleTitle: {
     marginTop: 18,
