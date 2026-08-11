@@ -456,6 +456,7 @@ CREATE TABLE IF NOT EXISTS analysis_snapshots (
   analysis_version TEXT NOT NULL,
   scoring_version TEXT NOT NULL DEFAULT '',
   content_hash TEXT NOT NULL,
+  context_hash TEXT NOT NULL DEFAULT '',
   merit_score INTEGER,
   evidence_score INTEGER,
   logic_score INTEGER,
@@ -571,6 +572,40 @@ def init_db():
                 f"ADD COLUMN {column_name} "
                 f"{column_definition}"
             )
+
+        snapshot_columns = {
+            str(row["name"])
+            for row in conn.execute(
+                "PRAGMA table_info(analysis_snapshots)"
+            ).fetchall()
+        }
+
+        if "context_hash" not in snapshot_columns:
+            conn.execute(
+                "ALTER TABLE analysis_snapshots "
+                "ADD COLUMN context_hash "
+                "TEXT NOT NULL DEFAULT ''"
+            )
+
+        conn.execute(
+            "DROP INDEX IF EXISTS "
+            "idx_analysis_snapshots_identity"
+        )
+
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX
+            idx_analysis_snapshots_identity
+            ON analysis_snapshots(
+              media_item_id,
+              mode,
+              content_hash,
+              context_hash,
+              analysis_version,
+              scoring_version
+            )
+            """
+        )
 
         conn.commit()
     finally:
