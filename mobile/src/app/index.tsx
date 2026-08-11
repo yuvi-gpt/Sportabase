@@ -319,6 +319,11 @@ export default function HomeScreen() {
 
   const hasLink = link.trim().length > 0;
 
+  const hasResults = Boolean(
+    articleResult ||
+      (videoResult && videoTranscriptMeta),
+  );
+
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
@@ -370,7 +375,24 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <View style={styles.hero}>
+            {articleResult ? (
+              <View style={styles.resultsSection}>
+                <ArticleAnalysisResults
+                  result={articleResult}
+                />
+              </View>
+            ) : null}
+
+            {videoResult && videoTranscriptMeta ? (
+              <View style={styles.resultsSection}>
+                <VideoAnalysisResults
+                  result={videoResult}
+                  transcript={videoTranscriptMeta}
+                />
+              </View>
+            ) : null}
+            {!hasResults ? (
+              <View style={styles.hero}>
               <Text style={styles.eyebrow}>
                 EVIDENCE-FIRST ANALYSIS
               </Text>
@@ -387,7 +409,8 @@ export default function HomeScreen() {
                 identifies the source and prepares it for
                 analysis.
               </Text>
-            </View>
+              </View>
+            ) : null}
 
             <View style={styles.shareFirstCard}>
               <View style={styles.shareCardTop}>
@@ -613,22 +636,6 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {articleResult ? (
-              <View style={styles.resultsSection}>
-                <ArticleAnalysisResults
-                  result={articleResult}
-                />
-              </View>
-            ) : null}
-
-            {videoResult && videoTranscriptMeta ? (
-              <View style={styles.resultsSection}>
-                <VideoAnalysisResults
-                  result={videoResult}
-                  transcript={videoTranscriptMeta}
-                />
-              </View>
-            ) : null}
 
             <View style={styles.featureGrid}>
               {FEATURES.map((feature) => (
