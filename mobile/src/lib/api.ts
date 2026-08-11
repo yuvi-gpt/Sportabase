@@ -19,6 +19,38 @@ export type ContentResolveResponse = {
   metadata: Record<string, unknown>;
 };
 
+export type ArticleAnalyzeRequest = {
+  title: string;
+  url: string;
+  text: string;
+  max_bullets?: number;
+};
+
+export type ArticleAnalyzeResponse = {
+  url: string;
+  title: string;
+  tldr: string[];
+  merit_score: number;
+  badge: string;
+
+  article_type: string;
+  article_type_label: string;
+  article_subtype: string;
+  type_confidence: number;
+  type_signals: string[];
+
+  reasons: string[];
+
+  score_components: Record<string, number>;
+  score_calculation: Record<string, unknown>;
+
+  language: Record<string, unknown>;
+  localized_article_type: string;
+  localized_reasons: string[];
+  ui_labels: Record<string, string>;
+
+  debug: Record<string, unknown>;
+};
 export type VideoAnalyzeRequest = {
   title: string;
   transcript: string;
@@ -135,6 +167,20 @@ export function resolveContent(
   );
 }
 
+export function analyzeArticle(
+  request: ArticleAnalyzeRequest,
+) {
+  return requestJson<ArticleAnalyzeResponse>(
+    '/analyze',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    },
+  );
+}
 export function analyzeVideo(
   request: VideoAnalyzeRequest,
 ) {
