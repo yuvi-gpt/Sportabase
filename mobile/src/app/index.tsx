@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
 import {
+  analyzeArticle,
   analyzeVideo,
   getApiHealth,
   resolveContent,
+  type ArticleAnalyzeResponse,
   type VideoAnalyzeResponse,
 } from '../lib/api';
 import { VideoAnalysisResults } from '../components/video-analysis-results';
@@ -69,6 +71,9 @@ export default function HomeScreen() {
   const [message, setMessage] = useState('');
   const [isResolving, setIsResolving] =
     useState(false);
+
+  const [articleResult, setArticleResult] =
+    useState<ArticleAnalyzeResponse | null>(null);
 
   const [videoResult, setVideoResult] =
     useState<VideoAnalyzeResponse | null>(null);
@@ -137,6 +142,7 @@ export default function HomeScreen() {
   function selectMode(nextMode: AnalysisMode) {
     setMode(nextMode);
     setMessage('');
+    setArticleResult(null);
     setVideoResult(null);
     setVideoTranscriptMeta(null);
   }
@@ -164,6 +170,7 @@ export default function HomeScreen() {
     }
 
     if (mode === 'article') {
+      setArticleResult(null);
       setIsResolving(true);
       setMessage('Reading the article...');
 
@@ -185,16 +192,28 @@ export default function HomeScreen() {
         setMessage(
           `Article ready: ${articleTitle} · ` +
             `${resolved.content_characters.toLocaleString()} ` +
-            'characters extracted.',
+            'characters extracted. Analyzing...',
         );
+
+        const result = await analyzeArticle({
+          title: articleTitle,
+          url: resolved.normalized_url || value,
+          text: resolved.content,
+          max_bullets: 3,
+        });
+
+        setArticleResult(result);
+        setMessage('Article analysis complete.');
       } catch (error) {
+        setArticleResult(null);
+
         const detail =
           error instanceof Error
             ? error.message
-            : 'The article could not be resolved.';
+            : 'The article could not be analyzed.';
 
         setMessage(
-          `Article resolution unavailable: ${detail}`,
+          `Article analysis unavailable: ${detail}`,
         );
       } finally {
         setIsResolving(false);
