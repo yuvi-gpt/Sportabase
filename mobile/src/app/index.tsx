@@ -9,6 +9,10 @@ import {
   type ArticleAnalyzeResponse,
   type VideoAnalyzeResponse,
 } from '../lib/api';
+
+import {
+  getArticleGradientFixture,
+} from '../lib/article-gradient-fixtures';
 import { ArticleAnalysisResults } from '../components/article-analysis-results';
 import { VideoAnalysisResults } from '../components/video-analysis-results';
 import {
@@ -196,9 +200,31 @@ export default function HomeScreen() {
             'characters extracted. Analyzing...',
         );
 
+        const analysisUrl =
+          resolved.normalized_url || value;
+
+        const fixtureResult =
+          getArticleGradientFixture({
+            url: analysisUrl,
+            title: articleTitle,
+            text: resolved.content,
+          });
+
+        if (fixtureResult) {
+          setArticleResult(fixtureResult);
+
+          setMessage(
+            `Gradient test loaded locally: ` +
+              `${fixtureResult.merit_score}/100. ` +
+              'Gemini bypassed.',
+          );
+
+          return;
+        }
+
         const result = await analyzeArticle({
           title: articleTitle,
-          url: resolved.normalized_url || value,
+          url: analysisUrl,
           text: resolved.content,
           max_bullets: 3,
         });
