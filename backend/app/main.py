@@ -447,6 +447,43 @@ CREATE TABLE IF NOT EXISTS story_media_links (
 CREATE INDEX IF NOT EXISTS idx_story_media_links_media
 ON story_media_links(media_item_id);
 
+CREATE TABLE IF NOT EXISTS source_observations (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  media_item_id TEXT,
+  story_id TEXT,
+  subject_key TEXT NOT NULL,
+  observation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unresolved',
+  claim_summary TEXT NOT NULL DEFAULT '',
+  provenance_url TEXT NOT NULL DEFAULT '',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_source_time
+ON source_observations(source_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_subject_time
+ON source_observations(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_media
+ON source_observations(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_story
+ON source_observations(story_id);
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
