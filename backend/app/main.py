@@ -4135,6 +4135,21 @@ def load_evidence_context_for_media_item(
     )
 
 
+def evidence_context_hash_for_media_item(
+    *,
+    media_item_id: str,
+) -> str:
+    context = (
+        load_evidence_context_for_media_item(
+            media_item_id=media_item_id,
+        )
+    )
+
+    return evidence_context_hash(
+        context
+    )
+
+
 def load_evidence_context_for_story(
     *,
     story_id: str,
@@ -15008,10 +15023,17 @@ def analyze(
                 content_hash=content_hash,
             )
 
+            media_context_hash = (
+                evidence_context_hash_for_media_item(
+                    media_item_id=media_item["id"],
+                )
+            )
+
             snapshot = find_analysis_snapshot(
                 media_item_id=media_item["id"],
                 mode="article",
                 content_hash=content_hash,
+                context_hash=media_context_hash,
             )
 
             record_user_history(
@@ -15417,11 +15439,18 @@ def analyze(
             content_hash=content_hash,
         )
 
+        media_context_hash = (
+            evidence_context_hash_for_media_item(
+                media_item_id=media_item["id"],
+            )
+        )
+
         snapshot_result = (
             persist_analysis_snapshot(
                 media_item_id=media_item["id"],
                 mode="article",
                 content_hash=content_hash,
+                context_hash=media_context_hash,
                 response=response.model_dump(),
                 merit_score=response.merit_score,
                 badge=response.badge,

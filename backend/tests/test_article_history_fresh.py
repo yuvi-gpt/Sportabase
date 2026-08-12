@@ -169,6 +169,9 @@ class ArticleHistoryFreshTests(
                 "app.main.upsert_media_item",
                 side_effect=upsert_side_effect,
              ) as mock_upsert, patch(
+                "app.main.evidence_context_hash_for_media_item",
+                return_value="media-context-hash",
+             ) as mock_context_hash, patch(
                 "app.main.persist_analysis_snapshot",
                 side_effect=snapshot_side_effect,
              ) as mock_snapshot, patch(
@@ -228,6 +231,17 @@ class ArticleHistoryFreshTests(
 
         self.assertEqual(
             snapshot_kwargs[
+                "context_hash"
+            ],
+            "media-context-hash",
+        )
+
+        mock_context_hash.assert_called_once_with(
+            media_item_id="fresh-media",
+        )
+
+        self.assertEqual(
+            snapshot_kwargs[
                 "merit_score"
             ],
             84,
@@ -277,6 +291,9 @@ class ArticleHistoryFreshTests(
                 return_value={
                     "id": "reused-media",
                 },
+             ), patch(
+                "app.main.evidence_context_hash_for_media_item",
+                return_value="media-context-hash",
              ), patch(
                 "app.main.persist_analysis_snapshot",
                 return_value={

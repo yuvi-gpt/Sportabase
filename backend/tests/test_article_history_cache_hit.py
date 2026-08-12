@@ -103,6 +103,9 @@ class ArticleHistoryCacheHitTests(
                 "id": "media-cache-test",
             },
         ) as mock_upsert, patch(
+            "app.main.evidence_context_hash_for_media_item",
+            return_value="media-context-hash",
+        ) as mock_context_hash, patch(
             "app.main.find_analysis_snapshot",
             return_value={
                 "id": 42,
@@ -134,10 +137,15 @@ class ArticleHistoryCacheHitTests(
             content_hash=expected_hash,
         )
 
+        mock_context_hash.assert_called_once_with(
+            media_item_id="media-cache-test",
+        )
+
         mock_find.assert_called_once_with(
             media_item_id="media-cache-test",
             mode="article",
             content_hash=expected_hash,
+            context_hash="media-context-hash",
         )
 
         mock_history.assert_called_once_with(
@@ -169,6 +177,9 @@ class ArticleHistoryCacheHitTests(
             return_value={
                 "id": "media-no-snapshot",
             },
+        ), patch(
+            "app.main.evidence_context_hash_for_media_item",
+            return_value="media-context-hash",
         ), patch(
             "app.main.find_analysis_snapshot",
             return_value=None,
