@@ -612,6 +612,82 @@ ON evidence_links(source_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_links_reporter
 ON evidence_links(reporter_id);
 
+CREATE TABLE IF NOT EXISTS observation_dependencies (
+  id TEXT PRIMARY KEY,
+  downstream_source_observation_id TEXT,
+  downstream_reporter_observation_id TEXT,
+  upstream_source_observation_id TEXT,
+  upstream_reporter_observation_id TEXT,
+  upstream_source_id TEXT,
+  upstream_reporter_id TEXT,
+  relationship_type TEXT NOT NULL,
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (downstream_source_observation_id IS NOT NULL)
+    + (downstream_reporter_observation_id IS NOT NULL)
+    = 1
+  ),
+  CHECK (
+    (upstream_source_observation_id IS NOT NULL)
+    + (upstream_reporter_observation_id IS NOT NULL)
+    + (upstream_source_id IS NOT NULL)
+    + (upstream_reporter_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(downstream_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(downstream_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(upstream_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(upstream_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(upstream_source_id)
+    REFERENCES intelligence_sources(id),
+  FOREIGN KEY(upstream_reporter_id)
+    REFERENCES intelligence_reporters(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_downstream_source
+ON observation_dependencies(
+  downstream_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_downstream_reporter
+ON observation_dependencies(
+  downstream_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_source_observation
+ON observation_dependencies(
+  upstream_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_reporter_observation
+ON observation_dependencies(
+  upstream_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_source
+ON observation_dependencies(
+  upstream_source_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_reporter
+ON observation_dependencies(
+  upstream_reporter_id
+);
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
