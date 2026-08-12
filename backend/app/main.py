@@ -3046,6 +3046,233 @@ def record_evidence(
     }
 
 
+def record_evidence_link(
+    *,
+    evidence_id: str,
+    relationship_type: str = "supports",
+    confidence: Optional[float] = None,
+    media_item_id: Optional[str] = None,
+    story_id: Optional[str] = None,
+    source_id: Optional[str] = None,
+    reporter_id: Optional[str] = None,
+    linked_at: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    normalized_evidence_id = str(
+        evidence_id or ""
+    ).strip()
+
+    normalized_relationship_type = str(
+        relationship_type or ""
+    ).strip().lower()
+
+    if not normalized_evidence_id:
+        raise ValueError(
+            "Evidence link evidence ID is required."
+        )
+
+    if not normalized_relationship_type:
+        raise ValueError(
+            "Evidence link relationship type is required."
+        )
+
+    normalized_media_item_id = (
+        str(
+            media_item_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_story_id = (
+        str(
+            story_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_source_id = (
+        str(
+            source_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_reporter_id = (
+        str(
+            reporter_id or ""
+        ).strip()
+        or None
+    )
+
+    targets = {
+        "media_item": normalized_media_item_id,
+        "story": normalized_story_id,
+        "source": normalized_source_id,
+        "reporter": normalized_reporter_id,
+    }
+
+    active_targets = [
+        (
+            target_type,
+            target_id,
+        )
+        for (
+            target_type,
+            target_id,
+        ) in targets.items()
+        if target_id is not None
+    ]
+
+    if len(active_targets) != 1:
+        raise ValueError(
+            "Evidence link requires exactly one target."
+        )
+
+    (
+        target_type,
+        target_id,
+    ) = active_targets[0]
+
+    normalized_confidence = None
+
+    if confidence is not None:
+        try:
+            normalized_confidence = float(
+                confidence
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Evidence link confidence "
+                "must be numeric."
+            ) from exc
+
+        if not (
+            0.0
+            <= normalized_confidence
+            <= 1.0
+        ):
+            raise ValueError(
+                "Evidence link confidence "
+                "must be between 0 and 1."
+            )
+
+    normalized_linked_at = (
+        str(
+            linked_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    identity_payload = json.dumps(
+        {
+            "evidence_id": (
+                normalized_evidence_id
+            ),
+            "target_type": (
+                target_type
+            ),
+            "target_id": (
+                target_id
+            ),
+            "relationship_type": (
+                normalized_relationship_type
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+    link_id = hashlib.sha256(
+        (
+            "evidence-link|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO evidence_links (
+              id,
+              evidence_id,
+              media_item_id,
+              story_id,
+              source_id,
+              reporter_id,
+              relationship_type,
+              confidence,
+              linked_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?
+            )
+            ON CONFLICT(id)
+            DO NOTHING
+            """,
+            (
+                link_id,
+                normalized_evidence_id,
+                normalized_media_item_id,
+                normalized_story_id,
+                normalized_source_id,
+                normalized_reporter_id,
+                normalized_relationship_type,
+                normalized_confidence,
+                normalized_linked_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE id = ?
+            """,
+            (
+                link_id,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Evidence link persistence failed."
+        )
+
+    return {
+        "link": dict(row),
+        "created": created,
+    }
+
+
 def media_item_id_for_url(
     url: str,
 ) -> str:
