@@ -3548,7 +3548,7 @@ def record_evidence_link(
     }
 
 
-EVIDENCE_CONTEXT_VERSION = "evidence-context-v1"
+EVIDENCE_CONTEXT_VERSION = "evidence-context-v2"
 
 
 def _evidence_context_confidence(
@@ -3630,6 +3630,8 @@ def build_evidence_context(
     subject_key: str = "",
     media_item_id: str = "",
     story_id: str = "",
+    source_id: str = "",
+    reporter_id: str = "",
     source_observations: Optional[list] = None,
     reporter_observations: Optional[list] = None,
     evidence_records: Optional[list] = None,
@@ -3645,6 +3647,14 @@ def build_evidence_context(
 
     normalized_story_id = str(
         story_id or ""
+    ).strip()
+
+    normalized_source_id = str(
+        source_id or ""
+    ).strip()
+
+    normalized_reporter_id = str(
+        reporter_id or ""
     ).strip()
 
     normalized_source_observations = []
@@ -3847,6 +3857,8 @@ def build_evidence_context(
             "subject_key": normalized_subject_key,
             "media_item_id": normalized_media_item_id,
             "story_id": normalized_story_id,
+            "source_id": normalized_source_id,
+            "reporter_id": normalized_reporter_id,
         },
         "source_observations": (
             _deduplicate_evidence_context_entries(

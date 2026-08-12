@@ -212,6 +212,8 @@ class EvidenceContextTests(
             ),
             media_item_id="media-1",
             story_id="story-1",
+            source_id="source-1",
+            reporter_id="reporter-1",
         )
 
         second = main.build_evidence_context(
@@ -220,6 +222,8 @@ class EvidenceContextTests(
             ),
             media_item_id="media-1",
             story_id="story-1",
+            source_id="source-1",
+            reporter_id="reporter-1",
         )
 
         self.assertEqual(
@@ -235,10 +239,54 @@ class EvidenceContextTests(
                 ),
                 "media_item_id": "media-1",
                 "story_id": "story-1",
+                "source_id": "source-1",
+                "reporter_id": "reporter-1",
             },
         )
 
         self.assertEqual(
+            main.evidence_context_hash(first),
+            main.evidence_context_hash(second),
+        )
+
+    def test_source_scope_changes_hash(
+        self,
+    ):
+        first = main.build_evidence_context(
+            source_id="source-1",
+        )
+
+        second = main.build_evidence_context(
+            source_id="source-2",
+        )
+
+        self.assertNotEqual(
+            first,
+            second,
+        )
+
+        self.assertNotEqual(
+            main.evidence_context_hash(first),
+            main.evidence_context_hash(second),
+        )
+
+    def test_reporter_scope_changes_hash(
+        self,
+    ):
+        first = main.build_evidence_context(
+            reporter_id="reporter-1",
+        )
+
+        second = main.build_evidence_context(
+            reporter_id="reporter-2",
+        )
+
+        self.assertNotEqual(
+            first,
+            second,
+        )
+
+        self.assertNotEqual(
             main.evidence_context_hash(first),
             main.evidence_context_hash(second),
         )
