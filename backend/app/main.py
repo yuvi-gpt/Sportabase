@@ -3624,6 +3624,85 @@ def evidence_context_hash(
     ).hexdigest()
 
 
+def load_evidence_context_for_subject(
+    *,
+    subject_key: str,
+) -> Dict[str, Any]:
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    if not normalized_subject_key:
+        raise ValueError(
+            "Evidence context subject key is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE subject_key = ?
+            ORDER BY id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE subject_key = ?
+            ORDER BY id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT *
+            FROM evidence_records
+            WHERE subject_key = ?
+            ORDER BY id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT evidence_links.*
+            FROM evidence_links
+            INNER JOIN evidence_records
+              ON evidence_records.id =
+                 evidence_links.evidence_id
+            WHERE evidence_records.subject_key = ?
+            ORDER BY evidence_links.id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        subject_key=normalized_subject_key,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
+
+
 def media_item_id_for_url(
     url: str,
 ) -> str:
