@@ -2115,6 +2115,30 @@ def upsert_intelligence_source(
     return dict(row)
 
 
+def story_id_for_canonical_key(
+    canonical_key: str,
+) -> str:
+    normalized_canonical_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            canonical_key or ""
+        ).strip(),
+    ).lower()
+
+    if not normalized_canonical_key:
+        raise ValueError(
+            "Story canonical key is required."
+        )
+
+    return hashlib.sha256(
+        (
+            "story|"
+            + normalized_canonical_key
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def reporter_id_for_identity_key(
     identity_key: str,
 ) -> str:
