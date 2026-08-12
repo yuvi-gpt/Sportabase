@@ -3990,6 +3990,72 @@ def load_evidence_context_for_source(
     )
 
 
+def load_evidence_context_for_reporter(
+    *,
+    reporter_id: str,
+) -> Dict[str, Any]:
+    normalized_reporter_id = str(
+        reporter_id or ""
+    ).strip()
+
+    if not normalized_reporter_id:
+        raise ValueError(
+            "Evidence context reporter ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE reporter_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_reporter_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE reporter_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_reporter_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.reporter_id = ?
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_reporter_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        reporter_id=normalized_reporter_id,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
+
+
 def load_evidence_context_for_media_item(
     *,
     media_item_id: str,
