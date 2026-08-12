@@ -3273,6 +3273,337 @@ def record_evidence_link(
     }
 
 
+EVIDENCE_CONTEXT_VERSION = "evidence-context-v1"
+
+
+def _evidence_context_confidence(
+    value: Any,
+    *,
+    field_name: str,
+) -> Optional[float]:
+    if value is None:
+        return None
+
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{field_name} must be numeric."
+        ) from exc
+
+    if not 0.0 <= normalized <= 1.0:
+        raise ValueError(
+            f"{field_name} must be between 0 and 1."
+        )
+
+    return normalized
+
+
+def _deduplicate_evidence_context_entries(
+    entries: list,
+    *,
+    collection_name: str,
+) -> list:
+    by_id: Dict[str, Dict[str, Any]] = {}
+
+    for entry in entries:
+        entry_id = str(
+            entry.get("id") or ""
+        ).strip()
+
+        if not entry_id:
+            raise ValueError(
+                f"{collection_name} entry ID is required."
+            )
+
+        existing = by_id.get(entry_id)
+
+        if (
+            existing is not None
+            and existing != entry
+        ):
+            raise ValueError(
+                f"{collection_name} contains conflicting "
+                f"rows for ID {entry_id}."
+            )
+
+        by_id[entry_id] = entry
+
+    return [
+        by_id[entry_id]
+        for entry_id in sorted(by_id)
+    ]
+
+
+def _evidence_context_row(
+    row: Any,
+    *,
+    collection_name: str,
+) -> Dict[str, Any]:
+    try:
+        normalized = dict(row)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{collection_name} rows must be mapping-like."
+        ) from exc
+
+    return normalized
+
+
+def build_evidence_context(
+    *,
+    source_observations: Optional[list] = None,
+    reporter_observations: Optional[list] = None,
+    evidence_records: Optional[list] = None,
+    evidence_links: Optional[list] = None,
+) -> Dict[str, Any]:
+    normalized_source_observations = []
+
+    for raw_row in source_observations or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="source_observations",
+        )
+
+        normalized_source_observations.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "source_id": str(
+                    row.get("source_id") or ""
+                ).strip(),
+                "media_item_id": str(
+                    row.get("media_item_id") or ""
+                ).strip(),
+                "story_id": str(
+                    row.get("story_id") or ""
+                ).strip(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "observation_type": str(
+                    row.get("observation_type") or ""
+                ).strip().lower(),
+                "status": str(
+                    row.get("status") or ""
+                ).strip().lower(),
+                "provenance_url": str(
+                    row.get("provenance_url") or ""
+                ).strip(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Source observation confidence"
+                        ),
+                    )
+                ),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    normalized_reporter_observations = []
+
+    for raw_row in reporter_observations or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="reporter_observations",
+        )
+
+        normalized_reporter_observations.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "reporter_id": str(
+                    row.get("reporter_id") or ""
+                ).strip(),
+                "source_id": str(
+                    row.get("source_id") or ""
+                ).strip(),
+                "media_item_id": str(
+                    row.get("media_item_id") or ""
+                ).strip(),
+                "story_id": str(
+                    row.get("story_id") or ""
+                ).strip(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "observation_type": str(
+                    row.get("observation_type") or ""
+                ).strip().lower(),
+                "status": str(
+                    row.get("status") or ""
+                ).strip().lower(),
+                "provenance_url": str(
+                    row.get("provenance_url") or ""
+                ).strip(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Reporter observation confidence"
+                        ),
+                    )
+                ),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    normalized_evidence_records = []
+
+    for raw_row in evidence_records or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="evidence_records",
+        )
+
+        normalized_evidence_records.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "evidence_key": str(
+                    row.get("evidence_key") or ""
+                ).strip(),
+                "evidence_type": str(
+                    row.get("evidence_type") or ""
+                ).strip().lower(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "canonical_url": str(
+                    row.get("canonical_url") or ""
+                ).strip(),
+                "reference_key": str(
+                    row.get("reference_key") or ""
+                ).strip(),
+                "verification_status": str(
+                    row.get("verification_status") or ""
+                ).strip().lower(),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    normalized_evidence_links = []
+
+    for raw_row in evidence_links or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="evidence_links",
+        )
+
+        targets = [
+            (
+                target_type,
+                str(
+                    row.get(column_name) or ""
+                ).strip(),
+            )
+            for target_type, column_name in (
+                ("media_item", "media_item_id"),
+                ("story", "story_id"),
+                ("source", "source_id"),
+                ("reporter", "reporter_id"),
+            )
+            if str(
+                row.get(column_name) or ""
+            ).strip()
+        ]
+
+        if len(targets) != 1:
+            raise ValueError(
+                "Evidence context link requires exactly "
+                "one target."
+            )
+
+        target_type, target_id = targets[0]
+
+        normalized_evidence_links.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "evidence_id": str(
+                    row.get("evidence_id") or ""
+                ).strip(),
+                "target_type": target_type,
+                "target_id": target_id,
+                "relationship_type": str(
+                    row.get("relationship_type") or ""
+                ).strip().lower(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Evidence link confidence"
+                        ),
+                    )
+                ),
+            }
+        )
+
+    return {
+        "version": EVIDENCE_CONTEXT_VERSION,
+        "source_observations": (
+            _deduplicate_evidence_context_entries(
+                normalized_source_observations,
+                collection_name="source_observations",
+            )
+        ),
+        "reporter_observations": (
+            _deduplicate_evidence_context_entries(
+                normalized_reporter_observations,
+                collection_name="reporter_observations",
+            )
+        ),
+        "evidence_records": (
+            _deduplicate_evidence_context_entries(
+                normalized_evidence_records,
+                collection_name="evidence_records",
+            )
+        ),
+        "evidence_links": (
+            _deduplicate_evidence_context_entries(
+                normalized_evidence_links,
+                collection_name="evidence_links",
+            )
+        ),
+    }
+
+
+def evidence_context_hash(
+    context: Dict[str, Any],
+) -> str:
+    if not isinstance(context, dict):
+        raise ValueError(
+            "Evidence context must be a dictionary."
+        )
+
+    canonical_json = json.dumps(
+        context,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+    return hashlib.sha256(
+        (
+            "evidence-context|"
+            + canonical_json
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def media_item_id_for_url(
     url: str,
 ) -> str:
