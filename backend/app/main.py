@@ -3923,6 +3923,10 @@ EVIDENCE_FEATURE_VERSION = (
     "evidence-features-v1"
 )
 
+EVIDENCE_ACTOR_FEATURE_VERSION = (
+    "evidence-actors-v1"
+)
+
 EVIDENCE_SIGNAL_VOCABULARY = {
     "story_relationship_types": (
         "confirms",
@@ -4603,6 +4607,135 @@ def build_evidence_signal_features(
                 "unknown"
             ]
         ),
+    }
+
+
+def build_evidence_actor_features(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence actor features require "
+            "a dictionary."
+        )
+
+    observation_source_ids = set()
+    reporter_ids = set()
+    subject_keys = set()
+
+    for row in bundle.get(
+        "source_observations",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        source_id = str(
+            row.get("source_id") or ""
+        ).strip()
+
+        subject_key = str(
+            row.get("subject_key") or ""
+        ).strip()
+
+        if source_id:
+            observation_source_ids.add(
+                source_id
+            )
+
+        if subject_key:
+            subject_keys.add(
+                subject_key
+            )
+
+    for row in bundle.get(
+        "reporter_observations",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        source_id = str(
+            row.get("source_id") or ""
+        ).strip()
+
+        reporter_id = str(
+            row.get("reporter_id") or ""
+        ).strip()
+
+        subject_key = str(
+            row.get("subject_key") or ""
+        ).strip()
+
+        if source_id:
+            observation_source_ids.add(
+                source_id
+            )
+
+        if reporter_id:
+            reporter_ids.add(
+                reporter_id
+            )
+
+        if subject_key:
+            subject_keys.add(
+                subject_key
+            )
+
+    for row in bundle.get(
+        "evidence_records",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        subject_key = str(
+            row.get("subject_key") or ""
+        ).strip()
+
+        if subject_key:
+            subject_keys.add(
+                subject_key
+            )
+
+    normalized_sources = sorted(
+        observation_source_ids
+    )
+
+    normalized_reporters = sorted(
+        reporter_ids
+    )
+
+    normalized_subjects = sorted(
+        subject_keys
+    )
+
+    return {
+        "version": (
+            EVIDENCE_ACTOR_FEATURE_VERSION
+        ),
+        "distinct": {
+            "observation_source_ids": (
+                normalized_sources
+            ),
+            "reporter_ids": (
+                normalized_reporters
+            ),
+            "subject_keys": (
+                normalized_subjects
+            ),
+        },
+        "counts": {
+            "observation_sources": len(
+                normalized_sources
+            ),
+            "reporters": len(
+                normalized_reporters
+            ),
+            "subjects": len(
+                normalized_subjects
+            ),
+        },
     }
 
 
