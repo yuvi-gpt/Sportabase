@@ -4448,6 +4448,15 @@ EVIDENCE_ACTOR_FEATURE_VERSION = (
     "evidence-actors-v1"
 )
 
+OBSERVATION_DEPENDENCY_POLICY_VERSION = (
+    "dependency-relationships-v1"
+)
+
+OBSERVATION_DEPENDENCY_RELATIONSHIP_VOCABULARY = (
+    "attributed_to",
+    "derived_from",
+)
+
 EVIDENCE_SIGNAL_VOCABULARY = {
     "story_relationship_types": (
         "confirms",
@@ -4476,6 +4485,54 @@ EVIDENCE_SIGNAL_VOCABULARY = {
         "supports",
     ),
 }
+
+
+def inspect_observation_dependency_vocabulary(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Observation dependency vocabulary "
+            "inspection requires a dictionary."
+        )
+
+    observed = set()
+
+    for row in bundle.get(
+        "observation_dependencies",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        relationship_type = str(
+            row.get(
+                "relationship_type",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if relationship_type:
+            observed.add(
+                relationship_type
+            )
+
+    allowed = set(
+        OBSERVATION_DEPENDENCY_RELATIONSHIP_VOCABULARY
+    )
+
+    return {
+        "version": (
+            OBSERVATION_DEPENDENCY_POLICY_VERSION
+        ),
+        "recognized": sorted(
+            observed & allowed
+        ),
+        "unknown": sorted(
+            observed - allowed
+        ),
+    }
 
 
 def _evidence_analysis_text(
