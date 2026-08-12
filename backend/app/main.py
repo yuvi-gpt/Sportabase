@@ -3915,6 +3915,39 @@ EVIDENCE_ANALYSIS_BUNDLE_VERSION = (
     "evidence-analysis-v1"
 )
 
+EVIDENCE_SIGNAL_POLICY_VERSION = (
+    "evidence-signals-v1"
+)
+
+EVIDENCE_SIGNAL_VOCABULARY = {
+    "story_relationship_types": (
+        "confirms",
+        "reports",
+    ),
+    "observation_types": (
+        "report",
+    ),
+    "observation_statuses": (
+        "confirmed",
+        "unresolved",
+    ),
+    "evidence_types": (
+        "independent_report",
+        "official_statement",
+        "primary_document",
+        "quote",
+    ),
+    "verification_statuses": (
+        "unverified",
+        "verified",
+    ),
+    "evidence_relationship_types": (
+        "contradicts",
+        "published_by",
+        "supports",
+    ),
+}
+
 
 def _evidence_analysis_text(
     value: Any,
@@ -4266,6 +4299,169 @@ def build_evidence_analysis_bundle(
                 ),
             )
         ),
+    }
+
+
+def inspect_evidence_signal_vocabulary(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence signal vocabulary "
+            "inspection requires a dictionary."
+        )
+
+    observed = {
+        "story_relationship_types": set(),
+        "observation_types": set(),
+        "observation_statuses": set(),
+        "evidence_types": set(),
+        "verification_statuses": set(),
+        "evidence_relationship_types": set(),
+    }
+
+    for row in bundle.get(
+        "story_links",
+        [],
+    ):
+        if isinstance(row, dict):
+            value = str(
+                row.get(
+                    "relationship_type",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            if value:
+                observed[
+                    "story_relationship_types"
+                ].add(value)
+
+    for collection_name in (
+        "source_observations",
+        "reporter_observations",
+    ):
+        for row in bundle.get(
+            collection_name,
+            [],
+        ):
+            if not isinstance(row, dict):
+                continue
+
+            observation_type = str(
+                row.get(
+                    "observation_type",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            status = str(
+                row.get(
+                    "status",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            if observation_type:
+                observed[
+                    "observation_types"
+                ].add(
+                    observation_type
+                )
+
+            if status:
+                observed[
+                    "observation_statuses"
+                ].add(status)
+
+    for row in bundle.get(
+        "evidence_records",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        evidence_type = str(
+            row.get(
+                "evidence_type",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        verification_status = str(
+            row.get(
+                "verification_status",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if evidence_type:
+            observed[
+                "evidence_types"
+            ].add(evidence_type)
+
+        if verification_status:
+            observed[
+                "verification_statuses"
+            ].add(
+                verification_status
+            )
+
+    for row in bundle.get(
+        "evidence_links",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        relationship_type = str(
+            row.get(
+                "relationship_type",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if relationship_type:
+            observed[
+                "evidence_relationship_types"
+            ].add(
+                relationship_type
+            )
+
+    recognized = {}
+    unknown = {}
+
+    for category in sorted(
+        EVIDENCE_SIGNAL_VOCABULARY
+    ):
+        allowed = set(
+            EVIDENCE_SIGNAL_VOCABULARY[
+                category
+            ]
+        )
+
+        values = observed[category]
+
+        recognized[category] = sorted(
+            values & allowed
+        )
+
+        unknown[category] = sorted(
+            values - allowed
+        )
+
+    return {
+        "version": (
+            EVIDENCE_SIGNAL_POLICY_VERSION
+        ),
+        "recognized": recognized,
+        "unknown": unknown,
     }
 
 
