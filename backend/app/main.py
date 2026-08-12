@@ -3919,6 +3919,10 @@ EVIDENCE_SIGNAL_POLICY_VERSION = (
     "evidence-signals-v1"
 )
 
+EVIDENCE_FEATURE_VERSION = (
+    "evidence-features-v1"
+)
+
 EVIDENCE_SIGNAL_VOCABULARY = {
     "story_relationship_types": (
         "confirms",
@@ -4462,6 +4466,143 @@ def inspect_evidence_signal_vocabulary(
         ),
         "recognized": recognized,
         "unknown": unknown,
+    }
+
+
+def build_evidence_signal_features(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence signal features require "
+            "a dictionary."
+        )
+
+    vocabulary_report = (
+        inspect_evidence_signal_vocabulary(
+            bundle
+        )
+    )
+
+    counts = {
+        category: {
+            value: 0
+            for value in (
+                EVIDENCE_SIGNAL_VOCABULARY[
+                    category
+                ]
+            )
+        }
+        for category in sorted(
+            EVIDENCE_SIGNAL_VOCABULARY
+        )
+    }
+
+    def increment(
+        category: str,
+        value: Any,
+    ) -> None:
+        normalized_value = str(
+            value or ""
+        ).strip().lower()
+
+        if (
+            normalized_value
+            in counts[category]
+        ):
+            counts[
+                category
+            ][
+                normalized_value
+            ] += 1
+
+    for row in bundle.get(
+        "story_links",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        increment(
+            "story_relationship_types",
+            row.get(
+                "relationship_type"
+            ),
+        )
+
+    for collection_name in (
+        "source_observations",
+        "reporter_observations",
+    ):
+        for row in bundle.get(
+            collection_name,
+            [],
+        ):
+            if not isinstance(row, dict):
+                continue
+
+            increment(
+                "observation_types",
+                row.get(
+                    "observation_type"
+                ),
+            )
+
+            increment(
+                "observation_statuses",
+                row.get(
+                    "status"
+                ),
+            )
+
+    for row in bundle.get(
+        "evidence_records",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        increment(
+            "evidence_types",
+            row.get(
+                "evidence_type"
+            ),
+        )
+
+        increment(
+            "verification_statuses",
+            row.get(
+                "verification_status"
+            ),
+        )
+
+    for row in bundle.get(
+        "evidence_links",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        increment(
+            "evidence_relationship_types",
+            row.get(
+                "relationship_type"
+            ),
+        )
+
+    return {
+        "version": (
+            EVIDENCE_FEATURE_VERSION
+        ),
+        "policy_version": (
+            EVIDENCE_SIGNAL_POLICY_VERSION
+        ),
+        "counts": counts,
+        "unknown": (
+            vocabulary_report[
+                "unknown"
+            ]
+        ),
     }
 
 
