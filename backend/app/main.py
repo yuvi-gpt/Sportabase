@@ -4135,6 +4135,158 @@ def load_evidence_context_for_media_item(
     )
 
 
+MEDIA_EVIDENCE_CONTEXT_POLICY_VERSION = (
+    "media-evidence-graph-v1"
+)
+
+
+def load_expanded_evidence_context_for_media_item(
+    *,
+    media_item_id: str,
+) -> Dict[str, Any]:
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    if not normalized_media_item_id:
+        raise ValueError(
+            "Expanded evidence context media item "
+            "ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        story_links = conn.execute(
+            """
+            SELECT
+              story_id,
+              relationship_type,
+              confidence
+            FROM story_media_links
+            WHERE media_item_id = ?
+            ORDER BY story_id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT DISTINCT
+              evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.media_item_id = ?
+               OR evidence_links.story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    context = build_evidence_context(
+        media_item_id=normalized_media_item_id,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
+
+    context["expansion"] = {
+        "policy": (
+            MEDIA_EVIDENCE_CONTEXT_POLICY_VERSION
+        ),
+        "story_links": [
+            {
+                "story_id": str(
+                    row["story_id"] or ""
+                ).strip(),
+                "relationship_type": str(
+                    row["relationship_type"] or ""
+                ).strip().lower(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row["confidence"],
+                        field_name=(
+                            "Story media link confidence"
+                        ),
+                    )
+                ),
+            }
+            for row in story_links
+        ],
+    }
+
+    return context
+
+
 def evidence_context_hash_for_media_item(
     *,
     media_item_id: str,
