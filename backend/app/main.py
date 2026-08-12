@@ -429,6 +429,23 @@ CREATE TABLE IF NOT EXISTS intelligence_stories (
 CREATE INDEX IF NOT EXISTS idx_intelligence_stories_status
 ON intelligence_stories(status);
 
+CREATE TABLE IF NOT EXISTS intelligence_claims (
+  id TEXT PRIMARY KEY,
+  canonical_key TEXT NOT NULL UNIQUE,
+  subject_key TEXT NOT NULL,
+  canonical_text TEXT NOT NULL DEFAULT '',
+  claim_type TEXT NOT NULL DEFAULT 'assertion',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_claims_subject
+ON intelligence_claims(subject_key);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_claims_type
+ON intelligence_claims(claim_type);
+
 CREATE TABLE IF NOT EXISTS story_media_links (
   story_id TEXT NOT NULL,
   media_item_id TEXT NOT NULL,
