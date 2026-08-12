@@ -169,7 +169,7 @@ class ArticleHistoryFreshTests(
                 "app.main.upsert_media_item",
                 side_effect=upsert_side_effect,
              ) as mock_upsert, patch(
-                "app.main.evidence_context_hash_for_media_item",
+                "app.main.expanded_evidence_context_hash_for_media_item",
                 return_value="media-context-hash",
              ) as mock_context_hash, patch(
                 "app.main.persist_analysis_snapshot",
@@ -292,7 +292,7 @@ class ArticleHistoryFreshTests(
                     "id": "reused-media",
                 },
              ), patch(
-                "app.main.evidence_context_hash_for_media_item",
+                "app.main.expanded_evidence_context_hash_for_media_item",
                 return_value="media-context-hash",
              ), patch(
                 "app.main.persist_analysis_snapshot",

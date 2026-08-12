@@ -103,7 +103,7 @@ class ArticleHistoryCacheHitTests(
                 "id": "media-cache-test",
             },
         ) as mock_upsert, patch(
-            "app.main.evidence_context_hash_for_media_item",
+            "app.main.expanded_evidence_context_hash_for_media_item",
             return_value="media-context-hash",
         ) as mock_context_hash, patch(
             "app.main.find_analysis_snapshot",
@@ -178,7 +178,7 @@ class ArticleHistoryCacheHitTests(
                 "id": "media-no-snapshot",
             },
         ), patch(
-            "app.main.evidence_context_hash_for_media_item",
+            "app.main.expanded_evidence_context_hash_for_media_item",
             return_value="media-context-hash",
         ), patch(
             "app.main.find_analysis_snapshot",

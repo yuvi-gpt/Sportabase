@@ -4302,6 +4302,21 @@ def evidence_context_hash_for_media_item(
     )
 
 
+def expanded_evidence_context_hash_for_media_item(
+    *,
+    media_item_id: str,
+) -> str:
+    context = (
+        load_expanded_evidence_context_for_media_item(
+            media_item_id=media_item_id,
+        )
+    )
+
+    return evidence_context_hash(
+        context
+    )
+
+
 def load_evidence_context_for_story(
     *,
     story_id: str,
@@ -15176,7 +15191,7 @@ def analyze(
             )
 
             media_context_hash = (
-                evidence_context_hash_for_media_item(
+                expanded_evidence_context_hash_for_media_item(
                     media_item_id=media_item["id"],
                 )
             )
@@ -15592,7 +15607,7 @@ def analyze(
         )
 
         media_context_hash = (
-            evidence_context_hash_for_media_item(
+            expanded_evidence_context_hash_for_media_item(
                 media_item_id=media_item["id"],
             )
         )

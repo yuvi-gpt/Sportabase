@@ -469,6 +469,32 @@ class ExpandedEvidenceContextMediaTests(
             ],
         )
 
+    def test_expanded_hash_helper_matches_context(
+        self,
+    ):
+        context = (
+            main.load_expanded_evidence_context_for_media_item(
+                media_item_id=self.media["id"],
+            )
+        )
+
+        expected_hash = (
+            main.evidence_context_hash(
+                context
+            )
+        )
+
+        actual_hash = (
+            main.expanded_evidence_context_hash_for_media_item(
+                media_item_id=self.media["id"],
+            )
+        )
+
+        self.assertEqual(
+            actual_hash,
+            expected_hash,
+        )
+
     def test_same_expanded_context_is_stable(
         self,
     ):
