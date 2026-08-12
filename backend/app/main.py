@@ -2767,6 +2767,285 @@ def record_reporter_observation(
     }
 
 
+def evidence_key_for_record(
+    *,
+    evidence_type: str,
+    subject_key: str,
+    observed_at: str,
+    canonical_url: str = "",
+    reference_key: str = "",
+    verification_status: str = "unverified",
+) -> str:
+    normalized_evidence_type = str(
+        evidence_type or ""
+    ).strip().lower()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    normalized_verification_status = str(
+        verification_status or ""
+    ).strip().lower()
+
+    raw_canonical_url = str(
+        canonical_url or ""
+    ).strip()
+
+    normalized_canonical_url = (
+        normalized_analysis_url(
+            raw_canonical_url
+        )
+        if raw_canonical_url
+        else ""
+    )
+
+    normalized_reference_key = str(
+        reference_key or ""
+    ).strip()
+
+    if not normalized_evidence_type:
+        raise ValueError(
+            "Evidence type is required."
+        )
+
+    if not normalized_subject_key:
+        raise ValueError(
+            "Evidence subject key is required."
+        )
+
+    if not normalized_observed_at:
+        raise ValueError(
+            "Evidence observed time is required."
+        )
+
+    if not normalized_verification_status:
+        raise ValueError(
+            "Evidence verification status is required."
+        )
+
+    if (
+        not normalized_canonical_url
+        and not normalized_reference_key
+    ):
+        raise ValueError(
+            "Evidence requires a canonical URL "
+            "or reference key."
+        )
+
+    identity_payload = json.dumps(
+        {
+            "evidence_type": (
+                normalized_evidence_type
+            ),
+            "subject_key": (
+                normalized_subject_key
+            ),
+            "canonical_url": (
+                normalized_canonical_url
+            ),
+            "reference_key": (
+                normalized_reference_key
+            ),
+            "verification_status": (
+                normalized_verification_status
+            ),
+            "observed_at": (
+                normalized_observed_at
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+    return hashlib.sha256(
+        (
+            "evidence-key|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def record_evidence(
+    *,
+    evidence_type: str,
+    subject_key: str,
+    observed_at: str,
+    claim_summary: str = "",
+    canonical_url: str = "",
+    reference_key: str = "",
+    verification_status: str = "unverified",
+    published_at: Optional[str] = None,
+    recorded_at: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    normalized_evidence_type = str(
+        evidence_type or ""
+    ).strip().lower()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    normalized_verification_status = str(
+        verification_status or ""
+    ).strip().lower()
+
+    raw_canonical_url = str(
+        canonical_url or ""
+    ).strip()
+
+    normalized_canonical_url = (
+        normalized_analysis_url(
+            raw_canonical_url
+        )
+        if raw_canonical_url
+        else ""
+    )
+
+    normalized_reference_key = str(
+        reference_key or ""
+    ).strip()
+
+    evidence_key = evidence_key_for_record(
+        evidence_type=(
+            normalized_evidence_type
+        ),
+        subject_key=(
+            normalized_subject_key
+        ),
+        observed_at=(
+            normalized_observed_at
+        ),
+        canonical_url=(
+            normalized_canonical_url
+        ),
+        reference_key=(
+            normalized_reference_key
+        ),
+        verification_status=(
+            normalized_verification_status
+        ),
+    )
+
+    evidence_id = hashlib.sha256(
+        (
+            "evidence|"
+            + evidence_key
+        ).encode("utf-8")
+    ).hexdigest()
+
+    normalized_claim_summary = str(
+        claim_summary or ""
+    ).strip()
+
+    normalized_published_at = (
+        str(
+            published_at or ""
+        ).strip()
+        or None
+    )
+
+    normalized_recorded_at = (
+        str(
+            recorded_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO evidence_records (
+              id,
+              evidence_key,
+              evidence_type,
+              subject_key,
+              claim_summary,
+              canonical_url,
+              reference_key,
+              verification_status,
+              published_at,
+              observed_at,
+              recorded_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(evidence_key)
+            DO NOTHING
+            """,
+            (
+                evidence_id,
+                evidence_key,
+                normalized_evidence_type,
+                normalized_subject_key,
+                normalized_claim_summary,
+                normalized_canonical_url,
+                normalized_reference_key,
+                normalized_verification_status,
+                normalized_published_at,
+                normalized_observed_at,
+                normalized_recorded_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM evidence_records
+            WHERE evidence_key = ?
+            """,
+            (
+                evidence_key,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Evidence persistence failed."
+        )
+
+    return {
+        "evidence": dict(row),
+        "created": created,
+    }
+
+
 def media_item_id_for_url(
     url: str,
 ) -> str:
