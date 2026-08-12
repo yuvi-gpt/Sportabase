@@ -2262,6 +2262,134 @@ def upsert_intelligence_story(
     return dict(row)
 
 
+def link_media_item_to_story(
+    *,
+    story_id: str,
+    media_item_id: str,
+    relationship_type: str = "reports",
+    confidence: float = 0.0,
+    linked_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    normalized_story_id = str(
+        story_id or ""
+    ).strip()
+
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    normalized_relationship_type = str(
+        relationship_type or ""
+    ).strip().lower()
+
+    if not normalized_story_id:
+        raise ValueError(
+            "Story media link story ID is required."
+        )
+
+    if not normalized_media_item_id:
+        raise ValueError(
+            "Story media link media item ID is required."
+        )
+
+    if not normalized_relationship_type:
+        raise ValueError(
+            "Story media link relationship type "
+            "is required."
+        )
+
+    try:
+        normalized_confidence = float(
+            confidence
+        )
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise ValueError(
+            "Story media link confidence "
+            "must be numeric."
+        ) from exc
+
+    if not (
+        0.0
+        <= normalized_confidence
+        <= 1.0
+    ):
+        raise ValueError(
+            "Story media link confidence "
+            "must be between 0 and 1."
+        )
+
+    normalized_linked_at = (
+        str(
+            linked_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    conn = db_conn()
+
+    try:
+        conn.execute(
+            """
+            INSERT INTO story_media_links (
+              story_id,
+              media_item_id,
+              relationship_type,
+              confidence,
+              linked_at
+            )
+            VALUES (
+              ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(
+              story_id,
+              media_item_id
+            )
+            DO UPDATE SET
+              relationship_type =
+                excluded.relationship_type,
+              confidence =
+                excluded.confidence
+            """,
+            (
+                normalized_story_id,
+                normalized_media_item_id,
+                normalized_relationship_type,
+                normalized_confidence,
+                normalized_linked_at,
+            ),
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM story_media_links
+            WHERE story_id = ?
+              AND media_item_id = ?
+            """,
+            (
+                normalized_story_id,
+                normalized_media_item_id,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Story media link persistence failed."
+        )
+
+    return dict(row)
+
+
 def reporter_id_for_identity_key(
     identity_key: str,
 ) -> str:
