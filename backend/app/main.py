@@ -484,6 +484,50 @@ ON source_observations(media_item_id);
 CREATE INDEX IF NOT EXISTS idx_source_observations_story
 ON source_observations(story_id);
 
+CREATE TABLE IF NOT EXISTS reporter_observations (
+  id TEXT PRIMARY KEY,
+  reporter_id TEXT NOT NULL,
+  source_id TEXT,
+  media_item_id TEXT,
+  story_id TEXT,
+  subject_key TEXT NOT NULL,
+  observation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unresolved',
+  claim_summary TEXT NOT NULL DEFAULT '',
+  provenance_url TEXT NOT NULL DEFAULT '',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_reporter_time
+ON reporter_observations(reporter_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_source_time
+ON reporter_observations(source_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_subject_time
+ON reporter_observations(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_media
+ON reporter_observations(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_story
+ON reporter_observations(story_id);
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
