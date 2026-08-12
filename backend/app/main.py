@@ -528,6 +528,90 @@ ON reporter_observations(media_item_id);
 CREATE INDEX IF NOT EXISTS idx_reporter_observations_story
 ON reporter_observations(story_id);
 
+CREATE TABLE IF NOT EXISTS evidence_records (
+  id TEXT PRIMARY KEY,
+  evidence_key TEXT NOT NULL UNIQUE,
+  evidence_type TEXT NOT NULL,
+  subject_key TEXT NOT NULL,
+  claim_summary TEXT NOT NULL DEFAULT '',
+  canonical_url TEXT NOT NULL DEFAULT '',
+  reference_key TEXT NOT NULL DEFAULT '',
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  published_at TEXT,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_type
+ON evidence_records(evidence_type);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_subject_time
+ON evidence_records(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_url
+ON evidence_records(canonical_url);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_verification
+ON evidence_records(verification_status);
+
+CREATE TABLE IF NOT EXISTS evidence_links (
+  id TEXT PRIMARY KEY,
+  evidence_id TEXT NOT NULL,
+  media_item_id TEXT,
+  story_id TEXT,
+  source_id TEXT,
+  reporter_id TEXT,
+  relationship_type TEXT NOT NULL DEFAULT 'supports',
+  confidence REAL,
+  linked_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (media_item_id IS NOT NULL)
+    + (story_id IS NOT NULL)
+    + (source_id IS NOT NULL)
+    + (reporter_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_evidence
+ON evidence_links(evidence_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_media
+ON evidence_links(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_story
+ON evidence_links(story_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_source
+ON evidence_links(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_reporter
+ON evidence_links(reporter_id);
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
