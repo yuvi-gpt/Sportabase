@@ -445,6 +445,33 @@ class EvidenceAnalysisRetrievalTests(
             main.EVIDENCE_ANALYSIS_BUNDLE_VERSION,
         )
 
+    def test_state_helper_matches_bundle_hash(
+        self,
+    ):
+        bundle = (
+            main.load_evidence_analysis_bundle_for_media_item(
+                media_item_id=self.media["id"],
+            )
+        )
+
+        state = (
+            main.load_evidence_analysis_state_for_media_item(
+                media_item_id=self.media["id"],
+            )
+        )
+
+        self.assertEqual(
+            state["bundle"],
+            bundle,
+        )
+
+        self.assertEqual(
+            state["context_hash"],
+            main.evidence_analysis_bundle_hash(
+                bundle
+            ),
+        )
+
     def test_media_item_id_is_required(
         self,
     ):

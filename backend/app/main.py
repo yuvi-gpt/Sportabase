@@ -4415,6 +4415,26 @@ def load_evidence_analysis_bundle_for_media_item(
     )
 
 
+def load_evidence_analysis_state_for_media_item(
+    *,
+    media_item_id: str,
+) -> Dict[str, Any]:
+    bundle = (
+        load_evidence_analysis_bundle_for_media_item(
+            media_item_id=media_item_id,
+        )
+    )
+
+    return {
+        "bundle": bundle,
+        "context_hash": (
+            evidence_analysis_bundle_hash(
+                bundle
+            )
+        ),
+    }
+
+
 def load_evidence_context_for_source(
     *,
     source_id: str,
@@ -15674,6 +15694,59 @@ def analyze(
         f"{cleaned_text}"
     )
 
+    content_hash = analysis_content_hash(
+        cache_content
+    )
+
+    article_evidence_bundle: Optional[
+        Dict[str, Any]
+    ] = None
+
+    article_evidence_context_hash = ""
+
+    try:
+        evidence_media_item_id = (
+            media_item_id_for_url(
+                req.url
+            )
+        )
+
+        article_evidence_state = (
+            load_evidence_analysis_state_for_media_item(
+                media_item_id=(
+                    evidence_media_item_id
+                ),
+            )
+        )
+
+        article_evidence_bundle = (
+            article_evidence_state[
+                "bundle"
+            ]
+        )
+
+        article_evidence_context_hash = str(
+            article_evidence_state[
+                "context_hash"
+            ]
+        ).strip()
+
+        if not article_evidence_context_hash:
+            raise ValueError(
+                "Evidence analysis context hash "
+                "is empty."
+            )
+
+    except Exception as error:
+        article_evidence_bundle = None
+        article_evidence_context_hash = ""
+
+        print(
+            "article evidence analysis "
+            "context skipped:",
+            str(error),
+        )
+
     cache_key = make_analysis_cache_key(
         mode="article",
         url=req.url,
@@ -15681,10 +15754,9 @@ def analyze(
         variant=(
             f"max_bullets:{req.max_bullets}"
         ),
-    )
-
-    content_hash = analysis_content_hash(
-        cache_content
+        context_hash=(
+            article_evidence_context_hash
+        ),
     )
 
     cached = get_cached_analysis(cache_key)
@@ -15703,17 +15775,13 @@ def analyze(
                 content_hash=content_hash,
             )
 
-            media_context_hash = (
-                expanded_evidence_context_hash_for_media_item(
-                    media_item_id=media_item["id"],
-                )
-            )
-
             snapshot = find_analysis_snapshot(
                 media_item_id=media_item["id"],
                 mode="article",
                 content_hash=content_hash,
-                context_hash=media_context_hash,
+                context_hash=(
+                    article_evidence_context_hash
+                ),
             )
 
             record_user_history(
@@ -16119,18 +16187,14 @@ def analyze(
             content_hash=content_hash,
         )
 
-        media_context_hash = (
-            expanded_evidence_context_hash_for_media_item(
-                media_item_id=media_item["id"],
-            )
-        )
-
         snapshot_result = (
             persist_analysis_snapshot(
                 media_item_id=media_item["id"],
                 mode="article",
                 content_hash=content_hash,
-                context_hash=media_context_hash,
+                context_hash=(
+                    article_evidence_context_hash
+                ),
                 response=response.model_dump(),
                 merit_score=response.merit_score,
                 badge=response.badge,

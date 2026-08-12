@@ -86,6 +86,20 @@ class ArticleHistoryCacheHitTests(
             )
         )
 
+        expected_cache_key = (
+            main.make_analysis_cache_key(
+                mode="article",
+                url=req.url,
+                content=cache_content,
+                variant=(
+                    f"max_bullets:{req.max_bullets}"
+                ),
+                context_hash=(
+                    "media-context-hash"
+                ),
+            )
+        )
+
         expected_client_key = (
             main.request_client_key(
                 request
@@ -95,7 +109,7 @@ class ArticleHistoryCacheHitTests(
         with patch(
             "app.main.get_cached_analysis",
             return_value=self.cached_payload(req),
-        ), patch(
+        ) as mock_get_cached, patch(
             "app.main.record_analysis_cache_hit",
         ) as mock_cache_hit, patch(
             "app.main.upsert_media_item",
@@ -103,8 +117,11 @@ class ArticleHistoryCacheHitTests(
                 "id": "media-cache-test",
             },
         ) as mock_upsert, patch(
-            "app.main.expanded_evidence_context_hash_for_media_item",
-            return_value="media-context-hash",
+            "app.main.load_evidence_analysis_state_for_media_item",
+            return_value={
+                "bundle": {},
+                "context_hash": "media-context-hash",
+            },
         ) as mock_context_hash, patch(
             "app.main.find_analysis_snapshot",
             return_value={
@@ -125,6 +142,10 @@ class ArticleHistoryCacheHitTests(
             81,
         )
 
+        mock_get_cached.assert_called_once_with(
+            expected_cache_key
+        )
+
         mock_cache_hit.assert_called_once_with(
             expected_client_key,
             "article",
@@ -138,7 +159,11 @@ class ArticleHistoryCacheHitTests(
         )
 
         mock_context_hash.assert_called_once_with(
-            media_item_id="media-cache-test",
+            media_item_id=(
+                main.media_item_id_for_url(
+                    req.url
+                )
+            ),
         )
 
         mock_find.assert_called_once_with(
@@ -178,8 +203,11 @@ class ArticleHistoryCacheHitTests(
                 "id": "media-no-snapshot",
             },
         ), patch(
-            "app.main.expanded_evidence_context_hash_for_media_item",
-            return_value="media-context-hash",
+            "app.main.load_evidence_analysis_state_for_media_item",
+            return_value={
+                "bundle": {},
+                "context_hash": "media-context-hash",
+            },
         ), patch(
             "app.main.find_analysis_snapshot",
             return_value=None,
@@ -216,6 +244,12 @@ class ArticleHistoryCacheHitTests(
             return_value=self.cached_payload(req),
         ), patch(
             "app.main.record_analysis_cache_hit",
+        ), patch(
+            "app.main.load_evidence_analysis_state_for_media_item",
+            return_value={
+                "bundle": {},
+                "context_hash": "media-context-hash",
+            },
         ), patch(
             "app.main.upsert_media_item",
             side_effect=RuntimeError(
