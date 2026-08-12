@@ -168,6 +168,123 @@ class EvidenceAnalysisBundleTests(
             second,
         )
 
+    def test_analysis_bundle_hash_is_stable(
+        self,
+    ):
+        bundle = (
+            main.build_evidence_analysis_bundle(
+                media_item_id="media-1",
+                evidence_records=[
+                    self.evidence_row()
+                ],
+            )
+        )
+
+        first_hash = (
+            main.evidence_analysis_bundle_hash(
+                bundle
+            )
+        )
+
+        second_hash = (
+            main.evidence_analysis_bundle_hash(
+                bundle
+            )
+        )
+
+        self.assertEqual(
+            first_hash,
+            second_hash,
+        )
+
+    def test_claim_summary_changes_analysis_hash(
+        self,
+    ):
+        first = (
+            main.build_evidence_analysis_bundle(
+                media_item_id="media-1",
+                evidence_records=[
+                    self.evidence_row(
+                        claim_summary=(
+                            "Club confirmed the move."
+                        )
+                    )
+                ],
+            )
+        )
+
+        second = (
+            main.build_evidence_analysis_bundle(
+                media_item_id="media-1",
+                evidence_records=[
+                    self.evidence_row(
+                        claim_summary=(
+                            "Club denied the move."
+                        )
+                    )
+                ],
+            )
+        )
+
+        self.assertNotEqual(
+            main.evidence_analysis_bundle_hash(
+                first
+            ),
+            main.evidence_analysis_bundle_hash(
+                second
+            ),
+        )
+
+    def test_operational_fields_do_not_change_analysis_hash(
+        self,
+    ):
+        first_row = self.evidence_row()
+
+        second_row = {
+            **first_row,
+            "recorded_at": (
+                "2026-08-12T20:00:00+00:00"
+            ),
+            "metadata_json": (
+                '{"different":true}'
+            ),
+        }
+
+        first = (
+            main.build_evidence_analysis_bundle(
+                media_item_id="media-1",
+                evidence_records=[
+                    first_row
+                ],
+            )
+        )
+
+        second = (
+            main.build_evidence_analysis_bundle(
+                media_item_id="media-1",
+                evidence_records=[
+                    second_row
+                ],
+            )
+        )
+
+        self.assertEqual(
+            main.evidence_analysis_bundle_hash(
+                first
+            ),
+            main.evidence_analysis_bundle_hash(
+                second
+            ),
+        )
+
+    def test_analysis_bundle_hash_requires_dictionary(
+        self,
+    ):
+        with self.assertRaises(ValueError):
+            main.evidence_analysis_bundle_hash(
+                []
+            )
+
     def test_story_link_is_analysis_semantic(
         self,
     ):

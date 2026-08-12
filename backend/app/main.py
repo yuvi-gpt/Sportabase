@@ -4269,6 +4269,31 @@ def build_evidence_analysis_bundle(
     }
 
 
+def evidence_analysis_bundle_hash(
+    bundle: Dict[str, Any],
+) -> str:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence analysis bundle must "
+            "be a dictionary."
+        )
+
+    canonical_json = json.dumps(
+        bundle,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+    return hashlib.sha256(
+        (
+            "evidence-analysis|"
+            + canonical_json
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def load_evidence_analysis_bundle_for_media_item(
     *,
     media_item_id: str,
@@ -5635,10 +5660,15 @@ def make_analysis_cache_key(
     url: str,
     content: str,
     variant: str = "",
+    context_hash: str = "",
 ) -> str:
     normalized_mode = str(
         mode or ""
     ).strip().lower()
+
+    normalized_context_hash = str(
+        context_hash or ""
+    ).strip()
 
     key_parts = [
         ANALYSIS_VERSION,
@@ -5654,6 +5684,10 @@ def make_analysis_cache_key(
         key_parts.insert(
             1,
             SCORING_VERSION,
+        )
+
+        key_parts.append(
+            normalized_context_hash
         )
 
     raw_key = "|".join(
