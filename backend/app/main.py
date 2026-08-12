@@ -4433,7 +4433,7 @@ def evidence_context_hash(
 
 
 EVIDENCE_ANALYSIS_BUNDLE_VERSION = (
-    "evidence-analysis-v1"
+    "evidence-analysis-v2"
 )
 
 EVIDENCE_SIGNAL_POLICY_VERSION = (
@@ -4494,6 +4494,7 @@ def build_evidence_analysis_bundle(
     reporter_observations: Optional[list] = None,
     evidence_records: Optional[list] = None,
     evidence_links: Optional[list] = None,
+    observation_dependencies: Optional[list] = None,
 ) -> Dict[str, Any]:
     normalized_media_item_id = str(
         media_item_id or ""
@@ -4510,6 +4511,7 @@ def build_evidence_analysis_bundle(
     normalized_reporter_observations = []
     normalized_evidence_records = []
     normalized_evidence_links = []
+    normalized_observation_dependencies = []
 
     for raw_row in story_links or []:
         row = _evidence_context_row(
@@ -4781,6 +4783,94 @@ def build_evidence_analysis_bundle(
             }
         )
 
+    for raw_row in observation_dependencies or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name=(
+                "observation_dependencies"
+            ),
+        )
+
+        identity = (
+            _observation_dependency_identity(
+                relationship_type=row.get(
+                    "relationship_type"
+                ),
+                observed_at=row.get(
+                    "observed_at"
+                ),
+                confidence=row.get(
+                    "confidence"
+                ),
+                downstream_source_observation_id=(
+                    row.get(
+                        "downstream_source_observation_id"
+                    )
+                ),
+                downstream_reporter_observation_id=(
+                    row.get(
+                        "downstream_reporter_observation_id"
+                    )
+                ),
+                upstream_source_observation_id=(
+                    row.get(
+                        "upstream_source_observation_id"
+                    )
+                ),
+                upstream_reporter_observation_id=(
+                    row.get(
+                        "upstream_reporter_observation_id"
+                    )
+                ),
+                upstream_source_id=row.get(
+                    "upstream_source_id"
+                ),
+                upstream_reporter_id=row.get(
+                    "upstream_reporter_id"
+                ),
+            )
+        )
+
+        normalized_observation_dependencies.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "downstream_type": (
+                    identity[
+                        "downstream_type"
+                    ]
+                ),
+                "downstream_id": (
+                    identity[
+                        "downstream_id"
+                    ]
+                ),
+                "upstream_type": (
+                    identity[
+                        "upstream_type"
+                    ]
+                ),
+                "upstream_id": (
+                    identity[
+                        "upstream_id"
+                    ]
+                ),
+                "relationship_type": (
+                    identity[
+                        "relationship_type"
+                    ]
+                ),
+                "confidence": (
+                    identity["confidence"]
+                ),
+                "observed_at": (
+                    identity["observed_at"]
+                ),
+            }
+        )
+
+
     return {
         "version": (
             EVIDENCE_ANALYSIS_BUNDLE_VERSION
@@ -4825,6 +4915,14 @@ def build_evidence_analysis_bundle(
                 normalized_evidence_links,
                 collection_name=(
                     "evidence_links"
+                ),
+            )
+        ),
+        "observation_dependencies": (
+            _deduplicate_evidence_context_entries(
+                normalized_observation_dependencies,
+                collection_name=(
+                    "observation_dependencies"
                 ),
             )
         ),
@@ -5393,6 +5491,42 @@ def load_evidence_analysis_bundle_for_media_item(
             ),
         ).fetchall()
 
+        observation_dependencies = conn.execute(
+            """
+            SELECT *
+            FROM observation_dependencies
+            WHERE downstream_source_observation_id
+                  IN (
+                    SELECT id
+                    FROM source_observations
+                    WHERE media_item_id = ?
+                       OR story_id IN (
+                            SELECT story_id
+                            FROM story_media_links
+                            WHERE media_item_id = ?
+                       )
+                  )
+               OR downstream_reporter_observation_id
+                  IN (
+                    SELECT id
+                    FROM reporter_observations
+                    WHERE media_item_id = ?
+                       OR story_id IN (
+                            SELECT story_id
+                            FROM story_media_links
+                            WHERE media_item_id = ?
+                       )
+                  )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
     finally:
         conn.close()
 
@@ -5403,6 +5537,9 @@ def load_evidence_analysis_bundle_for_media_item(
         reporter_observations=reporter_observations,
         evidence_records=evidence_records,
         evidence_links=evidence_links,
+        observation_dependencies=(
+            observation_dependencies
+        ),
     )
 
 
