@@ -3352,11 +3352,26 @@ def _evidence_context_row(
 
 def build_evidence_context(
     *,
+    subject_key: str = "",
+    media_item_id: str = "",
+    story_id: str = "",
     source_observations: Optional[list] = None,
     reporter_observations: Optional[list] = None,
     evidence_records: Optional[list] = None,
     evidence_links: Optional[list] = None,
 ) -> Dict[str, Any]:
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    normalized_story_id = str(
+        story_id or ""
+    ).strip()
+
     normalized_source_observations = []
 
     for raw_row in source_observations or []:
@@ -3553,6 +3568,11 @@ def build_evidence_context(
 
     return {
         "version": EVIDENCE_CONTEXT_VERSION,
+        "scope": {
+            "subject_key": normalized_subject_key,
+            "media_item_id": normalized_media_item_id,
+            "story_id": normalized_story_id,
+        },
         "source_observations": (
             _deduplicate_evidence_context_entries(
                 normalized_source_observations,

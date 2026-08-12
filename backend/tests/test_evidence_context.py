@@ -178,6 +178,71 @@ class EvidenceContextTests(
             main.evidence_context_hash(second),
         )
 
+    def test_subject_scope_changes_hash(
+        self,
+    ):
+        first = main.build_evidence_context(
+            subject_key=(
+                "transfer|player-a|club-b"
+            ),
+        )
+
+        second = main.build_evidence_context(
+            subject_key=(
+                "transfer|player-a|club-c"
+            ),
+        )
+
+        self.assertNotEqual(
+            first,
+            second,
+        )
+
+        self.assertNotEqual(
+            main.evidence_context_hash(first),
+            main.evidence_context_hash(second),
+        )
+
+    def test_same_scope_is_stable(
+        self,
+    ):
+        first = main.build_evidence_context(
+            subject_key=(
+                "transfer|player-a|club-b"
+            ),
+            media_item_id="media-1",
+            story_id="story-1",
+        )
+
+        second = main.build_evidence_context(
+            subject_key=(
+                "transfer|player-a|club-b"
+            ),
+            media_item_id="media-1",
+            story_id="story-1",
+        )
+
+        self.assertEqual(
+            first,
+            second,
+        )
+
+        self.assertEqual(
+            first["scope"],
+            {
+                "subject_key": (
+                    "transfer|player-a|club-b"
+                ),
+                "media_item_id": "media-1",
+                "story_id": "story-1",
+            },
+        )
+
+        self.assertEqual(
+            main.evidence_context_hash(first),
+            main.evidence_context_hash(second),
+        )
+
     def test_input_order_does_not_change_context(
         self,
     ):
