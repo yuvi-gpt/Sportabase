@@ -3899,6 +3899,85 @@ def evidence_context_hash(
     ).hexdigest()
 
 
+def load_evidence_context_for_story(
+    *,
+    story_id: str,
+) -> Dict[str, Any]:
+    normalized_story_id = str(
+        story_id or ""
+    ).strip()
+
+    if not normalized_story_id:
+        raise ValueError(
+            "Evidence context story ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE story_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE story_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE story_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.story_id = ?
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        story_id=normalized_story_id,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
+
+
 def load_evidence_context_for_subject(
     *,
     subject_key: str,
