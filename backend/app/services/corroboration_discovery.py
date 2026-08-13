@@ -7,6 +7,10 @@ from app.services.news_search import (
     search_brave_news,
 )
 
+from app.services.publication_time import (
+    resolve_publication_time,
+)
+
 
 CORROBORATION_SEARCH_PLAN_VERSION = (
     "corroboration-search-plan-v1"
@@ -342,6 +346,7 @@ def collect_corroboration_candidates(
     domain_resolver,
     fetch_article,
     extract_article,
+    publication_time_resolver=resolve_publication_time,
     searcher=search_brave_news,
     candidate_normalizer=(
         normalize_brave_news_candidates
@@ -779,14 +784,16 @@ def collect_corroboration_candidates(
             excluded += 1
             continue
 
+        article_html = str(
+            fetched.get(
+                "html"
+            )
+            or ""
+        )
+
         try:
             extracted = extract_article(
-                str(
-                    fetched.get(
-                        "html"
-                    )
-                    or ""
-                )
+                article_html
             )
         except Exception as error:
             evaluated.update(
@@ -835,6 +842,45 @@ def collect_corroboration_candidates(
 
             failed += 1
             continue
+
+        try:
+            publication_time = (
+                publication_time_resolver(
+                    article_html,
+                    provider_page_age=(
+                        candidate.get(
+                            "page_age"
+                        )
+                        or ""
+                    ),
+                )
+            )
+        except Exception:
+            publication_time = {
+                "version": "",
+                "status": "extraction_failed",
+                "published_at": "",
+                "raw_value": "",
+                "timezone_known": False,
+                "precision": "",
+                "source_type": "",
+                "source_key": "",
+            }
+
+        if not isinstance(
+            publication_time,
+            dict,
+        ):
+            publication_time = {
+                "version": "",
+                "status": "extraction_failed",
+                "published_at": "",
+                "raw_value": "",
+                "timezone_known": False,
+                "precision": "",
+                "source_type": "",
+                "source_key": "",
+            }
 
         final_source_domain = (
             domain_resolver(
@@ -899,6 +945,54 @@ def collect_corroboration_candidates(
                         0,
                     )
                 ),
+                "published_at": str(
+                    publication_time.get(
+                        "published_at"
+                    )
+                    or ""
+                ).strip(),
+                "publication_time_version": str(
+                    publication_time.get(
+                        "version"
+                    )
+                    or ""
+                ).strip(),
+                "publication_time_status": str(
+                    publication_time.get(
+                        "status"
+                    )
+                    or ""
+                ).strip(),
+                "publication_time_raw": str(
+                    publication_time.get(
+                        "raw_value"
+                    )
+                    or ""
+                ).strip(),
+                "publication_time_source_type": str(
+                    publication_time.get(
+                        "source_type"
+                    )
+                    or ""
+                ).strip(),
+                "publication_time_source_key": str(
+                    publication_time.get(
+                        "source_key"
+                    )
+                    or ""
+                ).strip(),
+                "publication_time_timezone_known": bool(
+                    publication_time.get(
+                        "timezone_known",
+                        False,
+                    )
+                ),
+                "publication_time_precision": str(
+                    publication_time.get(
+                        "precision"
+                    )
+                    or ""
+                ).strip(),
             }
         )
 
