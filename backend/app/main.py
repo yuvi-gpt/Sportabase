@@ -33,6 +33,12 @@ from lingua import LanguageDetectorBuilder
 from app.db.schema import SCHEMA
 from app.db.connection import connect_database
 from app.db.migrations import initialize_database
+from app.intelligence.sources import (
+    source_domain_for_url as _source_domain_for_url_impl,
+    source_key_for_url as _source_key_for_url_impl,
+    source_id_for_url as _source_id_for_url_impl,
+    upsert_intelligence_source as _upsert_intelligence_source_impl,
+)
 # from app.routes.insights import router as insights_router
 
 
@@ -1414,59 +1420,20 @@ def analysis_content_hash(
 def source_domain_for_url(
     url: str,
 ) -> str:
-    canonical_url = normalized_analysis_url(
-        url
+    return _source_domain_for_url_impl(
+        url,
+        normalize_url=normalized_analysis_url,
     )
-
-    if not canonical_url:
-        return ""
-
-    try:
-        parsed = urlparse(
-            canonical_url
-        )
-
-        hostname = str(
-            parsed.hostname or ""
-        ).strip().lower()
-
-    except Exception:
-        return ""
-
-    if hostname.startswith("www."):
-        hostname = hostname[4:]
-
-    return hostname
 
 
 def source_key_for_url(
     url: str,
     source_type: str = "publisher",
 ) -> str:
-    canonical_domain = (
-        source_domain_for_url(
-            url
-        )
-    )
-
-    normalized_source_type = str(
-        source_type or ""
-    ).strip().lower()
-
-    if not canonical_domain:
-        raise ValueError(
-            "Source domain is required."
-        )
-
-    if not normalized_source_type:
-        raise ValueError(
-            "Source type is required."
-        )
-
-    return (
-        normalized_source_type
-        + "|"
-        + canonical_domain
+    return _source_key_for_url_impl(
+        url,
+        source_type,
+        domain_resolver=source_domain_for_url,
     )
 
 
@@ -1474,17 +1441,11 @@ def source_id_for_url(
     url: str,
     source_type: str = "publisher",
 ) -> str:
-    source_key = source_key_for_url(
+    return _source_id_for_url_impl(
         url,
         source_type,
+        key_resolver=source_key_for_url,
     )
-
-    return hashlib.sha256(
-        (
-            "source|"
-            + source_key
-        ).encode("utf-8")
-    ).hexdigest()
 
 
 def upsert_intelligence_source(
@@ -1503,152 +1464,21 @@ def upsert_intelligence_source(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    canonical_domain = (
-        source_domain_for_url(
-            url
-        )
+    return _upsert_intelligence_source_impl(
+        url=url,
+        display_name=display_name,
+        source_type=source_type,
+        publication_founded_at=(
+            publication_founded_at
+        ),
+        domain_registered_at=(
+            domain_registered_at
+        ),
+        metadata=metadata,
+        seen_at=seen_at,
+        domain_resolver=source_domain_for_url,
+        connection_factory=db_conn,
     )
-
-    normalized_source_type = str(
-        source_type or ""
-    ).strip().lower()
-
-    if not canonical_domain:
-        raise ValueError(
-            "Source domain is required."
-        )
-
-    if not normalized_source_type:
-        raise ValueError(
-            "Source type is required."
-        )
-
-    source_key = (
-        normalized_source_type
-        + "|"
-        + canonical_domain
-    )
-
-    source_id = hashlib.sha256(
-        (
-            "source|"
-            + source_key
-        ).encode("utf-8")
-    ).hexdigest()
-
-    normalized_display_name = str(
-        display_name or ""
-    ).strip()
-
-    normalized_founded_at = (
-        str(
-            publication_founded_at or ""
-        ).strip()
-        or None
-    )
-
-    normalized_registered_at = (
-        str(
-            domain_registered_at or ""
-        ).strip()
-        or None
-    )
-
-    normalized_seen_at = (
-        str(
-            seen_at or ""
-        ).strip()
-        or datetime.now(
-            timezone.utc
-        ).isoformat()
-    )
-
-    metadata_json = json.dumps(
-        metadata or {},
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            INSERT INTO intelligence_sources (
-              id,
-              source_key,
-              display_name,
-              source_type,
-              canonical_domain,
-              publication_founded_at,
-              domain_registered_at,
-              first_seen_at,
-              last_seen_at,
-              metadata_json
-            )
-            VALUES (
-              ?, ?, ?, ?, ?, ?,
-              ?, ?, ?, ?
-            )
-            ON CONFLICT(source_key)
-            DO UPDATE SET
-              display_name = CASE
-                WHEN excluded.display_name != ''
-                THEN excluded.display_name
-                ELSE intelligence_sources.display_name
-              END,
-              publication_founded_at = COALESCE(
-                excluded.publication_founded_at,
-                intelligence_sources.publication_founded_at
-              ),
-              domain_registered_at = COALESCE(
-                excluded.domain_registered_at,
-                intelligence_sources.domain_registered_at
-              ),
-              last_seen_at =
-                excluded.last_seen_at,
-              metadata_json = CASE
-                WHEN excluded.metadata_json != '{}'
-                THEN excluded.metadata_json
-                ELSE intelligence_sources.metadata_json
-              END
-            """,
-            (
-                source_id,
-                source_key,
-                normalized_display_name,
-                normalized_source_type,
-                canonical_domain,
-                normalized_founded_at,
-                normalized_registered_at,
-                normalized_seen_at,
-                normalized_seen_at,
-                metadata_json,
-            ),
-        )
-
-        row = conn.execute(
-            """
-            SELECT *
-            FROM intelligence_sources
-            WHERE source_key = ?
-            """,
-            (
-                source_key,
-            ),
-        ).fetchone()
-
-        conn.commit()
-
-    finally:
-        conn.close()
-
-    if row is None:
-        raise RuntimeError(
-            "Source persistence failed."
-        )
-
-    return dict(row)
 
 
 def story_id_for_canonical_key(
