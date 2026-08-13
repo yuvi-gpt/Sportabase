@@ -105,6 +105,11 @@ from app.analysis.evidence import (
     load_evidence_analysis_bundle_for_media_item as _load_evidence_analysis_bundle_for_media_item_impl,
     load_evidence_analysis_state_for_media_item as _load_evidence_analysis_state_for_media_item_impl,
 )
+from app.analysis.independence import (
+    CLAIM_INDEPENDENCE_POLICY_VERSION,
+    CLAIM_INDEPENDENCE_STATUS_VOCABULARY,
+    build_claim_independence_assessment,
+)
 # from app.routes.insights import router as insights_router
 
 
