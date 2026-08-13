@@ -8637,6 +8637,30 @@ def gemini_candidate_semantics(
     )
 
 
+
+def gemini_candidate_collection_semantics(
+    *,
+    claim: Dict[str, Any],
+    collection: Dict[str, Any],
+    client_key: str = "anonymous",
+    max_assessments: int = 8,
+) -> Dict[str, Any]:
+    from app.services.corroboration_semantics import (
+        assess_candidate_collection_semantics_with_gemini,
+    )
+
+    return (
+        assess_candidate_collection_semantics_with_gemini(
+            claim=claim,
+            collection=collection,
+            client=gemini_client(),
+            client_key=client_key,
+            generator=generate_gemini_content,
+            max_assessments=max_assessments,
+        )
+    )
+
+
 def gemini_tldr(
     title: str,
     text: str,
