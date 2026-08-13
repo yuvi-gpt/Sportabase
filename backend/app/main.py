@@ -31,6 +31,8 @@ from dotenv import load_dotenv
 from google import genai
 from lingua import LanguageDetectorBuilder
 from app.db.schema import SCHEMA
+from app.db.connection import connect_database
+from app.db.migrations import initialize_database
 # from app.routes.insights import router as insights_router
 
 
@@ -299,99 +301,16 @@ class ContentResolveResponse(BaseModel):
 
 
 def db_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(
-        str(DB_PATH),
-        timeout=30,
-        check_same_thread=False,
+    return connect_database(
+        DB_PATH
     )
-    conn.row_factory = sqlite3.Row
-
-    conn.execute("PRAGMA busy_timeout=30000;")
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-
-    return conn
 
 
 def init_db():
-    conn = db_conn()
-    try:
-        conn.executescript(SCHEMA)
-
-        existing_columns = {
-            str(row["name"])
-            for row in conn.execute(
-                "PRAGMA table_info(gemini_usage)"
-            ).fetchall()
-        }
-
-        migration_columns = {
-            "inflight_join": (
-                "INTEGER NOT NULL DEFAULT 0"
-            ),
-            "latency_ms": (
-                "INTEGER NOT NULL DEFAULT 0"
-            ),
-            "failure_status_code": "INTEGER",
-            "failure_type": (
-                "TEXT NOT NULL DEFAULT ''"
-            ),
-            "failure_detail": (
-                "TEXT NOT NULL DEFAULT ''"
-            ),
-        }
-
-        for (
-            column_name,
-            column_definition,
-        ) in migration_columns.items():
-            if column_name in existing_columns:
-                continue
-
-            conn.execute(
-                "ALTER TABLE gemini_usage "
-                f"ADD COLUMN {column_name} "
-                f"{column_definition}"
-            )
-
-        snapshot_columns = {
-            str(row["name"])
-            for row in conn.execute(
-                "PRAGMA table_info(analysis_snapshots)"
-            ).fetchall()
-        }
-
-        if "context_hash" not in snapshot_columns:
-            conn.execute(
-                "ALTER TABLE analysis_snapshots "
-                "ADD COLUMN context_hash "
-                "TEXT NOT NULL DEFAULT ''"
-            )
-
-        conn.execute(
-            "DROP INDEX IF EXISTS "
-            "idx_analysis_snapshots_identity"
-        )
-
-        conn.execute(
-            """
-            CREATE UNIQUE INDEX
-            idx_analysis_snapshots_identity
-            ON analysis_snapshots(
-              media_item_id,
-              mode,
-              content_hash,
-              context_hash,
-              analysis_version,
-              scoring_version
-            )
-            """
-        )
-
-        conn.commit()
-    finally:
-        conn.close()
+    initialize_database(
+        db_conn,
+        SCHEMA,
+    )
 
 
 init_db()
