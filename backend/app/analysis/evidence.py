@@ -13,9 +13,13 @@ from app.intelligence.dependencies import (
     _observation_dependency_identity,
 )
 
+from app.intelligence.claims import (
+    _claim_link_identity,
+)
+
 
 EVIDENCE_ANALYSIS_BUNDLE_VERSION = (
-    "evidence-analysis-v2"
+    "evidence-analysis-v3"
 )
 
 
@@ -35,6 +39,8 @@ def build_evidence_analysis_bundle(
     reporter_observations: Optional[list] = None,
     evidence_records: Optional[list] = None,
     evidence_links: Optional[list] = None,
+    claims: Optional[list] = None,
+    claim_links: Optional[list] = None,
     observation_dependencies: Optional[list] = None,
 ) -> Dict[str, Any]:
     normalized_media_item_id = str(
@@ -52,6 +58,8 @@ def build_evidence_analysis_bundle(
     normalized_reporter_observations = []
     normalized_evidence_records = []
     normalized_evidence_links = []
+    normalized_claims = []
+    normalized_claim_links = []
     normalized_observation_dependencies = []
 
     for raw_row in story_links or []:
@@ -324,6 +332,92 @@ def build_evidence_analysis_bundle(
             }
         )
 
+    for raw_row in claims or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="claims",
+        )
+
+        normalized_claims.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "canonical_key": (
+                    _evidence_analysis_text(
+                        row.get("canonical_key")
+                    ).lower()
+                ),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "canonical_text": (
+                    _evidence_analysis_text(
+                        row.get("canonical_text")
+                    )
+                ),
+                "claim_type": str(
+                    row.get("claim_type") or ""
+                ).strip().lower(),
+            }
+        )
+
+    for raw_row in claim_links or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="claim_links",
+        )
+
+        identity = _claim_link_identity(
+            claim_id=row.get("claim_id"),
+            relationship_type=row.get(
+                "relationship_type"
+            ),
+            observed_at=row.get(
+                "observed_at"
+            ),
+            confidence=row.get(
+                "confidence"
+            ),
+            source_observation_id=row.get(
+                "source_observation_id"
+            ),
+            reporter_observation_id=row.get(
+                "reporter_observation_id"
+            ),
+            evidence_id=row.get(
+                "evidence_id"
+            ),
+        )
+
+        normalized_claim_links.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "claim_id": (
+                    identity["claim_id"]
+                ),
+                "target_type": (
+                    identity["target_type"]
+                ),
+                "target_id": (
+                    identity["target_id"]
+                ),
+                "relationship_type": (
+                    identity[
+                        "relationship_type"
+                    ]
+                ),
+                "confidence": (
+                    identity["confidence"]
+                ),
+                "observed_at": (
+                    identity["observed_at"]
+                ),
+            }
+        )
+
     for raw_row in observation_dependencies or []:
         row = _evidence_context_row(
             raw_row,
@@ -457,6 +551,18 @@ def build_evidence_analysis_bundle(
                 collection_name=(
                     "evidence_links"
                 ),
+            )
+        ),
+        "claims": (
+            _deduplicate_evidence_context_entries(
+                normalized_claims,
+                collection_name="claims",
+            )
+        ),
+        "claim_links": (
+            _deduplicate_evidence_context_entries(
+                normalized_claim_links,
+                collection_name="claim_links",
             )
         ),
         "observation_dependencies": (
@@ -604,6 +710,104 @@ def load_evidence_analysis_bundle_for_media_item(
             ),
         ).fetchall()
 
+        selected_source_observation_ids = [
+            str(row["id"])
+            for row in source_observations
+        ]
+
+        selected_reporter_observation_ids = [
+            str(row["id"])
+            for row in reporter_observations
+        ]
+
+        selected_evidence_ids = [
+            str(row["id"])
+            for row in evidence_records
+        ]
+
+        target_conditions = []
+        target_parameters = []
+
+        for (
+            column_name,
+            identifiers,
+        ) in (
+            (
+                "source_observation_id",
+                selected_source_observation_ids,
+            ),
+            (
+                "reporter_observation_id",
+                selected_reporter_observation_ids,
+            ),
+            (
+                "evidence_id",
+                selected_evidence_ids,
+            ),
+        ):
+            if not identifiers:
+                continue
+
+            placeholders = ", ".join(
+                "?"
+                for _ in identifiers
+            )
+
+            target_conditions.append(
+                f"{column_name} IN ({placeholders})"
+            )
+
+            target_parameters.extend(
+                identifiers
+            )
+
+        if target_conditions:
+            claim_links = conn.execute(
+                (
+                    "SELECT * "
+                    "FROM claim_links "
+                    "WHERE "
+                    + " OR ".join(
+                        target_conditions
+                    )
+                    + " ORDER BY id"
+                ),
+                target_parameters,
+            ).fetchall()
+        else:
+            claim_links = []
+
+        claim_ids = sorted(
+            {
+                str(
+                    row["claim_id"]
+                ).strip()
+                for row in claim_links
+                if str(
+                    row["claim_id"] or ""
+                ).strip()
+            }
+        )
+
+        if claim_ids:
+            claim_placeholders = ", ".join(
+                "?"
+                for _ in claim_ids
+            )
+
+            claims = conn.execute(
+                (
+                    "SELECT * "
+                    "FROM intelligence_claims "
+                    "WHERE id IN ("
+                    + claim_placeholders
+                    + ") ORDER BY id"
+                ),
+                claim_ids,
+            ).fetchall()
+        else:
+            claims = []
+
         observation_dependencies = conn.execute(
             """
             SELECT *
@@ -650,6 +854,8 @@ def load_evidence_analysis_bundle_for_media_item(
         reporter_observations=reporter_observations,
         evidence_records=evidence_records,
         evidence_links=evidence_links,
+        claims=claims,
+        claim_links=claim_links,
         observation_dependencies=(
             observation_dependencies
         ),

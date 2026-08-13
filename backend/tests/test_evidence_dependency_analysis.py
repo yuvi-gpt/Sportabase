@@ -55,7 +55,7 @@ class EvidenceDependencyAnalysisTests(
 
         return row
 
-    def test_bundle_version_is_v2(
+    def test_bundle_version_is_v3(
         self,
     ):
         bundle = (
@@ -66,7 +66,7 @@ class EvidenceDependencyAnalysisTests(
 
         self.assertEqual(
             bundle["version"],
-            "evidence-analysis-v2",
+            "evidence-analysis-v3",
         )
 
         self.assertEqual(
