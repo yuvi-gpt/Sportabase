@@ -46,6 +46,8 @@ from app.intelligence.stories import (
 from app.intelligence.claims import (
     claim_id_for_canonical_key as _claim_id_for_canonical_key_impl,
     upsert_intelligence_claim as _upsert_intelligence_claim_impl,
+    claim_link_id_for_record as _claim_link_id_for_record_impl,
+    record_claim_link as _record_claim_link_impl,
 )
 from app.intelligence.reporters import (
     reporter_id_for_identity_key as _reporter_id_for_identity_key_impl,
@@ -1599,6 +1601,53 @@ def upsert_intelligence_claim(
         metadata=metadata,
         seen_at=seen_at,
         id_resolver=claim_id_for_canonical_key,
+        connection_factory=db_conn,
+    )
+
+
+def claim_link_id_for_record(
+    *,
+    claim_id: str,
+    relationship_type: str,
+    observed_at: str,
+    confidence: Optional[float] = None,
+    source_observation_id: Optional[str] = None,
+    reporter_observation_id: Optional[str] = None,
+    evidence_id: Optional[str] = None,
+) -> str:
+    return _claim_link_id_for_record_impl(
+        claim_id=claim_id,
+        relationship_type=relationship_type,
+        observed_at=observed_at,
+        confidence=confidence,
+        source_observation_id=source_observation_id,
+        reporter_observation_id=reporter_observation_id,
+        evidence_id=evidence_id,
+    )
+
+
+def record_claim_link(
+    *,
+    claim_id: str,
+    relationship_type: str,
+    observed_at: str,
+    confidence: Optional[float] = None,
+    source_observation_id: Optional[str] = None,
+    reporter_observation_id: Optional[str] = None,
+    evidence_id: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    recorded_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    return _record_claim_link_impl(
+        claim_id=claim_id,
+        relationship_type=relationship_type,
+        observed_at=observed_at,
+        confidence=confidence,
+        source_observation_id=source_observation_id,
+        reporter_observation_id=reporter_observation_id,
+        evidence_id=evidence_id,
+        metadata=metadata,
+        recorded_at=recorded_at,
         connection_factory=db_conn,
     )
 
