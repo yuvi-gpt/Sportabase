@@ -6,7 +6,7 @@ from app.analysis.stance import (
 
 
 CLAIM_SUPPORT_PROVENANCE_VERSION = (
-    "claim-support-provenance-v1"
+    "claim-support-provenance-v2"
 )
 
 CLAIM_SUPPORT_PROVENANCE_STATUS_VOCABULARY = (
@@ -16,7 +16,118 @@ CLAIM_SUPPORT_PROVENANCE_STATUS_VOCABULARY = (
     "recorded_support_dependency_present",
     "support_source_diversity_not_established",
     "multi_source_support_independence_unknown",
+    "verified_independent_support",
 )
+
+
+def _dependency_upstream_matches_observation(
+    dependency: Dict[str, Any],
+    observation_target,
+    observation_actors: Dict[Any, Any],
+) -> bool:
+    target_type, target_id = (
+        observation_target
+    )
+
+    upstream_type = str(
+        dependency.get(
+            "upstream_type"
+        ) or ""
+    ).strip().lower()
+
+    upstream_id = str(
+        dependency.get(
+            "upstream_id"
+        ) or ""
+    ).strip()
+
+    if not upstream_type or not upstream_id:
+        return False
+
+    if upstream_type in (
+        "source_observation",
+        "reporter_observation",
+    ):
+        return (
+            upstream_type,
+            upstream_id,
+        ) == (
+            target_type,
+            target_id,
+        )
+
+    actor = observation_actors.get(
+        observation_target,
+        {},
+    )
+
+    if upstream_type == "source":
+        source_id = str(
+            actor.get(
+                "source_id"
+            ) or ""
+        ).strip()
+
+        return bool(
+            source_id
+            and source_id == upstream_id
+        )
+
+    if upstream_type == "reporter":
+        reporter_id = str(
+            actor.get(
+                "reporter_id"
+            ) or ""
+        ).strip()
+
+        return bool(
+            reporter_id
+            and reporter_id == upstream_id
+        )
+
+    return False
+
+
+def _dependency_conflicts_with_pair(
+    dependency: Dict[str, Any],
+    first_target,
+    second_target,
+    observation_actors: Dict[Any, Any],
+) -> bool:
+    downstream = (
+        str(
+            dependency.get(
+                "downstream_type"
+            ) or ""
+        ).strip().lower(),
+        str(
+            dependency.get(
+                "downstream_id"
+            ) or ""
+        ).strip(),
+    )
+
+    if (
+        downstream == first_target
+        and _dependency_upstream_matches_observation(
+            dependency,
+            second_target,
+            observation_actors,
+        )
+    ):
+        return True
+
+    if (
+        downstream == second_target
+        and _dependency_upstream_matches_observation(
+            dependency,
+            first_target,
+            observation_actors,
+        )
+    ):
+        return True
+
+    return False
 
 
 def build_claim_support_provenance(
@@ -181,6 +292,132 @@ def build_claim_support_provenance(
                 ).strip(),
             }
         )
+
+    independence_assertions = []
+
+    for row in bundle.get(
+        "observation_independence_assertions",
+        [],
+    ):
+        if not isinstance(
+            row,
+            dict,
+        ):
+            continue
+
+        observation_a_type = str(
+            row.get(
+                "observation_a_type"
+            ) or ""
+        ).strip().lower()
+
+        observation_a_id = str(
+            row.get(
+                "observation_a_id"
+            ) or ""
+        ).strip()
+
+        observation_b_type = str(
+            row.get(
+                "observation_b_type"
+            ) or ""
+        ).strip().lower()
+
+        observation_b_id = str(
+            row.get(
+                "observation_b_id"
+            ) or ""
+        ).strip()
+
+        provenance_evidence_id = str(
+            row.get(
+                "provenance_evidence_id"
+            ) or ""
+        ).strip()
+
+        verification_status = str(
+            row.get(
+                "verification_status"
+            ) or ""
+        ).strip().lower()
+
+        if (
+            observation_a_type
+            not in (
+                "source_observation",
+                "reporter_observation",
+            )
+            or not observation_a_id
+            or observation_b_type
+            not in (
+                "source_observation",
+                "reporter_observation",
+            )
+            or not observation_b_id
+            or not provenance_evidence_id
+        ):
+            continue
+
+        first_target, second_target = sorted(
+            (
+                (
+                    observation_a_type,
+                    observation_a_id,
+                ),
+                (
+                    observation_b_type,
+                    observation_b_id,
+                ),
+            )
+        )
+
+        independence_assertions.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "observation_a_type": (
+                    first_target[0]
+                ),
+                "observation_a_id": (
+                    first_target[1]
+                ),
+                "observation_b_type": (
+                    second_target[0]
+                ),
+                "observation_b_id": (
+                    second_target[1]
+                ),
+                "provenance_evidence_id": (
+                    provenance_evidence_id
+                ),
+                "verification_status": (
+                    verification_status
+                ),
+                "confidence": (
+                    row.get("confidence")
+                ),
+                "observed_at": str(
+                    row.get(
+                        "observed_at"
+                    ) or ""
+                ).strip(),
+            }
+        )
+
+    independence_assertions.sort(
+        key=lambda row: (
+            row["observation_a_type"],
+            row["observation_a_id"],
+            row["observation_b_type"],
+            row["observation_b_id"],
+            row["verification_status"],
+            row["provenance_evidence_id"],
+            row["observed_at"],
+            str(row["confidence"]),
+            row["id"],
+        )
+    )
 
     claim_states = []
 
@@ -359,6 +596,162 @@ def build_claim_support_provenance(
                     dependency
                 )
 
+        claim_independence_assertions = []
+        qualifying_independence_assertions = []
+        blocked_independence_assertions = []
+
+        for assertion in independence_assertions:
+            first_target = (
+                assertion[
+                    "observation_a_type"
+                ],
+                assertion[
+                    "observation_a_id"
+                ],
+            )
+
+            second_target = (
+                assertion[
+                    "observation_b_type"
+                ],
+                assertion[
+                    "observation_b_id"
+                ],
+            )
+
+            if (
+                first_target
+                not in supporting_observations
+                or second_target
+                not in supporting_observations
+            ):
+                continue
+
+            first_actor = (
+                observation_actors.get(
+                    first_target,
+                    {},
+                )
+            )
+
+            second_actor = (
+                observation_actors.get(
+                    second_target,
+                    {},
+                )
+            )
+
+            first_source_id = str(
+                first_actor.get(
+                    "source_id"
+                ) or ""
+            ).strip()
+
+            second_source_id = str(
+                second_actor.get(
+                    "source_id"
+                ) or ""
+            ).strip()
+
+            dependency_conflicts = [
+                dependency
+                for dependency in support_dependencies
+                if _dependency_conflicts_with_pair(
+                    dependency,
+                    first_target,
+                    second_target,
+                    observation_actors,
+                )
+            ]
+
+            dependency_conflict_ids = sorted(
+                {
+                    str(
+                        dependency.get(
+                            "id"
+                        ) or ""
+                    ).strip()
+                    for dependency
+                    in dependency_conflicts
+                    if str(
+                        dependency.get(
+                            "id"
+                        ) or ""
+                    ).strip()
+                }
+            )
+
+            block_reasons = []
+
+            if (
+                assertion[
+                    "verification_status"
+                ]
+                != "verified"
+            ):
+                block_reasons.append(
+                    "assertion_not_verified"
+                )
+
+            if (
+                not first_source_id
+                or not second_source_id
+            ):
+                block_reasons.append(
+                    "source_identity_unresolved"
+                )
+
+            elif (
+                first_source_id
+                == second_source_id
+            ):
+                block_reasons.append(
+                    "same_source"
+                )
+
+            if dependency_conflicts:
+                block_reasons.append(
+                    "recorded_dependency_conflict"
+                )
+
+            evaluated = {
+                **assertion,
+                "supporting_source_ids": sorted(
+                    {
+                        first_source_id,
+                        second_source_id,
+                    }
+                    - {""}
+                ),
+                "dependency_conflict_ids": (
+                    dependency_conflict_ids
+                ),
+                "block_reasons": (
+                    sorted(
+                        set(
+                            block_reasons
+                        )
+                    )
+                ),
+            }
+
+            claim_independence_assertions.append(
+                evaluated
+            )
+
+            if block_reasons:
+                blocked_independence_assertions.append(
+                    evaluated
+                )
+            else:
+                qualifying_independence_assertions.append(
+                    evaluated
+                )
+
+        independent_support_established = bool(
+            qualifying_independence_assertions
+        )
+
         observation_count = len(
             supporting_observations
         )
@@ -383,6 +776,11 @@ def build_claim_support_provenance(
         elif observation_count == 1:
             status = (
                 "single_support_observation"
+            )
+
+        elif independent_support_established:
+            status = (
+                "verified_independent_support"
             )
 
         elif support_dependencies:
@@ -420,7 +818,7 @@ def build_claim_support_provenance(
                 ).strip(),
                 "status": status,
                 "independent_support_established": (
-                    False
+                    independent_support_established
                 ),
                 "corroboration_status": (
                     "not_assessed"
@@ -463,6 +861,15 @@ def build_claim_support_provenance(
                 ): (
                     supporter_to_supporter_dependencies
                 ),
+                "support_independence_assertions": (
+                    claim_independence_assertions
+                ),
+                "qualifying_independence_assertions": (
+                    qualifying_independence_assertions
+                ),
+                "blocked_independence_assertions": (
+                    blocked_independence_assertions
+                ),
                 "counts": {
                     "supporting_observations": (
                         observation_count
@@ -484,6 +891,24 @@ def build_claim_support_provenance(
                         "dependencies"
                     ): len(
                         supporter_to_supporter_dependencies
+                    ),
+                    (
+                        "support_independence_"
+                        "assertions"
+                    ): len(
+                        claim_independence_assertions
+                    ),
+                    (
+                        "qualifying_independence_"
+                        "assertions"
+                    ): len(
+                        qualifying_independence_assertions
+                    ),
+                    (
+                        "blocked_independence_"
+                        "assertions"
+                    ): len(
+                        blocked_independence_assertions
                     ),
                 },
             }
@@ -516,6 +941,22 @@ def build_claim_support_provenance(
             (
                 "multiple_supporting_sources_do_"
                 "not_imply_independence"
+            ): True,
+            (
+                "verified_pair_assertion_requires_"
+                "distinct_supporting_sources"
+            ): True,
+            (
+                "direct_dependency_conflict_blocks_"
+                "verified_independent_pair"
+            ): True,
+            (
+                "unrelated_support_dependency_does_"
+                "not_erase_verified_independent_pair"
+            ): True,
+            (
+                "independence_confidence_is_recorded_"
+                "but_not_thresholded"
             ): True,
             (
                 "support_provenance_does_not_"

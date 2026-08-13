@@ -206,7 +206,6 @@ def build_claim_corroboration_assessment(
             independent_support_established
             and supporting_observation_count >= 2
             and distinct_supporting_sources >= 2
-            and support_dependency_count == 0
         )
 
         if qualifies_for_corroboration:
