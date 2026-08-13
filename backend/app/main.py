@@ -629,6 +629,52 @@ ON evidence_links(source_id);
 CREATE INDEX IF NOT EXISTS idx_evidence_links_reporter
 ON evidence_links(reporter_id);
 
+CREATE TABLE IF NOT EXISTS claim_links (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  source_observation_id TEXT,
+  reporter_observation_id TEXT,
+  evidence_id TEXT,
+  relationship_type TEXT NOT NULL,
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (source_observation_id IS NOT NULL)
+    + (reporter_observation_id IS NOT NULL)
+    + (evidence_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id),
+  FOREIGN KEY(source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_claim
+ON claim_links(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_source_observation
+ON claim_links(source_observation_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_reporter_observation
+ON claim_links(reporter_observation_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_evidence
+ON claim_links(evidence_id);
+
 CREATE TABLE IF NOT EXISTS observation_dependencies (
   id TEXT PRIMARY KEY,
   downstream_source_observation_id TEXT,
