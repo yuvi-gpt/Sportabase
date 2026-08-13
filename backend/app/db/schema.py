@@ -1,0 +1,523 @@
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS stories (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  title TEXT NOT NULL,
+  link TEXT NOT NULL,
+  published TEXT,
+  summary TEXT,
+  tldr_json TEXT,
+  merit_score INTEGER,
+  badge TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories(created_at);
+CREATE INDEX IF NOT EXISTS idx_stories_sport ON stories(sport);
+CREATE INDEX IF NOT EXISTS idx_stories_source ON stories(source);
+
+CREATE TABLE IF NOT EXISTS analysis_cache (
+  cache_key TEXT PRIMARY KEY,
+  mode TEXT NOT NULL,
+  request_url TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  analysis_version TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  article_type TEXT,
+  created_at TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_cache_expires_at
+ON analysis_cache(expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_cache_mode
+ON analysis_cache(mode);
+
+CREATE TABLE IF NOT EXISTS gemini_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  usage_day TEXT NOT NULL,
+  client_key TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  model TEXT NOT NULL,
+  status TEXT NOT NULL,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  thought_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_hit INTEGER NOT NULL DEFAULT 0,
+  inflight_join INTEGER NOT NULL DEFAULT 0,
+  latency_ms INTEGER NOT NULL DEFAULT 0,
+  failure_status_code INTEGER,
+  failure_type TEXT NOT NULL DEFAULT '',
+  failure_detail TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_gemini_usage_day
+ON gemini_usage(usage_day);
+
+CREATE INDEX IF NOT EXISTS idx_gemini_usage_client_day
+ON gemini_usage(client_key, usage_day);
+
+CREATE TABLE IF NOT EXISTS intelligence_sources (
+  id TEXT PRIMARY KEY,
+  source_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  source_type TEXT NOT NULL DEFAULT 'publisher',
+  canonical_domain TEXT,
+  publication_founded_at TEXT,
+  domain_registered_at TEXT,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_sources_domain
+ON intelligence_sources(canonical_domain);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_sources_type
+ON intelligence_sources(source_type);
+
+CREATE TABLE IF NOT EXISTS intelligence_reporters (
+  id TEXT PRIMARY KEY,
+  identity_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_reporters_name
+ON intelligence_reporters(display_name);
+
+CREATE TABLE IF NOT EXISTS media_items (
+  id TEXT PRIMARY KEY,
+  canonical_url TEXT NOT NULL UNIQUE,
+  mode TEXT NOT NULL,
+  source_id TEXT,
+  reporter_id TEXT,
+  title TEXT NOT NULL DEFAULT '',
+  published_at TEXT,
+  latest_content_hash TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id),
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_source
+ON media_items(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_reporter
+ON media_items(reporter_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_mode
+ON media_items(mode);
+
+CREATE TABLE IF NOT EXISTS intelligence_stories (
+  id TEXT PRIMARY KEY,
+  canonical_key TEXT NOT NULL UNIQUE,
+  canonical_title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'developing',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_stories_status
+ON intelligence_stories(status);
+
+CREATE TABLE IF NOT EXISTS intelligence_claims (
+  id TEXT PRIMARY KEY,
+  canonical_key TEXT NOT NULL UNIQUE,
+  subject_key TEXT NOT NULL,
+  canonical_text TEXT NOT NULL DEFAULT '',
+  claim_type TEXT NOT NULL DEFAULT 'assertion',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_claims_subject
+ON intelligence_claims(subject_key);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_claims_type
+ON intelligence_claims(claim_type);
+
+CREATE TABLE IF NOT EXISTS story_media_links (
+  story_id TEXT NOT NULL,
+  media_item_id TEXT NOT NULL,
+  relationship_type TEXT NOT NULL DEFAULT 'reports',
+  confidence REAL NOT NULL DEFAULT 0.0,
+  linked_at TEXT NOT NULL,
+  PRIMARY KEY(story_id, media_item_id),
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_story_media_links_media
+ON story_media_links(media_item_id);
+
+CREATE TABLE IF NOT EXISTS source_observations (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  media_item_id TEXT,
+  story_id TEXT,
+  subject_key TEXT NOT NULL,
+  observation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unresolved',
+  claim_summary TEXT NOT NULL DEFAULT '',
+  provenance_url TEXT NOT NULL DEFAULT '',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_source_time
+ON source_observations(source_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_subject_time
+ON source_observations(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_media
+ON source_observations(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_story
+ON source_observations(story_id);
+
+CREATE TABLE IF NOT EXISTS reporter_observations (
+  id TEXT PRIMARY KEY,
+  reporter_id TEXT NOT NULL,
+  source_id TEXT,
+  media_item_id TEXT,
+  story_id TEXT,
+  subject_key TEXT NOT NULL,
+  observation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unresolved',
+  claim_summary TEXT NOT NULL DEFAULT '',
+  provenance_url TEXT NOT NULL DEFAULT '',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_reporter_time
+ON reporter_observations(reporter_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_source_time
+ON reporter_observations(source_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_subject_time
+ON reporter_observations(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_media
+ON reporter_observations(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_story
+ON reporter_observations(story_id);
+
+CREATE TABLE IF NOT EXISTS evidence_records (
+  id TEXT PRIMARY KEY,
+  evidence_key TEXT NOT NULL UNIQUE,
+  evidence_type TEXT NOT NULL,
+  subject_key TEXT NOT NULL,
+  claim_summary TEXT NOT NULL DEFAULT '',
+  canonical_url TEXT NOT NULL DEFAULT '',
+  reference_key TEXT NOT NULL DEFAULT '',
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  published_at TEXT,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_type
+ON evidence_records(evidence_type);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_subject_time
+ON evidence_records(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_url
+ON evidence_records(canonical_url);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_verification
+ON evidence_records(verification_status);
+
+CREATE TABLE IF NOT EXISTS evidence_links (
+  id TEXT PRIMARY KEY,
+  evidence_id TEXT NOT NULL,
+  media_item_id TEXT,
+  story_id TEXT,
+  source_id TEXT,
+  reporter_id TEXT,
+  relationship_type TEXT NOT NULL DEFAULT 'supports',
+  confidence REAL,
+  linked_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (media_item_id IS NOT NULL)
+    + (story_id IS NOT NULL)
+    + (source_id IS NOT NULL)
+    + (reporter_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_evidence
+ON evidence_links(evidence_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_media
+ON evidence_links(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_story
+ON evidence_links(story_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_source
+ON evidence_links(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_reporter
+ON evidence_links(reporter_id);
+
+CREATE TABLE IF NOT EXISTS claim_links (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  source_observation_id TEXT,
+  reporter_observation_id TEXT,
+  evidence_id TEXT,
+  relationship_type TEXT NOT NULL,
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (source_observation_id IS NOT NULL)
+    + (reporter_observation_id IS NOT NULL)
+    + (evidence_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id),
+  FOREIGN KEY(source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_claim
+ON claim_links(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_source_observation
+ON claim_links(source_observation_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_reporter_observation
+ON claim_links(reporter_observation_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_evidence
+ON claim_links(evidence_id);
+
+CREATE TABLE IF NOT EXISTS observation_dependencies (
+  id TEXT PRIMARY KEY,
+  downstream_source_observation_id TEXT,
+  downstream_reporter_observation_id TEXT,
+  upstream_source_observation_id TEXT,
+  upstream_reporter_observation_id TEXT,
+  upstream_source_id TEXT,
+  upstream_reporter_id TEXT,
+  relationship_type TEXT NOT NULL,
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (downstream_source_observation_id IS NOT NULL)
+    + (downstream_reporter_observation_id IS NOT NULL)
+    = 1
+  ),
+  CHECK (
+    (upstream_source_observation_id IS NOT NULL)
+    + (upstream_reporter_observation_id IS NOT NULL)
+    + (upstream_source_id IS NOT NULL)
+    + (upstream_reporter_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(downstream_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(downstream_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(upstream_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(upstream_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(upstream_source_id)
+    REFERENCES intelligence_sources(id),
+  FOREIGN KEY(upstream_reporter_id)
+    REFERENCES intelligence_reporters(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_downstream_source
+ON observation_dependencies(
+  downstream_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_downstream_reporter
+ON observation_dependencies(
+  downstream_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_source_observation
+ON observation_dependencies(
+  upstream_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_reporter_observation
+ON observation_dependencies(
+  upstream_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_source
+ON observation_dependencies(
+  upstream_source_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_reporter
+ON observation_dependencies(
+  upstream_reporter_id
+);
+
+CREATE TABLE IF NOT EXISTS analysis_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  media_item_id TEXT NOT NULL,
+  story_id TEXT,
+  analyzed_at TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  analysis_version TEXT NOT NULL,
+  scoring_version TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  context_hash TEXT NOT NULL DEFAULT '',
+  merit_score INTEGER,
+  evidence_score INTEGER,
+  logic_score INTEGER,
+  badge TEXT NOT NULL DEFAULT '',
+  verdict TEXT NOT NULL DEFAULT '',
+  article_type TEXT NOT NULL DEFAULT '',
+  score_components_json TEXT NOT NULL DEFAULT '{}',
+  score_calculation_json TEXT NOT NULL DEFAULT '{}',
+  reasons_json TEXT NOT NULL DEFAULT '[]',
+  response_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_media_time
+ON analysis_snapshots(media_item_id, analyzed_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_story_time
+ON analysis_snapshots(story_id, analyzed_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_analysis_version
+ON analysis_snapshots(analysis_version);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_scoring_version
+ON analysis_snapshots(scoring_version);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_snapshots_identity
+ON analysis_snapshots(
+  media_item_id,
+  mode,
+  content_hash,
+  analysis_version,
+  scoring_version
+);
+
+CREATE TABLE IF NOT EXISTS user_history (
+  client_key TEXT NOT NULL,
+  media_item_id TEXT NOT NULL,
+  first_analyzed_at TEXT NOT NULL,
+  last_analyzed_at TEXT NOT NULL,
+  analysis_count INTEGER NOT NULL DEFAULT 1,
+  last_snapshot_id INTEGER,
+  PRIMARY KEY(client_key, media_item_id),
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(last_snapshot_id)
+    REFERENCES analysis_snapshots(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_history_recent
+ON user_history(client_key, last_analyzed_at);
+"""
