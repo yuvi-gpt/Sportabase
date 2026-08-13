@@ -110,6 +110,12 @@ from app.analysis.independence import (
     CLAIM_INDEPENDENCE_STATUS_VOCABULARY,
     build_claim_independence_assessment,
 )
+from app.analysis.stance import (
+    CLAIM_STANCE_POLICY_VERSION,
+    CLAIM_LINK_STANCE_RELATIONSHIP_VOCABULARY,
+    CLAIM_STANCE_STATUS_VOCABULARY,
+    build_claim_stance_analysis,
+)
 # from app.routes.insights import router as insights_router
 
 
