@@ -67,6 +67,12 @@ from app.intelligence.dependencies import (
     observation_dependency_id_for_record as _observation_dependency_id_for_record_impl,
     record_observation_dependency as _record_observation_dependency_impl,
 )
+from app.intelligence.independence_assertions import (
+    OBSERVATION_INDEPENDENCE_ASSERTION_VERSION,
+    OBSERVATION_INDEPENDENCE_VERIFICATION_VOCABULARY,
+    observation_independence_assertion_id_for_record as _observation_independence_assertion_id_for_record_impl,
+    record_observation_independence_assertion as _record_observation_independence_assertion_impl,
+)
 from app.intelligence.context import (
     EVIDENCE_CONTEXT_VERSION,
     MEDIA_EVIDENCE_CONTEXT_POLICY_VERSION,
@@ -2083,6 +2089,93 @@ def record_observation_dependency(
         metadata=metadata,
         connection_factory=db_conn,
     )
+def observation_independence_assertion_id_for_record(
+    *,
+    observed_at: str,
+    provenance_evidence_id: str,
+    verification_status: str = "unverified",
+    confidence: Optional[float] = None,
+    left_source_observation_id:
+        Optional[str] = None,
+    left_reporter_observation_id:
+        Optional[str] = None,
+    right_source_observation_id:
+        Optional[str] = None,
+    right_reporter_observation_id:
+        Optional[str] = None,
+) -> str:
+    return (
+        _observation_independence_assertion_id_for_record_impl(
+            observed_at=observed_at,
+            provenance_evidence_id=(
+                provenance_evidence_id
+            ),
+            verification_status=(
+                verification_status
+            ),
+            confidence=confidence,
+            left_source_observation_id=(
+                left_source_observation_id
+            ),
+            left_reporter_observation_id=(
+                left_reporter_observation_id
+            ),
+            right_source_observation_id=(
+                right_source_observation_id
+            ),
+            right_reporter_observation_id=(
+                right_reporter_observation_id
+            ),
+        )
+    )
+
+
+def record_observation_independence_assertion(
+    *,
+    observed_at: str,
+    provenance_evidence_id: str,
+    verification_status: str = "unverified",
+    confidence: Optional[float] = None,
+    left_source_observation_id:
+        Optional[str] = None,
+    left_reporter_observation_id:
+        Optional[str] = None,
+    right_source_observation_id:
+        Optional[str] = None,
+    right_reporter_observation_id:
+        Optional[str] = None,
+    recorded_at: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    return (
+        _record_observation_independence_assertion_impl(
+            observed_at=observed_at,
+            provenance_evidence_id=(
+                provenance_evidence_id
+            ),
+            verification_status=(
+                verification_status
+            ),
+            confidence=confidence,
+            left_source_observation_id=(
+                left_source_observation_id
+            ),
+            left_reporter_observation_id=(
+                left_reporter_observation_id
+            ),
+            right_source_observation_id=(
+                right_source_observation_id
+            ),
+            right_reporter_observation_id=(
+                right_reporter_observation_id
+            ),
+            recorded_at=recorded_at,
+            metadata=metadata,
+            connection_factory=db_conn,
+        )
+    )
+
+
 def load_evidence_context_for_source(
     *,
     source_id: str,

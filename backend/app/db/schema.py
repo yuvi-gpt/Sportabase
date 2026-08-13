@@ -454,6 +454,106 @@ ON observation_dependencies(
   upstream_reporter_id
 );
 
+CREATE TABLE IF NOT EXISTS
+observation_independence_assertions (
+  id TEXT PRIMARY KEY,
+  observation_a_source_observation_id TEXT,
+  observation_a_reporter_observation_id TEXT,
+  observation_b_source_observation_id TEXT,
+  observation_b_reporter_observation_id TEXT,
+  provenance_evidence_id TEXT NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    verification_status IN (
+      'unverified',
+      'verified'
+    )
+  ),
+  CHECK (
+    (observation_a_source_observation_id IS NOT NULL)
+    + (observation_a_reporter_observation_id IS NOT NULL)
+    = 1
+  ),
+  CHECK (
+    (observation_b_source_observation_id IS NOT NULL)
+    + (observation_b_reporter_observation_id IS NOT NULL)
+    = 1
+  ),
+  CHECK (
+    observation_a_source_observation_id IS NULL
+    OR observation_b_source_observation_id IS NULL
+    OR (
+      observation_a_source_observation_id
+      <> observation_b_source_observation_id
+    )
+  ),
+  CHECK (
+    observation_a_reporter_observation_id IS NULL
+    OR observation_b_reporter_observation_id IS NULL
+    OR (
+      observation_a_reporter_observation_id
+      <> observation_b_reporter_observation_id
+    )
+  ),
+  FOREIGN KEY(observation_a_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(observation_a_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(observation_b_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(observation_b_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(provenance_evidence_id)
+    REFERENCES evidence_records(id)
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_observation_independence_a_source
+ON observation_independence_assertions(
+  observation_a_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_observation_independence_a_reporter
+ON observation_independence_assertions(
+  observation_a_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_observation_independence_b_source
+ON observation_independence_assertions(
+  observation_b_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_observation_independence_b_reporter
+ON observation_independence_assertions(
+  observation_b_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_observation_independence_evidence
+ON observation_independence_assertions(
+  provenance_evidence_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_observation_independence_verification
+ON observation_independence_assertions(
+  verification_status
+);
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
