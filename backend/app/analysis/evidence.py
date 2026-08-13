@@ -23,7 +23,7 @@ from app.intelligence.claims import (
 
 
 EVIDENCE_ANALYSIS_BUNDLE_VERSION = (
-    "evidence-analysis-v4"
+    "evidence-analysis-v5"
 )
 
 
@@ -861,7 +861,7 @@ def load_evidence_analysis_bundle_for_media_item(
             )
 
         if target_conditions:
-            claim_links = conn.execute(
+            seed_claim_links = conn.execute(
                 (
                     "SELECT * "
                     "FROM claim_links "
@@ -874,19 +874,198 @@ def load_evidence_analysis_bundle_for_media_item(
                 target_parameters,
             ).fetchall()
         else:
-            claim_links = []
+            seed_claim_links = []
 
         claim_ids = sorted(
             {
                 str(
                     row["claim_id"]
                 ).strip()
-                for row in claim_links
+                for row in seed_claim_links
                 if str(
                     row["claim_id"] or ""
                 ).strip()
             }
         )
+
+        if claim_ids:
+            claim_placeholders = ", ".join(
+                "?"
+                for _ in claim_ids
+            )
+
+            claim_scoped_source_observations = (
+                conn.execute(
+                    (
+                        "SELECT DISTINCT "
+                        "source_observations.* "
+                        "FROM source_observations "
+                        "INNER JOIN claim_links "
+                        "ON claim_links."
+                        "source_observation_id = "
+                        "source_observations.id "
+                        "WHERE claim_links.claim_id "
+                        "IN ("
+                        + claim_placeholders
+                        + ") "
+                        "ORDER BY "
+                        "source_observations.id"
+                    ),
+                    claim_ids,
+                ).fetchall()
+            )
+
+            claim_scoped_reporter_observations = (
+                conn.execute(
+                    (
+                        "SELECT DISTINCT "
+                        "reporter_observations.* "
+                        "FROM reporter_observations "
+                        "INNER JOIN claim_links "
+                        "ON claim_links."
+                        "reporter_observation_id = "
+                        "reporter_observations.id "
+                        "WHERE claim_links.claim_id "
+                        "IN ("
+                        + claim_placeholders
+                        + ") "
+                        "ORDER BY "
+                        "reporter_observations.id"
+                    ),
+                    claim_ids,
+                ).fetchall()
+            )
+
+            source_observations_by_id = {
+                str(row["id"]): row
+                for row in source_observations
+                if str(
+                    row["id"] or ""
+                ).strip()
+            }
+
+            for row in (
+                claim_scoped_source_observations
+            ):
+                row_id = str(
+                    row["id"] or ""
+                ).strip()
+
+                if row_id:
+                    source_observations_by_id[
+                        row_id
+                    ] = row
+
+            source_observations = [
+                source_observations_by_id[
+                    row_id
+                ]
+                for row_id in sorted(
+                    source_observations_by_id
+                )
+            ]
+
+            reporter_observations_by_id = {
+                str(row["id"]): row
+                for row in reporter_observations
+                if str(
+                    row["id"] or ""
+                ).strip()
+            }
+
+            for row in (
+                claim_scoped_reporter_observations
+            ):
+                row_id = str(
+                    row["id"] or ""
+                ).strip()
+
+                if row_id:
+                    reporter_observations_by_id[
+                        row_id
+                    ] = row
+
+            reporter_observations = [
+                reporter_observations_by_id[
+                    row_id
+                ]
+                for row_id in sorted(
+                    reporter_observations_by_id
+                )
+            ]
+
+            selected_source_observation_ids = [
+                str(row["id"])
+                for row in source_observations
+            ]
+
+            selected_reporter_observation_ids = [
+                str(row["id"])
+                for row in reporter_observations
+            ]
+
+            expanded_target_conditions = []
+            expanded_target_parameters = []
+
+            for (
+                column_name,
+                identifiers,
+            ) in (
+                (
+                    "source_observation_id",
+                    selected_source_observation_ids,
+                ),
+                (
+                    "reporter_observation_id",
+                    selected_reporter_observation_ids,
+                ),
+                (
+                    "evidence_id",
+                    selected_evidence_ids,
+                ),
+            ):
+                if not identifiers:
+                    continue
+
+                placeholders = ", ".join(
+                    "?"
+                    for _ in identifiers
+                )
+
+                expanded_target_conditions.append(
+                    (
+                        f"{column_name} "
+                        f"IN ({placeholders})"
+                    )
+                )
+
+                expanded_target_parameters.extend(
+                    identifiers
+                )
+
+            if expanded_target_conditions:
+                claim_links = conn.execute(
+                    (
+                        "SELECT * "
+                        "FROM claim_links "
+                        "WHERE claim_id IN ("
+                        + claim_placeholders
+                        + ") AND ("
+                        + " OR ".join(
+                            expanded_target_conditions
+                        )
+                        + ") "
+                        "ORDER BY id"
+                    ),
+                    (
+                        claim_ids
+                        + expanded_target_parameters
+                    ),
+                ).fetchall()
+            else:
+                claim_links = []
+        else:
+            claim_links = []
 
         if claim_ids:
             claim_placeholders = ", ".join(
@@ -907,41 +1086,58 @@ def load_evidence_analysis_bundle_for_media_item(
         else:
             claims = []
 
-        observation_dependencies = conn.execute(
-            """
-            SELECT *
-            FROM observation_dependencies
-            WHERE downstream_source_observation_id
-                  IN (
-                    SELECT id
-                    FROM source_observations
-                    WHERE media_item_id = ?
-                       OR story_id IN (
-                            SELECT story_id
-                            FROM story_media_links
-                            WHERE media_item_id = ?
-                       )
-                  )
-               OR downstream_reporter_observation_id
-                  IN (
-                    SELECT id
-                    FROM reporter_observations
-                    WHERE media_item_id = ?
-                       OR story_id IN (
-                            SELECT story_id
-                            FROM story_media_links
-                            WHERE media_item_id = ?
-                       )
-                  )
-            ORDER BY id
-            """,
+        dependency_conditions = []
+        dependency_parameters = []
+
+        for (
+            column_name,
+            identifiers,
+        ) in (
             (
-                normalized_media_item_id,
-                normalized_media_item_id,
-                normalized_media_item_id,
-                normalized_media_item_id,
+                "downstream_source_observation_id",
+                selected_source_observation_ids,
             ),
-        ).fetchall()
+            (
+                "downstream_reporter_observation_id",
+                selected_reporter_observation_ids,
+            ),
+        ):
+            if not identifiers:
+                continue
+
+            placeholders = ", ".join(
+                "?"
+                for _ in identifiers
+            )
+
+            dependency_conditions.append(
+                (
+                    f"{column_name} "
+                    f"IN ({placeholders})"
+                )
+            )
+
+            dependency_parameters.extend(
+                identifiers
+            )
+
+        if dependency_conditions:
+            observation_dependencies = (
+                conn.execute(
+                    (
+                        "SELECT * "
+                        "FROM observation_dependencies "
+                        "WHERE "
+                        + " OR ".join(
+                            dependency_conditions
+                        )
+                        + " ORDER BY id"
+                    ),
+                    dependency_parameters,
+                ).fetchall()
+            )
+        else:
+            observation_dependencies = []
 
         independence_a_conditions = []
         independence_a_parameters = []

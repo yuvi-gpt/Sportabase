@@ -74,7 +74,7 @@ class EvidenceIndependenceAssertionTests(
 
         self.assertEqual(
             bundle["version"],
-            "evidence-analysis-v4",
+            "evidence-analysis-v5",
         )
 
         self.assertEqual(
