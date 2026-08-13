@@ -91,10 +91,12 @@ from app.intelligence.features import (
     OBSERVATION_DEPENDENCY_POLICY_VERSION,
     OBSERVATION_DEPENDENCY_RELATIONSHIP_VOCABULARY,
     EVIDENCE_SIGNAL_VOCABULARY,
+    CLAIM_DEPENDENCY_FEATURE_VERSION,
     inspect_observation_dependency_vocabulary,
     inspect_evidence_signal_vocabulary,
     build_evidence_signal_features,
     build_evidence_actor_features,
+    build_claim_dependency_features,
 )
 from app.analysis.evidence import (
     EVIDENCE_ANALYSIS_BUNDLE_VERSION,
