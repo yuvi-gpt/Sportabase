@@ -8617,6 +8617,26 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
     return out
 
 
+
+def gemini_candidate_semantics(
+    *,
+    claim: Dict[str, Any],
+    candidate: Dict[str, Any],
+    client_key: str = "anonymous",
+) -> Dict[str, Any]:
+    from app.services.corroboration_semantics import (
+        assess_candidate_semantics_with_gemini,
+    )
+
+    return assess_candidate_semantics_with_gemini(
+        claim=claim,
+        candidate=candidate,
+        client=gemini_client(),
+        client_key=client_key,
+        generator=generate_gemini_content,
+    )
+
+
 def gemini_tldr(
     title: str,
     text: str,
