@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useIncomingShare } from 'expo-sharing';
 import {
   Stack,
@@ -6,6 +6,7 @@ import {
   useRouter,
 } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 function IncomingShareRedirector() {
@@ -50,7 +51,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="light" />
 
-      <IncomingShareRedirector />
+      {Platform.OS !== 'web' ? (
+        <IncomingShareRedirector />
+      ) : null}
 
       <Stack
         screenOptions={{
