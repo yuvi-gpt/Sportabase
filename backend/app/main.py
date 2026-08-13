@@ -116,6 +116,11 @@ from app.analysis.stance import (
     CLAIM_STANCE_STATUS_VOCABULARY,
     build_claim_stance_analysis,
 )
+from app.analysis.support import (
+    CLAIM_SUPPORT_PROVENANCE_VERSION,
+    CLAIM_SUPPORT_PROVENANCE_STATUS_VOCABULARY,
+    build_claim_support_provenance,
+)
 # from app.routes.insights import router as insights_router
 
 
