@@ -121,6 +121,11 @@ from app.analysis.support import (
     CLAIM_SUPPORT_PROVENANCE_STATUS_VOCABULARY,
     build_claim_support_provenance,
 )
+from app.analysis.corroboration import (
+    CLAIM_CORROBORATION_POLICY_VERSION,
+    CLAIM_CORROBORATION_STATUS_VOCABULARY,
+    build_claim_corroboration_assessment,
+)
 # from app.routes.insights import router as insights_router
 
 
