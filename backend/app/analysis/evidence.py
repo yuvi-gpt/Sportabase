@@ -13,13 +13,17 @@ from app.intelligence.dependencies import (
     _observation_dependency_identity,
 )
 
+from app.intelligence.independence_assertions import (
+    _observation_independence_assertion_identity,
+)
+
 from app.intelligence.claims import (
     _claim_link_identity,
 )
 
 
 EVIDENCE_ANALYSIS_BUNDLE_VERSION = (
-    "evidence-analysis-v3"
+    "evidence-analysis-v4"
 )
 
 
@@ -42,6 +46,7 @@ def build_evidence_analysis_bundle(
     claims: Optional[list] = None,
     claim_links: Optional[list] = None,
     observation_dependencies: Optional[list] = None,
+    observation_independence_assertions: Optional[list] = None,
 ) -> Dict[str, Any]:
     normalized_media_item_id = str(
         media_item_id or ""
@@ -61,6 +66,7 @@ def build_evidence_analysis_bundle(
     normalized_claims = []
     normalized_claim_links = []
     normalized_observation_dependencies = []
+    normalized_observation_independence_assertions = []
 
     for raw_row in story_links or []:
         row = _evidence_context_row(
@@ -506,6 +512,91 @@ def build_evidence_analysis_bundle(
         )
 
 
+    for raw_row in (
+        observation_independence_assertions
+        or []
+    ):
+        row = _evidence_context_row(
+            raw_row,
+            collection_name=(
+                "observation_independence_assertions"
+            ),
+        )
+
+        identity = (
+            _observation_independence_assertion_identity(
+                observed_at=row.get(
+                    "observed_at"
+                ),
+                provenance_evidence_id=row.get(
+                    "provenance_evidence_id"
+                ),
+                verification_status=row.get(
+                    "verification_status"
+                ),
+                confidence=row.get(
+                    "confidence"
+                ),
+                left_source_observation_id=row.get(
+                    "observation_a_source_observation_id"
+                ),
+                left_reporter_observation_id=row.get(
+                    "observation_a_reporter_observation_id"
+                ),
+                right_source_observation_id=row.get(
+                    "observation_b_source_observation_id"
+                ),
+                right_reporter_observation_id=row.get(
+                    "observation_b_reporter_observation_id"
+                ),
+            )
+        )
+
+        normalized_observation_independence_assertions.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "observation_a_type": (
+                    identity[
+                        "observation_a_type"
+                    ]
+                ),
+                "observation_a_id": (
+                    identity[
+                        "observation_a_id"
+                    ]
+                ),
+                "observation_b_type": (
+                    identity[
+                        "observation_b_type"
+                    ]
+                ),
+                "observation_b_id": (
+                    identity[
+                        "observation_b_id"
+                    ]
+                ),
+                "provenance_evidence_id": (
+                    identity[
+                        "provenance_evidence_id"
+                    ]
+                ),
+                "verification_status": (
+                    identity[
+                        "verification_status"
+                    ]
+                ),
+                "confidence": (
+                    identity["confidence"]
+                ),
+                "observed_at": (
+                    identity["observed_at"]
+                ),
+            }
+        )
+
+
     return {
         "version": (
             EVIDENCE_ANALYSIS_BUNDLE_VERSION
@@ -570,6 +661,14 @@ def build_evidence_analysis_bundle(
                 normalized_observation_dependencies,
                 collection_name=(
                     "observation_dependencies"
+                ),
+            )
+        ),
+        "observation_independence_assertions": (
+            _deduplicate_evidence_context_entries(
+                normalized_observation_independence_assertions,
+                collection_name=(
+                    "observation_independence_assertions"
                 ),
             )
         ),
@@ -844,6 +943,97 @@ def load_evidence_analysis_bundle_for_media_item(
             ),
         ).fetchall()
 
+        independence_a_conditions = []
+        independence_a_parameters = []
+
+        independence_b_conditions = []
+        independence_b_parameters = []
+
+        if selected_source_observation_ids:
+            placeholders = ", ".join(
+                "?"
+                for _ in selected_source_observation_ids
+            )
+
+            independence_a_conditions.append(
+                (
+                    "observation_a_source_observation_id "
+                    f"IN ({placeholders})"
+                )
+            )
+
+            independence_a_parameters.extend(
+                selected_source_observation_ids
+            )
+
+            independence_b_conditions.append(
+                (
+                    "observation_b_source_observation_id "
+                    f"IN ({placeholders})"
+                )
+            )
+
+            independence_b_parameters.extend(
+                selected_source_observation_ids
+            )
+
+        if selected_reporter_observation_ids:
+            placeholders = ", ".join(
+                "?"
+                for _ in selected_reporter_observation_ids
+            )
+
+            independence_a_conditions.append(
+                (
+                    "observation_a_reporter_observation_id "
+                    f"IN ({placeholders})"
+                )
+            )
+
+            independence_a_parameters.extend(
+                selected_reporter_observation_ids
+            )
+
+            independence_b_conditions.append(
+                (
+                    "observation_b_reporter_observation_id "
+                    f"IN ({placeholders})"
+                )
+            )
+
+            independence_b_parameters.extend(
+                selected_reporter_observation_ids
+            )
+
+        if (
+            independence_a_conditions
+            and independence_b_conditions
+        ):
+            observation_independence_assertions = (
+                conn.execute(
+                    (
+                        "SELECT * "
+                        "FROM "
+                        "observation_independence_assertions "
+                        "WHERE ("
+                        + " OR ".join(
+                            independence_a_conditions
+                        )
+                        + ") AND ("
+                        + " OR ".join(
+                            independence_b_conditions
+                        )
+                        + ") ORDER BY id"
+                    ),
+                    (
+                        independence_a_parameters
+                        + independence_b_parameters
+                    ),
+                ).fetchall()
+            )
+        else:
+            observation_independence_assertions = []
+
     finally:
         conn.close()
 
@@ -858,6 +1048,9 @@ def load_evidence_analysis_bundle_for_media_item(
         claim_links=claim_links,
         observation_dependencies=(
             observation_dependencies
+        ),
+        observation_independence_assertions=(
+            observation_independence_assertions
         ),
     )
 
