@@ -173,6 +173,18 @@ from app.services.analysis_cache import (
     make_analysis_cache_key as _make_analysis_cache_key_cache_impl,
     set_cached_analysis as _set_cached_analysis_cache_impl,
 )
+from app.services.gemini_runtime import (
+    classify_gemini_failure as _classify_gemini_failure_runtime_impl,
+    expire_stale_gemini_reservations as _expire_stale_gemini_reservations_runtime_impl,
+    finish_gemini_call as _finish_gemini_call_runtime_impl,
+    gemini_request_fingerprint as _gemini_request_fingerprint_runtime_impl,
+    generate_gemini_content as _generate_gemini_content_runtime_impl,
+    record_analysis_cache_hit as _record_analysis_cache_hit_runtime_impl,
+    record_inflight_gemini_join as _record_inflight_gemini_join_runtime_impl,
+    request_client_key as _request_client_key_runtime_impl,
+    reserve_gemini_call as _reserve_gemini_call_runtime_impl,
+    usage_metadata_counts as _usage_metadata_counts_runtime_impl,
+)
 # from app.routes.insights import router as insights_router
 
 
@@ -1461,38 +1473,11 @@ def set_cached_analysis(
 def request_client_key(
     request: Request,
 ) -> str:
-    installation_id = str(
-        request.headers.get(
-            "x-sportabase-client-id",
-            "",
+    return (
+        _request_client_key_runtime_impl(
+            request
         )
-    ).strip()
-
-    if installation_id:
-        identity = (
-            f"installation:{installation_id}"
-        )
-    else:
-        forwarded_for = str(
-            request.headers.get(
-                "x-forwarded-for",
-                "",
-            )
-        ).split(",", 1)[0].strip()
-
-        client_host = (
-            request.client.host
-            if request.client
-            else ""
-        )
-
-        identity = (
-            f"ip:{forwarded_for or client_host or 'unknown'}"
-        )
-
-    return hashlib.sha256(
-        identity.encode("utf-8")
-    ).hexdigest()[:32]
+    )
 
 
 def expire_stale_gemini_reservations(
@@ -1501,51 +1486,15 @@ def expire_stale_gemini_reservations(
     usage_day: Optional[str] = None,
     now: Optional[datetime] = None,
 ) -> int:
-    current_time = (
-        now
-        if now is not None
-        else datetime.now(timezone.utc)
-    )
-
-    current_usage_day = (
-        str(usage_day)
-        if usage_day
-        else current_time.date().isoformat()
-    )
-
-    cutoff = (
-        current_time
-        - timedelta(
-            seconds=(
+    return (
+        _expire_stale_gemini_reservations_runtime_impl(
+            conn,
+            usage_day=usage_day,
+            now=now,
+            reservation_timeout_seconds=(
                 GEMINI_RESERVATION_TIMEOUT_SECONDS
-            )
+            ),
         )
-    ).isoformat()
-
-    cursor = conn.execute(
-        """
-        UPDATE gemini_usage
-        SET
-          status = 'expired',
-          failure_type = 'reservation_timeout',
-          failure_detail = (
-            'Gemini reservation expired before completion.'
-          )
-        WHERE usage_day = ?
-          AND status = 'reserved'
-          AND created_at < ?
-          AND cache_hit = 0
-          AND inflight_join = 0
-        """,
-        (
-            current_usage_day,
-            cutoff,
-        ),
-    )
-
-    return max(
-        0,
-        int(cursor.rowcount or 0),
     )
 
 
@@ -1554,358 +1503,46 @@ def reserve_gemini_call(
     mode: str,
     model: str,
 ) -> int:
-    usage_day = utc_usage_day()
-    created_at = datetime.now(
-        timezone.utc
-    ).isoformat()
-
-    conn = db_conn()
-
-    try:
-        conn.execute("BEGIN IMMEDIATE")
-
-        expire_stale_gemini_reservations(
-            conn,
-            usage_day=usage_day,
-        )
-
-        global_count = int(
-            conn.execute(
-                """
-                SELECT COUNT(*)
-                FROM gemini_usage
-                WHERE usage_day = ?
-                  AND cache_hit = 0
-                  AND inflight_join = 0
-                  AND status IN (
-                    'reserved',
-                    'success',
-                    'failed'
-                  )
-                """,
-                (usage_day,),
-            ).fetchone()[0]
-        )
-
-        client_count = int(
-            conn.execute(
-                """
-                SELECT COUNT(*)
-                FROM gemini_usage
-                WHERE usage_day = ?
-                  AND client_key = ?
-                  AND cache_hit = 0
-                  AND inflight_join = 0
-                  AND status IN (
-                    'reserved',
-                    'success',
-                    'failed'
-                  )
-                """,
-                (
-                    usage_day,
-                    client_key,
-                ),
-            ).fetchone()[0]
-        )
-
-        if (
-            GLOBAL_DAILY_GEMINI_CALL_CAP > 0
-            and global_count
-            >= GLOBAL_DAILY_GEMINI_CALL_CAP
-        ):
-            conn.rollback()
-
-            raise HTTPException(
-                status_code=429,
-                detail=(
-                    "Sportabase beta capacity "
-                    "has been reached for today. "
-                    "Please try again after the "
-                    "daily UTC reset."
-                ),
-            )
-
-        if (
-            CLIENT_DAILY_GEMINI_CALL_CAP > 0
-            and client_count
-            >= CLIENT_DAILY_GEMINI_CALL_CAP
-        ):
-            conn.rollback()
-
-            raise HTTPException(
-                status_code=429,
-                detail=(
-                    "This Sportabase beta "
-                    "installation has reached "
-                    "its daily analysis limit. "
-                    "Please try again after the "
-                    "daily UTC reset."
-                ),
-            )
-
-        cursor = conn.execute(
-            """
-            INSERT INTO gemini_usage (
-              created_at,
-              usage_day,
-              client_key,
-              mode,
-              model,
-              status,
-              cache_hit
-            )
-            VALUES (?, ?, ?, ?, ?, ?, 0)
-            """,
-            (
-                created_at,
-                usage_day,
-                client_key,
-                str(mode),
-                str(model),
-                "reserved",
+    return (
+        _reserve_gemini_call_runtime_impl(
+            client_key,
+            mode,
+            model,
+            usage_day_resolver=(
+                utc_usage_day
+            ),
+            connection_factory=db_conn,
+            expire_reservations=(
+                expire_stale_gemini_reservations
+            ),
+            global_daily_call_cap=(
+                GLOBAL_DAILY_GEMINI_CALL_CAP
+            ),
+            client_daily_call_cap=(
+                CLIENT_DAILY_GEMINI_CALL_CAP
             ),
         )
-
-        usage_id = int(
-            cursor.lastrowid
-        )
-
-        conn.commit()
-
-        return usage_id
-
-    except HTTPException:
-        raise
-
-    except Exception:
-        conn.rollback()
-        raise
-
-    finally:
-        conn.close()
+    )
 
 
 def usage_metadata_counts(
     response: Any,
 ) -> Dict[str, int]:
-    metadata = getattr(
-        response,
-        "usage_metadata",
-        None,
-    )
-
-    def read_value(
-        *names: str,
-    ) -> int:
-        if metadata is None:
-            return 0
-
-        for name in names:
-            if isinstance(metadata, dict):
-                value = metadata.get(name)
-            else:
-                value = getattr(
-                    metadata,
-                    name,
-                    None,
-                )
-
-            try:
-                if value is not None:
-                    return max(
-                        0,
-                        int(value),
-                    )
-            except Exception:
-                continue
-
-        return 0
-
-    prompt_tokens = read_value(
-        "prompt_token_count",
-        "input_token_count",
-    )
-
-    output_tokens = read_value(
-        "candidates_token_count",
-        "output_token_count",
-    )
-
-    thought_tokens = read_value(
-        "thoughts_token_count",
-        "thought_token_count",
-    )
-
-    total_tokens = read_value(
-        "total_token_count",
-    )
-
-    if total_tokens <= 0:
-        total_tokens = (
-            prompt_tokens
-            + output_tokens
-            + thought_tokens
+    return (
+        _usage_metadata_counts_runtime_impl(
+            response
         )
-
-    return {
-        "prompt_tokens": prompt_tokens,
-        "output_tokens": output_tokens,
-        "thought_tokens": thought_tokens,
-        "total_tokens": total_tokens,
-    }
+    )
 
 
 def classify_gemini_failure(
     error: Exception,
 ) -> Dict[str, Any]:
-    error_name = type(error).__name__
-
-    raw_detail = re.sub(
-        r"\s+",
-        " ",
-        str(error or ""),
-    ).strip()
-
-    detail = (
-        f"{error_name}: {raw_detail}"
-        if raw_detail
-        else error_name
+    return (
+        _classify_gemini_failure_runtime_impl(
+            error
+        )
     )
-
-    detail = detail[:500]
-    lowered = detail.lower()
-
-    status_code: Optional[int] = None
-
-    for attribute_name in (
-        "status_code",
-        "status",
-        "code",
-    ):
-        value = getattr(
-            error,
-            attribute_name,
-            None,
-        )
-
-        if callable(value):
-            try:
-                value = value()
-            except Exception:
-                value = None
-
-        enum_value = getattr(
-            value,
-            "value",
-            None,
-        )
-
-        if enum_value is not None:
-            value = enum_value
-
-        match = re.search(
-            r"\b([1-5]\d{2})\b",
-            str(value or ""),
-        )
-
-        if match:
-            status_code = int(
-                match.group(1)
-            )
-            break
-
-    if status_code is None:
-        match = re.search(
-            r"\b([1-5]\d{2})\b",
-            detail,
-        )
-
-        if match:
-            status_code = int(
-                match.group(1)
-            )
-
-    if (
-        status_code in {401, 403}
-        or "unauthenticated" in lowered
-        or "permission denied" in lowered
-        or "invalid api key" in lowered
-        or "api key not valid" in lowered
-    ):
-        failure_type = "authentication"
-
-    elif (
-        status_code == 429
-        or "resource_exhausted" in lowered
-        or "resource exhausted" in lowered
-        or "rate limit" in lowered
-        or "quota exceeded" in lowered
-        or "too many requests" in lowered
-    ):
-        failure_type = "rate_limit"
-
-    elif (
-        status_code == 503
-        or "service unavailable" in lowered
-        or "temporarily unavailable" in lowered
-        or "temporarily busy" in lowered
-        or "model capacity" in lowered
-        or "overloaded" in lowered
-    ):
-        failure_type = "provider_capacity"
-
-    elif (
-        isinstance(
-            error,
-            (
-                TimeoutError,
-                requests.Timeout,
-            ),
-        )
-        or "timed out" in lowered
-        or "timeout" in lowered
-        or "deadline exceeded" in lowered
-    ):
-        failure_type = "timeout"
-
-    elif (
-        isinstance(
-            error,
-            (
-                ConnectionError,
-                requests.ConnectionError,
-            ),
-        )
-        or "connection error" in lowered
-        or "connection reset" in lowered
-        or "name resolution" in lowered
-        or "network is unreachable" in lowered
-    ):
-        failure_type = "network"
-
-    elif (
-        status_code in {400, 404, 409, 422}
-        or "invalid argument" in lowered
-        or "bad request" in lowered
-        or "malformed" in lowered
-    ):
-        failure_type = "invalid_request"
-
-    elif (
-        status_code is not None
-        and status_code >= 500
-    ):
-        failure_type = "provider_error"
-
-    else:
-        failure_type = "unknown"
-
-    return {
-        "failure_status_code": status_code,
-        "failure_type": failure_type,
-        "failure_detail": detail,
-    }
 
 
 def finish_gemini_call(
@@ -1917,52 +1554,21 @@ def finish_gemini_call(
     failure_type: str = "",
     failure_detail: str = "",
 ) -> Dict[str, int]:
-    counts = usage_metadata_counts(
-        response
-    )
-
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            UPDATE gemini_usage
-            SET
-              status = ?,
-              prompt_tokens = ?,
-              output_tokens = ?,
-              thought_tokens = ?,
-              total_tokens = ?,
-              latency_ms = ?,
-              failure_status_code = ?,
-              failure_type = ?,
-              failure_detail = ?
-            WHERE id = ?
-            """,
-            (
-                str(status),
-                counts["prompt_tokens"],
-                counts["output_tokens"],
-                counts["thought_tokens"],
-                counts["total_tokens"],
-                max(
-                    0,
-                    int(latency_ms or 0),
-                ),
-                failure_status_code,
-                str(failure_type or ""),
-                str(failure_detail or "")[:500],
-                int(usage_id),
+    return (
+        _finish_gemini_call_runtime_impl(
+            usage_id,
+            status,
+            response,
+            latency_ms,
+            failure_status_code,
+            failure_type,
+            failure_detail,
+            usage_counter=(
+                usage_metadata_counts
             ),
+            connection_factory=db_conn,
         )
-
-        conn.commit()
-
-    finally:
-        conn.close()
-
-    return counts
-
+    )
 
 
 def record_inflight_gemini_join(
@@ -1972,48 +1578,18 @@ def record_inflight_gemini_join(
     model: str,
     succeeded: bool,
 ) -> None:
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            INSERT INTO gemini_usage (
-              created_at,
-              usage_day,
-              client_key,
-              mode,
-              model,
-              status,
-              cache_hit,
-              inflight_join
-            )
-            VALUES (
-              ?, ?, ?, ?, ?, ?, 0, 1
-            )
-            """,
-            (
-                datetime.now(
-                    timezone.utc
-                ).isoformat(),
-                utc_usage_day(),
-                str(client_key),
-                str(mode),
-                str(model),
-                (
-                    "inflight_join_success"
-                    if succeeded
-                    else "inflight_join_failed"
-                ),
+    return (
+        _record_inflight_gemini_join_runtime_impl(
+            client_key=client_key,
+            mode=mode,
+            model=model,
+            succeeded=succeeded,
+            connection_factory=db_conn,
+            usage_day_resolver=(
+                utc_usage_day
             ),
         )
-
-        conn.commit()
-
-    except Exception:
-        conn.rollback()
-
-    finally:
-        conn.close()
+    )
 
 
 def gemini_request_fingerprint(
@@ -2022,27 +1598,13 @@ def gemini_request_fingerprint(
     model: str,
     contents: Any,
 ) -> str:
-    try:
-        serialized_contents = json.dumps(
-            contents,
-            ensure_ascii=False,
-            sort_keys=True,
-            default=str,
+    return (
+        _gemini_request_fingerprint_runtime_impl(
+            mode=mode,
+            model=model,
+            contents=contents,
         )
-    except Exception:
-        serialized_contents = repr(contents)
-
-    raw_key = "|".join(
-        [
-            str(mode or "").strip().lower(),
-            str(model or "").strip().lower(),
-            serialized_contents,
-        ]
     )
-
-    return hashlib.sha256(
-        raw_key.encode("utf-8")
-    ).hexdigest()
 
 
 def generate_gemini_content(
@@ -2053,208 +1615,52 @@ def generate_gemini_content(
     model: str,
     contents: Any,
 ) -> Any:
-    request_key = gemini_request_fingerprint(
-        mode=mode,
-        model=model,
-        contents=contents,
-    )
-
-    with _INFLIGHT_GEMINI_LOCK:
-        shared_future = (
-            _INFLIGHT_GEMINI_CALLS.get(
-                request_key
-            )
-        )
-
-        if shared_future is None:
-            shared_future = Future()
-
-            _INFLIGHT_GEMINI_CALLS[
-                request_key
-            ] = shared_future
-
-            is_request_leader = True
-        else:
-            is_request_leader = False
-
-    if not is_request_leader:
-        try:
-            shared_result = (
-                shared_future.result()
-            )
-
-        except Exception:
-            record_inflight_gemini_join(
-                client_key=client_key,
-                mode=mode,
-                model=model,
-                succeeded=False,
-            )
-            raise
-
-        record_inflight_gemini_join(
+    return (
+        _generate_gemini_content_runtime_impl(
+            client=client,
             client_key=client_key,
             mode=mode,
             model=model,
-            succeeded=True,
-        )
-
-        return shared_result
-
-    usage_id: Optional[int] = None
-    provider_started_at: Optional[
-        float
-    ] = None
-
-    try:
-        usage_id = reserve_gemini_call(
-            client_key=client_key,
-            mode=mode,
-            model=model,
-        )
-
-        provider_started_at = (
-            time.perf_counter()
-        )
-
-        response = (
-            client.models.generate_content(
-                model=model,
-                contents=contents,
-            )
-        )
-
-        success_latency_ms = max(
-            0,
-            int(
-                round(
-                    (
-                        time.perf_counter()
-                        - provider_started_at
-                    )
-                    * 1000
-                )
+            contents=contents,
+            inflight_lock=(
+                _INFLIGHT_GEMINI_LOCK
+            ),
+            inflight_calls=(
+                _INFLIGHT_GEMINI_CALLS
+            ),
+            fingerprint_resolver=(
+                gemini_request_fingerprint
+            ),
+            reserve_call=(
+                reserve_gemini_call
+            ),
+            finish_call=(
+                finish_gemini_call
+            ),
+            classify_failure=(
+                classify_gemini_failure
+            ),
+            record_join=(
+                record_inflight_gemini_join
             ),
         )
-
-        finish_gemini_call(
-            usage_id,
-            "success",
-            response,
-            latency_ms=success_latency_ms,
-        )
-
-        shared_future.set_result(
-            response
-        )
-
-        return response
-
-    except Exception as error:
-        if (
-            usage_id is not None
-            and provider_started_at
-            is not None
-        ):
-            failure = (
-                classify_gemini_failure(
-                    error
-                )
-            )
-
-            failure_latency_ms = max(
-                0,
-                int(
-                    round(
-                        (
-                            time.perf_counter()
-                            - provider_started_at
-                        )
-                        * 1000
-                    )
-                ),
-            )
-
-            finish_gemini_call(
-                usage_id,
-                "failed",
-                latency_ms=(
-                    failure_latency_ms
-                ),
-                failure_status_code=(
-                    failure[
-                        "failure_status_code"
-                    ]
-                ),
-                failure_type=(
-                    failure["failure_type"]
-                ),
-                failure_detail=(
-                    failure["failure_detail"]
-                ),
-            )
-
-        shared_future.set_exception(
-            error
-        )
-
-        raise
-
-    finally:
-        with _INFLIGHT_GEMINI_LOCK:
-            current_future = (
-                _INFLIGHT_GEMINI_CALLS.get(
-                    request_key
-                )
-            )
-
-            if (
-                current_future
-                is shared_future
-            ):
-                _INFLIGHT_GEMINI_CALLS.pop(
-                    request_key,
-                    None,
-                )
-
+    )
 
 
 def record_analysis_cache_hit(
     client_key: str,
     mode: str,
 ) -> None:
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            INSERT INTO gemini_usage (
-              created_at,
-              usage_day,
-              client_key,
-              mode,
-              model,
-              status,
-              cache_hit
-            )
-            VALUES (?, ?, ?, ?, ?, ?, 1)
-            """,
-            (
-                datetime.now(
-                    timezone.utc
-                ).isoformat(),
-                utc_usage_day(),
-                client_key,
-                str(mode),
-                "cache",
-                "cache_hit",
+    return (
+        _record_analysis_cache_hit_runtime_impl(
+            client_key,
+            mode,
+            connection_factory=db_conn,
+            usage_day_resolver=(
+                utc_usage_day
             ),
         )
-
-        conn.commit()
-
-    finally:
-        conn.close()
+    )
 
 
 
