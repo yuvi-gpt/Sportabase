@@ -554,6 +554,104 @@ ON observation_independence_assertions(
   verification_status
 );
 
+CREATE TABLE IF NOT EXISTS corpus_records (
+  id TEXT PRIMARY KEY,
+  origin_type TEXT NOT NULL,
+  data_family TEXT NOT NULL,
+  dataset_name TEXT NOT NULL,
+  external_record_id TEXT NOT NULL,
+  adapter_version TEXT NOT NULL,
+  sport_key TEXT NOT NULL DEFAULT '',
+  competition_key TEXT NOT NULL DEFAULT '',
+  season_key TEXT NOT NULL DEFAULT '',
+  event_type TEXT NOT NULL DEFAULT '',
+  granularity TEXT NOT NULL DEFAULT 'record',
+  measurement_kind TEXT NOT NULL DEFAULT 'raw',
+  canonical_url TEXT NOT NULL DEFAULT '',
+  published_at TEXT,
+  occurred_at TEXT,
+  payload_hash TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  ingested_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_records_external_identity
+ON corpus_records(
+  origin_type,
+  dataset_name,
+  external_record_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_records_dataset_time
+ON corpus_records(
+  dataset_name,
+  ingested_at
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_records_sport_scope
+ON corpus_records(
+  sport_key,
+  competition_key,
+  season_key
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_records_event_type
+ON corpus_records(
+  sport_key,
+  event_type,
+  granularity
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_records_occurred_at
+ON corpus_records(occurred_at);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_records_payload_hash
+ON corpus_records(payload_hash);
+
+
+CREATE TABLE IF NOT EXISTS corpus_record_links (
+  id TEXT PRIMARY KEY,
+  corpus_record_id TEXT NOT NULL,
+  story_id TEXT,
+  media_item_id TEXT,
+  claim_id TEXT,
+  relationship_type TEXT NOT NULL DEFAULT 'materializes',
+  linked_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    (story_id IS NOT NULL)
+    + (media_item_id IS NOT NULL)
+    + (claim_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(corpus_record_id)
+    REFERENCES corpus_records(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_record_links_record
+ON corpus_record_links(corpus_record_id);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_record_links_story
+ON corpus_record_links(story_id);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_record_links_media
+ON corpus_record_links(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_record_links_claim
+ON corpus_record_links(claim_id);
+
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
