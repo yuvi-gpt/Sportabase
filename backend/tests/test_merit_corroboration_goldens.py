@@ -176,7 +176,7 @@ class MeritCorroborationGoldenDatasetTests(
             ),
         }
 
-    def test_checked_in_dataset_starts_empty_and_not_ready(
+    def test_checked_in_dataset_has_real_world_drafts_and_is_not_ready(
         self,
     ):
         path = (
@@ -198,6 +198,30 @@ class MeritCorroborationGoldenDatasetTests(
 
         self.assertEqual(
             result["counts"]["cases"],
+            4,
+        )
+
+        self.assertEqual(
+            result["counts"]["real_world"],
+            4,
+        )
+
+        self.assertEqual(
+            result["counts"]["draft"],
+            4,
+        )
+
+        self.assertEqual(
+            result["counts"][
+                "approved_real_world"
+            ],
+            0,
+        )
+
+        self.assertEqual(
+            result["counts"][
+                "evaluation_eligible"
+            ],
             0,
         )
 
@@ -212,6 +236,93 @@ class MeritCorroborationGoldenDatasetTests(
                 "live_enablement_authorized"
             ]
         )
+
+
+    def test_checked_in_drafts_preserve_human_approval_gate(
+        self,
+    ):
+        path = (
+            BACKEND_DIR
+            / "data"
+            / "merit_corroboration_goldens.json"
+        )
+
+        result = (
+            load_merit_corroboration_golden_dataset(
+                path
+            )
+        )
+
+        expected_ids = {
+            (
+                "2025-doncic-lakers-"
+                "two-primary-sources"
+            ),
+            (
+                "2024-hamilton-ferrari-"
+                "independence-unknown"
+            ),
+            (
+                "2024-klopp-liverpool-"
+                "announcement-dependency"
+            ),
+            (
+                "2024-hamilton-ferrari-"
+                "single-primary-source"
+            ),
+        }
+
+        actual_ids = {
+            case["id"]
+            for case in result["cases"]
+        }
+
+        self.assertEqual(
+            actual_ids,
+            expected_ids,
+        )
+
+        self.assertEqual(
+            result[
+                "approved_real_world_cases"
+            ],
+            [],
+        )
+
+        for case in result["cases"]:
+            curation = case[
+                "curation"
+            ]
+
+            self.assertEqual(
+                curation["origin"],
+                "real_world",
+            )
+
+            self.assertEqual(
+                curation[
+                    "review_status"
+                ],
+                "draft",
+            )
+
+            self.assertEqual(
+                curation["reviewer"],
+                "",
+            )
+
+            self.assertEqual(
+                curation["reviewed_at"],
+                "",
+            )
+
+            self.assertTrue(
+                curation["source_urls"]
+            )
+
+            self.assertTrue(
+                curation["label_basis"]
+            )
 
     def test_approved_real_world_case_is_evaluation_eligible(
         self,
