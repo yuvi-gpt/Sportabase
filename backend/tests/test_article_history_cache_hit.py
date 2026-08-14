@@ -93,6 +93,8 @@ class ArticleHistoryCacheHitTests(
                 content=cache_content,
                 variant=(
                     f"max_bullets:{req.max_bullets}"
+                    "|intelligence_shadow:"
+                    f"{int(main.INTELLIGENCE_SHADOW_ENABLED)}"
                 ),
                 context_hash=(
                     "media-context-hash"

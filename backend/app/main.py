@@ -132,6 +132,10 @@ from app.analysis.corroboration import (
     CLAIM_CORROBORATION_STATUS_VOCABULARY,
     build_claim_corroboration_assessment,
 )
+from app.services.article_intelligence_shadow import (
+    ARTICLE_INTELLIGENCE_SHADOW_VERSION,
+    run_article_intelligence_shadow,
+)
 # from app.routes.insights import router as insights_router
 
 
@@ -208,6 +212,27 @@ ADMIN_API_KEY = os.getenv(
     "SPORTABASE_ADMIN_API_KEY",
     "",
 ).strip()
+
+INTELLIGENCE_SHADOW_ENABLED = (
+    os.getenv(
+        "SPORTABASE_INTELLIGENCE_SHADOW_ENABLED",
+        "0",
+    )
+    .strip()
+    .lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+)
+
+BRAVE_NEWS_API_KEY = os.getenv(
+    "SPORTABASE_BRAVE_NEWS_API_KEY",
+    "",
+).strip()
+
 
 GEMINI_INPUT_COST_PER_MILLION_USD = float(
     os.getenv(
@@ -13130,6 +13155,8 @@ def analyze(
         content=cache_content,
         variant=(
             f"max_bullets:{req.max_bullets}"
+            "|intelligence_shadow:"
+            f"{int(INTELLIGENCE_SHADOW_ENABLED)}"
         ),
         context_hash=(
             article_evidence_context_hash
@@ -13563,6 +13590,95 @@ def analyze(
             title=req.title,
             content_hash=content_hash,
         )
+
+        try:
+            shadow_client = (
+                gemini_client()
+                if INTELLIGENCE_SHADOW_ENABLED
+                else None
+            )
+
+            intelligence_shadow = (
+                run_article_intelligence_shadow(
+                    enabled=(
+                        INTELLIGENCE_SHADOW_ENABLED
+                    ),
+                    media_item_id=(
+                        media_item["id"]
+                    ),
+                    observed_at=(
+                        media_item[
+                            "first_seen_at"
+                        ]
+                    ),
+                    title=req.title,
+                    article_text=(
+                        cleaned_text
+                    ),
+                    url=req.url,
+                    article_type=(
+                        response.article_type
+                    ),
+                    type_confidence=(
+                        response.type_confidence
+                    ),
+                    legacy_score={
+                        "total": (
+                            response.merit_score
+                        ),
+                        "components": dict(
+                            response.score_components
+                        ),
+                    },
+                    news_api_key=(
+                        BRAVE_NEWS_API_KEY
+                    ),
+                    normalize_url=(
+                        normalized_analysis_url
+                    ),
+                    fetch_article=(
+                        fetch_safe_article_html
+                    ),
+                    extract_article=(
+                        extract_article_content
+                    ),
+                    gemini_client=(
+                        shadow_client
+                    ),
+                    gemini_client_key=(
+                        client_key
+                    ),
+                    gemini_generator=(
+                        generate_gemini_content
+                    ),
+                    connection_factory=(
+                        db_conn
+                    ),
+                )
+            )
+
+        except Exception as error:
+            intelligence_shadow = {
+                "version": (
+                    ARTICLE_INTELLIGENCE_SHADOW_VERSION
+                ),
+                "status": "failed",
+                "mode": "shadow",
+                "error_type": (
+                    type(error).__name__
+                ),
+                "error": str(
+                    error
+                )[:240],
+                "live_merit_effect_enabled": (
+                    False
+                ),
+                "truth_established": False,
+            }
+
+        response.debug[
+            "intelligence_shadow"
+        ] = intelligence_shadow
 
         snapshot_result = (
             persist_analysis_snapshot(
