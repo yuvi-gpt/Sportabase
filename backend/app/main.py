@@ -267,6 +267,78 @@ from app.services.legacy_handlers import (
     stable_id,
     stories_impl as _stories_handler_impl,
 )
+from app.services.intelligence_facade import (
+    source_domain_for_url_impl as _facade_source_domain_for_url_impl,
+    source_key_for_url_impl as _facade_source_key_for_url_impl,
+    source_id_for_url_impl as _facade_source_id_for_url_impl,
+    upsert_intelligence_source_impl as _facade_upsert_intelligence_source_impl,
+    story_id_for_canonical_key_impl as _facade_story_id_for_canonical_key_impl,
+    upsert_intelligence_story_impl as _facade_upsert_intelligence_story_impl,
+    claim_id_for_canonical_key_impl as _facade_claim_id_for_canonical_key_impl,
+    upsert_intelligence_claim_impl as _facade_upsert_intelligence_claim_impl,
+    claim_link_id_for_record_impl as _facade_claim_link_id_for_record_impl,
+    record_claim_link_impl as _facade_record_claim_link_impl,
+    link_media_item_to_story_impl as _facade_link_media_item_to_story_impl,
+    reporter_id_for_identity_key_impl as _facade_reporter_id_for_identity_key_impl,
+    upsert_intelligence_reporter_impl as _facade_upsert_intelligence_reporter_impl,
+    record_source_observation_impl as _facade_record_source_observation_impl,
+    record_reporter_observation_impl as _facade_record_reporter_observation_impl,
+    evidence_key_for_record_impl as _facade_evidence_key_for_record_impl,
+    record_evidence_impl as _facade_record_evidence_impl,
+    record_evidence_link_impl as _facade_record_evidence_link_impl,
+    _observation_dependency_identity_impl as _facade_observation_dependency_identity_impl,
+    observation_dependency_id_for_record_impl as _facade_observation_dependency_id_for_record_impl,
+    record_observation_dependency_impl as _facade_record_observation_dependency_impl,
+    observation_independence_assertion_id_for_record_impl as _facade_observation_independence_assertion_id_for_record_impl,
+    record_observation_independence_assertion_impl as _facade_record_observation_independence_assertion_impl,
+    load_evidence_context_for_source_impl as _facade_load_evidence_context_for_source_impl,
+    load_evidence_context_for_reporter_impl as _facade_load_evidence_context_for_reporter_impl,
+    load_evidence_context_for_media_item_impl as _facade_load_evidence_context_for_media_item_impl,
+    load_expanded_evidence_context_for_media_item_impl as _facade_load_expanded_evidence_context_for_media_item_impl,
+    evidence_context_hash_for_media_item_impl as _facade_evidence_context_hash_for_media_item_impl,
+    expanded_evidence_context_hash_for_media_item_impl as _facade_expanded_evidence_context_hash_for_media_item_impl,
+    load_evidence_context_for_story_impl as _facade_load_evidence_context_for_story_impl,
+    load_evidence_context_for_subject_impl as _facade_load_evidence_context_for_subject_impl,
+    load_evidence_analysis_bundle_for_media_item_impl as _facade_load_evidence_analysis_bundle_for_media_item_impl,
+    load_evidence_analysis_state_for_media_item_impl as _facade_load_evidence_analysis_state_for_media_item_impl,
+)
+
+
+def _invoke_intelligence_facade(
+    implementation,
+    local_values,
+):
+    call_kwargs = dict(
+        local_values
+    )
+
+    dependencies = getattr(
+        implementation,
+        "__sportabase_dependencies__",
+        (),
+    )
+
+    for dependency in dependencies:
+        if dependency not in globals():
+            raise RuntimeError(
+                "Missing intelligence facade "
+                "runtime dependency: "
+                + str(
+                    dependency
+                )
+            )
+
+        call_kwargs[
+            dependency
+        ] = globals()[
+            dependency
+        ]
+
+    return implementation(
+        **call_kwargs
+    )
+
+
 # from app.routes.insights import router as insights_router
 
 
@@ -478,9 +550,9 @@ def analysis_content_hash(
 def source_domain_for_url(
     url: str,
 ) -> str:
-    return _source_domain_for_url_impl(
-        url,
-        normalize_url=normalized_analysis_url,
+    return _invoke_intelligence_facade(
+        _facade_source_domain_for_url_impl,
+        locals(),
     )
 
 
@@ -488,10 +560,9 @@ def source_key_for_url(
     url: str,
     source_type: str = "publisher",
 ) -> str:
-    return _source_key_for_url_impl(
-        url,
-        source_type,
-        domain_resolver=source_domain_for_url,
+    return _invoke_intelligence_facade(
+        _facade_source_key_for_url_impl,
+        locals(),
     )
 
 
@@ -499,10 +570,9 @@ def source_id_for_url(
     url: str,
     source_type: str = "publisher",
 ) -> str:
-    return _source_id_for_url_impl(
-        url,
-        source_type,
-        key_resolver=source_key_for_url,
+    return _invoke_intelligence_facade(
+        _facade_source_id_for_url_impl,
+        locals(),
     )
 
 
@@ -522,28 +592,18 @@ def upsert_intelligence_source(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_source_impl(
-        url=url,
-        display_name=display_name,
-        source_type=source_type,
-        publication_founded_at=(
-            publication_founded_at
-        ),
-        domain_registered_at=(
-            domain_registered_at
-        ),
-        metadata=metadata,
-        seen_at=seen_at,
-        domain_resolver=source_domain_for_url,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_upsert_intelligence_source_impl,
+        locals(),
     )
 
 
 def story_id_for_canonical_key(
     canonical_key: str,
 ) -> str:
-    return _story_id_for_canonical_key_impl(
-        canonical_key
+    return _invoke_intelligence_facade(
+        _facade_story_id_for_canonical_key_impl,
+        locals(),
     )
 
 
@@ -557,22 +617,18 @@ def upsert_intelligence_story(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_story_impl(
-        canonical_key=canonical_key,
-        canonical_title=canonical_title,
-        status=status,
-        metadata=metadata,
-        seen_at=seen_at,
-        id_resolver=story_id_for_canonical_key,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_upsert_intelligence_story_impl,
+        locals(),
     )
 
 
 def claim_id_for_canonical_key(
     canonical_key: str,
 ) -> str:
-    return _claim_id_for_canonical_key_impl(
-        canonical_key
+    return _invoke_intelligence_facade(
+        _facade_claim_id_for_canonical_key_impl,
+        locals(),
     )
 
 
@@ -587,15 +643,9 @@ def upsert_intelligence_claim(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_claim_impl(
-        canonical_key=canonical_key,
-        subject_key=subject_key,
-        canonical_text=canonical_text,
-        claim_type=claim_type,
-        metadata=metadata,
-        seen_at=seen_at,
-        id_resolver=claim_id_for_canonical_key,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_upsert_intelligence_claim_impl,
+        locals(),
     )
 
 
@@ -609,14 +659,9 @@ def claim_link_id_for_record(
     reporter_observation_id: Optional[str] = None,
     evidence_id: Optional[str] = None,
 ) -> str:
-    return _claim_link_id_for_record_impl(
-        claim_id=claim_id,
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        source_observation_id=source_observation_id,
-        reporter_observation_id=reporter_observation_id,
-        evidence_id=evidence_id,
+    return _invoke_intelligence_facade(
+        _facade_claim_link_id_for_record_impl,
+        locals(),
     )
 
 
@@ -632,17 +677,9 @@ def record_claim_link(
     metadata: Optional[Dict[str, Any]] = None,
     recorded_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _record_claim_link_impl(
-        claim_id=claim_id,
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        source_observation_id=source_observation_id,
-        reporter_observation_id=reporter_observation_id,
-        evidence_id=evidence_id,
-        metadata=metadata,
-        recorded_at=recorded_at,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_record_claim_link_impl,
+        locals(),
     )
 
 
@@ -654,131 +691,18 @@ def link_media_item_to_story(
     confidence: float = 0.0,
     linked_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    normalized_story_id = str(
-        story_id or ""
-    ).strip()
-
-    normalized_media_item_id = str(
-        media_item_id or ""
-    ).strip()
-
-    normalized_relationship_type = str(
-        relationship_type or ""
-    ).strip().lower()
-
-    if not normalized_story_id:
-        raise ValueError(
-            "Story media link story ID is required."
-        )
-
-    if not normalized_media_item_id:
-        raise ValueError(
-            "Story media link media item ID is required."
-        )
-
-    if not normalized_relationship_type:
-        raise ValueError(
-            "Story media link relationship type "
-            "is required."
-        )
-
-    try:
-        normalized_confidence = float(
-            confidence
-        )
-    except (
-        TypeError,
-        ValueError,
-    ) as exc:
-        raise ValueError(
-            "Story media link confidence "
-            "must be numeric."
-        ) from exc
-
-    if not (
-        0.0
-        <= normalized_confidence
-        <= 1.0
-    ):
-        raise ValueError(
-            "Story media link confidence "
-            "must be between 0 and 1."
-        )
-
-    normalized_linked_at = (
-        str(
-            linked_at or ""
-        ).strip()
-        or datetime.now(
-            timezone.utc
-        ).isoformat()
+    return _invoke_intelligence_facade(
+        _facade_link_media_item_to_story_impl,
+        locals(),
     )
-
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            INSERT INTO story_media_links (
-              story_id,
-              media_item_id,
-              relationship_type,
-              confidence,
-              linked_at
-            )
-            VALUES (
-              ?, ?, ?, ?, ?
-            )
-            ON CONFLICT(
-              story_id,
-              media_item_id
-            )
-            DO UPDATE SET
-              relationship_type =
-                excluded.relationship_type,
-              confidence =
-                excluded.confidence
-            """,
-            (
-                normalized_story_id,
-                normalized_media_item_id,
-                normalized_relationship_type,
-                normalized_confidence,
-                normalized_linked_at,
-            ),
-        )
-
-        row = conn.execute(
-            """
-            SELECT *
-            FROM story_media_links
-            WHERE story_id = ?
-              AND media_item_id = ?
-            """,
-            (
-                normalized_story_id,
-                normalized_media_item_id,
-            ),
-        ).fetchone()
-
-        conn.commit()
-
-    finally:
-        conn.close()
-
-    if row is None:
-        raise RuntimeError(
-            "Story media link persistence failed."
-        )
-
-    return dict(row)
 
 
 def reporter_id_for_identity_key(
     identity_key: str,
 ) -> str:
-    return _reporter_id_for_identity_key_impl(
-        identity_key
+    return _invoke_intelligence_facade(
+        _facade_reporter_id_for_identity_key_impl,
+        locals(),
     )
 
 
@@ -791,13 +715,9 @@ def upsert_intelligence_reporter(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_reporter_impl(
-        identity_key=identity_key,
-        display_name=display_name,
-        metadata=metadata,
-        seen_at=seen_at,
-        id_resolver=reporter_id_for_identity_key,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_upsert_intelligence_reporter_impl,
+        locals(),
     )
 
 
@@ -816,21 +736,9 @@ def record_source_observation(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_source_observation_impl(
-        source_id=source_id,
-        subject_key=subject_key,
-        observation_type=observation_type,
-        observed_at=observed_at,
-        status=status,
-        claim_summary=claim_summary,
-        provenance_url=provenance_url,
-        confidence=confidence,
-        media_item_id=media_item_id,
-        story_id=story_id,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        normalize_url=normalized_analysis_url,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_record_source_observation_impl,
+        locals(),
     )
 
 
@@ -850,22 +758,9 @@ def record_reporter_observation(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_reporter_observation_impl(
-        reporter_id=reporter_id,
-        subject_key=subject_key,
-        observation_type=observation_type,
-        observed_at=observed_at,
-        status=status,
-        claim_summary=claim_summary,
-        provenance_url=provenance_url,
-        confidence=confidence,
-        source_id=source_id,
-        media_item_id=media_item_id,
-        story_id=story_id,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        normalize_url=normalized_analysis_url,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_record_reporter_observation_impl,
+        locals(),
     )
 def evidence_key_for_record(
     *,
@@ -876,14 +771,9 @@ def evidence_key_for_record(
     reference_key: str = "",
     verification_status: str = "unverified",
 ) -> str:
-    return _evidence_key_for_record_impl(
-        evidence_type=evidence_type,
-        subject_key=subject_key,
-        observed_at=observed_at,
-        canonical_url=canonical_url,
-        reference_key=reference_key,
-        verification_status=verification_status,
-        normalize_url=normalized_analysis_url,
+    return _invoke_intelligence_facade(
+        _facade_evidence_key_for_record_impl,
+        locals(),
     )
 
 
@@ -900,19 +790,9 @@ def record_evidence(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_evidence_impl(
-        evidence_type=evidence_type,
-        subject_key=subject_key,
-        observed_at=observed_at,
-        claim_summary=claim_summary,
-        canonical_url=canonical_url,
-        reference_key=reference_key,
-        verification_status=verification_status,
-        published_at=published_at,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        normalize_url=normalized_analysis_url,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_record_evidence_impl,
+        locals(),
     )
 
 
@@ -928,17 +808,9 @@ def record_evidence_link(
     linked_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_evidence_link_impl(
-        evidence_id=evidence_id,
-        relationship_type=relationship_type,
-        confidence=confidence,
-        media_item_id=media_item_id,
-        story_id=story_id,
-        source_id=source_id,
-        reporter_id=reporter_id,
-        linked_at=linked_at,
-        metadata=metadata,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_record_evidence_link_impl,
+        locals(),
     )
 def _observation_dependency_identity(
     *,
@@ -956,24 +828,9 @@ def _observation_dependency_identity(
     upstream_source_id: Optional[str] = None,
     upstream_reporter_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _observation_dependency_identity_impl(
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        downstream_source_observation_id=(
-            downstream_source_observation_id
-        ),
-        downstream_reporter_observation_id=(
-            downstream_reporter_observation_id
-        ),
-        upstream_source_observation_id=(
-            upstream_source_observation_id
-        ),
-        upstream_reporter_observation_id=(
-            upstream_reporter_observation_id
-        ),
-        upstream_source_id=upstream_source_id,
-        upstream_reporter_id=upstream_reporter_id,
+    return _invoke_intelligence_facade(
+        _facade_observation_dependency_identity_impl,
+        locals(),
     )
 
 
@@ -993,24 +850,9 @@ def observation_dependency_id_for_record(
     upstream_source_id: Optional[str] = None,
     upstream_reporter_id: Optional[str] = None,
 ) -> str:
-    return _observation_dependency_id_for_record_impl(
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        downstream_source_observation_id=(
-            downstream_source_observation_id
-        ),
-        downstream_reporter_observation_id=(
-            downstream_reporter_observation_id
-        ),
-        upstream_source_observation_id=(
-            upstream_source_observation_id
-        ),
-        upstream_reporter_observation_id=(
-            upstream_reporter_observation_id
-        ),
-        upstream_source_id=upstream_source_id,
-        upstream_reporter_id=upstream_reporter_id,
+    return _invoke_intelligence_facade(
+        _facade_observation_dependency_id_for_record_impl,
+        locals(),
     )
 
 
@@ -1032,27 +874,9 @@ def record_observation_dependency(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_observation_dependency_impl(
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        downstream_source_observation_id=(
-            downstream_source_observation_id
-        ),
-        downstream_reporter_observation_id=(
-            downstream_reporter_observation_id
-        ),
-        upstream_source_observation_id=(
-            upstream_source_observation_id
-        ),
-        upstream_reporter_observation_id=(
-            upstream_reporter_observation_id
-        ),
-        upstream_source_id=upstream_source_id,
-        upstream_reporter_id=upstream_reporter_id,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_record_observation_dependency_impl,
+        locals(),
     )
 def observation_independence_assertion_id_for_record(
     *,
@@ -1069,29 +893,9 @@ def observation_independence_assertion_id_for_record(
     right_reporter_observation_id:
         Optional[str] = None,
 ) -> str:
-    return (
-        _observation_independence_assertion_id_for_record_impl(
-            observed_at=observed_at,
-            provenance_evidence_id=(
-                provenance_evidence_id
-            ),
-            verification_status=(
-                verification_status
-            ),
-            confidence=confidence,
-            left_source_observation_id=(
-                left_source_observation_id
-            ),
-            left_reporter_observation_id=(
-                left_reporter_observation_id
-            ),
-            right_source_observation_id=(
-                right_source_observation_id
-            ),
-            right_reporter_observation_id=(
-                right_reporter_observation_id
-            ),
-        )
+    return _invoke_intelligence_facade(
+        _facade_observation_independence_assertion_id_for_record_impl,
+        locals(),
     )
 
 
@@ -1112,32 +916,9 @@ def record_observation_independence_assertion(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return (
-        _record_observation_independence_assertion_impl(
-            observed_at=observed_at,
-            provenance_evidence_id=(
-                provenance_evidence_id
-            ),
-            verification_status=(
-                verification_status
-            ),
-            confidence=confidence,
-            left_source_observation_id=(
-                left_source_observation_id
-            ),
-            left_reporter_observation_id=(
-                left_reporter_observation_id
-            ),
-            right_source_observation_id=(
-                right_source_observation_id
-            ),
-            right_reporter_observation_id=(
-                right_reporter_observation_id
-            ),
-            recorded_at=recorded_at,
-            metadata=metadata,
-            connection_factory=db_conn,
-        )
+    return _invoke_intelligence_facade(
+        _facade_record_observation_independence_assertion_impl,
+        locals(),
     )
 
 
@@ -1145,9 +926,9 @@ def load_evidence_context_for_source(
     *,
     source_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_context_for_source_impl(
-        source_id=source_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_context_for_source_impl,
+        locals(),
     )
 
 
@@ -1155,9 +936,9 @@ def load_evidence_context_for_reporter(
     *,
     reporter_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_context_for_reporter_impl(
-        reporter_id=reporter_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_context_for_reporter_impl,
+        locals(),
     )
 
 
@@ -1165,9 +946,9 @@ def load_evidence_context_for_media_item(
     *,
     media_item_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_context_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_context_for_media_item_impl,
+        locals(),
     )
 
 
@@ -1175,9 +956,9 @@ def load_expanded_evidence_context_for_media_item(
     *,
     media_item_id: str,
 ) -> Dict[str, Any]:
-    return _load_expanded_evidence_context_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_expanded_evidence_context_for_media_item_impl,
+        locals(),
     )
 
 
@@ -1185,9 +966,9 @@ def evidence_context_hash_for_media_item(
     *,
     media_item_id: str,
 ) -> str:
-    return _evidence_context_hash_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_evidence_context_hash_for_media_item_impl,
+        locals(),
     )
 
 
@@ -1195,9 +976,9 @@ def expanded_evidence_context_hash_for_media_item(
     *,
     media_item_id: str,
 ) -> str:
-    return _expanded_evidence_context_hash_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_expanded_evidence_context_hash_for_media_item_impl,
+        locals(),
     )
 
 
@@ -1205,9 +986,9 @@ def load_evidence_context_for_story(
     *,
     story_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_context_for_story_impl(
-        story_id=story_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_context_for_story_impl,
+        locals(),
     )
 
 
@@ -1215,9 +996,9 @@ def load_evidence_context_for_subject(
     *,
     subject_key: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_context_for_subject_impl(
-        subject_key=subject_key,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_context_for_subject_impl,
+        locals(),
     )
 
 
@@ -1237,9 +1018,9 @@ def load_evidence_analysis_bundle_for_media_item(
     *,
     media_item_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_analysis_bundle_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_analysis_bundle_for_media_item_impl,
+        locals(),
     )
 
 
@@ -1247,9 +1028,9 @@ def load_evidence_analysis_state_for_media_item(
     *,
     media_item_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_analysis_state_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    return _invoke_intelligence_facade(
+        _facade_load_evidence_analysis_state_for_media_item_impl,
+        locals(),
     )
 
 
