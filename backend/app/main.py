@@ -166,6 +166,13 @@ from app.services.analysis_history import (
     record_user_history as _record_user_history_history_impl,
     upsert_media_item as _upsert_media_item_history_impl,
 )
+from app.services.analysis_cache import (
+    analysis_content_hash as _analysis_content_hash_cache_impl,
+    cache_ttl_for_analysis as _cache_ttl_for_analysis_cache_impl,
+    get_cached_analysis as _get_cached_analysis_cache_impl,
+    make_analysis_cache_key as _make_analysis_cache_key_cache_impl,
+    set_cached_analysis as _set_cached_analysis_cache_impl,
+)
 # from app.routes.insights import router as insights_router
 
 
@@ -365,15 +372,13 @@ def utc_usage_day() -> str:
 def analysis_content_hash(
     content: str,
 ) -> str:
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        clean_html(content),
-    ).strip()
+    return (
+        _analysis_content_hash_cache_impl(
+            content,
+            clean_html=clean_html,
+        )
+    )
 
-    return hashlib.sha256(
-        normalized.encode("utf-8")
-    ).hexdigest()
 
 
 def source_domain_for_url(
@@ -1367,145 +1372,56 @@ def make_analysis_cache_key(
     variant: str = "",
     context_hash: str = "",
 ) -> str:
-    normalized_mode = str(
-        mode or ""
-    ).strip().lower()
-
-    normalized_context_hash = str(
-        context_hash or ""
-    ).strip()
-
-    key_parts = [
-        ANALYSIS_VERSION,
-        normalized_mode,
-        normalized_analysis_url(url),
-        analysis_content_hash(content),
-        str(
-            variant or ""
-        ).strip().lower(),
-    ]
-
-    if normalized_mode == "article":
-        key_parts.insert(
-            1,
-            SCORING_VERSION,
+    return (
+        _make_analysis_cache_key_cache_impl(
+            mode,
+            url,
+            content,
+            variant,
+            context_hash,
+            analysis_version=(
+                ANALYSIS_VERSION
+            ),
+            scoring_version=(
+                SCORING_VERSION
+            ),
+            normalize_url=(
+                normalized_analysis_url
+            ),
+            content_hash_resolver=(
+                analysis_content_hash
+            ),
         )
-
-        key_parts.append(
-            normalized_context_hash
-        )
-
-    raw_key = "|".join(
-        key_parts
     )
 
-    return hashlib.sha256(
-        raw_key.encode("utf-8")
-    ).hexdigest()
 
 def cache_ttl_for_analysis(
     mode: str,
     article_type: str = "",
 ) -> int:
-    normalized_mode = str(
-        mode or ""
-    ).strip().lower()
-
-    normalized_type = str(
-        article_type or ""
-    ).strip().lower()
-
-    if (
-        normalized_mode == "article"
-        and normalized_type
-        in {
-            "live_commentary",
-            "live_updates",
-        }
-    ):
-        return max(
-            0,
-            LIVE_CACHE_TTL_SECONDS,
+    return (
+        _cache_ttl_for_analysis_cache_impl(
+            mode,
+            article_type,
+            analysis_cache_ttl_seconds=(
+                ANALYSIS_CACHE_TTL_SECONDS
+            ),
+            live_cache_ttl_seconds=(
+                LIVE_CACHE_TTL_SECONDS
+            ),
         )
-
-    return max(
-        0,
-        ANALYSIS_CACHE_TTL_SECONDS,
     )
 
 
 def get_cached_analysis(
     cache_key: str,
 ) -> Optional[Dict[str, Any]]:
-    now_epoch = int(time.time())
-
-    conn = db_conn()
-
-    try:
-        row = conn.execute(
-            """
-            SELECT
-              response_json,
-              article_type,
-              created_at,
-              expires_at
-            FROM analysis_cache
-            WHERE cache_key = ?
-            """,
-            (cache_key,),
-        ).fetchone()
-
-        if row is None:
-            return None
-
-        if int(row["expires_at"]) <= now_epoch:
-            conn.execute(
-                """
-                DELETE FROM analysis_cache
-                WHERE cache_key = ?
-                """,
-                (cache_key,),
-            )
-            conn.commit()
-            return None
-
-        payload = json.loads(
-            row["response_json"]
+    return (
+        _get_cached_analysis_cache_impl(
+            cache_key,
+            connection_factory=db_conn,
         )
-
-        if not isinstance(payload, dict):
-            return None
-
-        debug = payload.get("debug")
-
-        if not isinstance(debug, dict):
-            debug = {}
-
-        debug["cache"] = {
-            "hit": True,
-            "article_type": (
-                row["article_type"] or ""
-            ),
-            "created_at": row["created_at"],
-            "expires_at": int(
-                row["expires_at"]
-            ),
-        }
-
-        payload["debug"] = debug
-
-        return payload
-
-    except Exception as error:
-        print(
-            "analysis cache read failed:",
-            type(error).__name__,
-            str(error)[:160],
-        )
-        return None
-
-    finally:
-        conn.close()
+    )
 
 
 def set_cached_analysis(
@@ -1516,99 +1432,30 @@ def set_cached_analysis(
     response_payload: Any,
     article_type: str = "",
 ) -> None:
-    ttl_seconds = cache_ttl_for_analysis(
-        mode,
-        article_type,
-    )
-
-    if ttl_seconds <= 0:
-        return
-
-    if hasattr(
-        response_payload,
-        "model_dump",
-    ):
-        payload = (
-            response_payload.model_dump()
-        )
-    else:
-        payload = response_payload
-
-    if not isinstance(payload, dict):
-        return
-
-    now_epoch = int(time.time())
-    created_at = datetime.now(
-        timezone.utc
-    ).isoformat()
-
-    expires_at = (
-        now_epoch + ttl_seconds
-    )
-
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            DELETE FROM analysis_cache
-            WHERE expires_at <= ?
-            """,
-            (now_epoch,),
-        )
-
-        conn.execute(
-            """
-            INSERT INTO analysis_cache (
-              cache_key,
-              mode,
-              request_url,
-              content_hash,
-              analysis_version,
-              response_json,
-              article_type,
-              created_at,
-              expires_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(cache_key)
-            DO UPDATE SET
-              response_json = excluded.response_json,
-              article_type = excluded.article_type,
-              created_at = excluded.created_at,
-              expires_at = excluded.expires_at
-            """,
-            (
-                cache_key,
-                str(mode),
-                normalized_analysis_url(
-                    request_url
-                ),
-                analysis_content_hash(
-                    content
-                ),
-                ANALYSIS_VERSION,
-                json.dumps(
-                    payload,
-                    ensure_ascii=False,
-                ),
-                str(article_type or ""),
-                created_at,
-                expires_at,
+    return (
+        _set_cached_analysis_cache_impl(
+            cache_key,
+            mode,
+            request_url,
+            content,
+            response_payload,
+            article_type,
+            connection_factory=db_conn,
+            ttl_resolver=(
+                cache_ttl_for_analysis
+            ),
+            normalize_url=(
+                normalized_analysis_url
+            ),
+            content_hash_resolver=(
+                analysis_content_hash
+            ),
+            analysis_version=(
+                ANALYSIS_VERSION
             ),
         )
+    )
 
-        conn.commit()
-
-    except Exception as error:
-        print(
-            "analysis cache write failed:",
-            type(error).__name__,
-            str(error)[:160],
-        )
-
-    finally:
-        conn.close()
 
 
 def request_client_key(
