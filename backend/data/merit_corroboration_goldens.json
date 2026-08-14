@@ -1,0 +1,93 @@
+{
+  "version": "merit-corroboration-golden-dataset-v1",
+  "description": "Human-reviewed real-world Merit corroboration cases. Do not treat model-generated or synthetic cases as real-world gold labels.",
+  "cases": [
+    {
+      "version": "merit-corroboration-golden-case-v1",
+      "id": "2025-doncic-lakers-two-primary-sources",
+      "claim_id": "golden-doncic-lakers-trade",
+      "legacy_score": {},
+      "corroboration_state": {},
+      "expectations": {
+        "signal": "verified_corroboration"
+      },
+      "curation": {
+        "version": "merit-corroboration-curation-v1",
+        "origin": "real_world",
+        "review_status": "draft",
+        "reviewer": "",
+        "reviewed_at": "",
+        "source_urls": [
+          "https://www.nba.com/mavs/mavericks-acquire-anthony-davis-and-max-christie",
+          "https://www.nba.com/lakers/news/luka-doncic-is-a-laker"
+        ],
+        "label_basis": "PROVISIONAL HUMAN-REVIEW CANDIDATE. Dallas directly announced that Luka Doncic was sent to the Los Angeles Lakers in the trade, and the Lakers separately published their acquisition and introduction of Doncic. Final claim alignment, independence provenance, legacy Merit score, and approval remain to be reviewed."
+      }
+    },
+    {
+      "version": "merit-corroboration-golden-case-v1",
+      "id": "2024-hamilton-ferrari-independence-unknown",
+      "claim_id": "golden-hamilton-ferrari-2025",
+      "legacy_score": {},
+      "corroboration_state": {},
+      "expectations": {
+        "signal": "support_independence_unknown"
+      },
+      "curation": {
+        "version": "merit-corroboration-curation-v1",
+        "origin": "real_world",
+        "review_status": "draft",
+        "reviewer": "",
+        "reviewed_at": "",
+        "source_urls": [
+          "https://www.ferrari.com/en-EN/corporate/articles/scuderia-ferrari-press-release-01-feb-2024-corporate",
+          "https://www.formula1.com/en/latest/article/breaking-lewis-hamilton-to-make-shock-switch-from-mercedes-to-ferrari-for-2025.3U1mESEizCeJ096Qrhbkb6.3U1mESEizCeJ096Qrhbkb6"
+        ],
+        "label_basis": "PROVISIONAL HUMAN-REVIEW CANDIDATE. Ferrari directly announced Lewis Hamilton would join Scuderia Ferrari for 2025, while Formula 1 also reported the switch. Different publishers alone do not establish independent origination, so this case remains independence-unknown until provenance is reviewed."
+      }
+    },
+    {
+      "version": "merit-corroboration-golden-case-v1",
+      "id": "2024-klopp-liverpool-announcement-dependency",
+      "claim_id": "golden-klopp-liverpool-exit",
+      "legacy_score": {},
+      "corroboration_state": {},
+      "expectations": {
+        "signal": "support_dependency_present"
+      },
+      "curation": {
+        "version": "merit-corroboration-curation-v1",
+        "origin": "real_world",
+        "review_status": "draft",
+        "reviewer": "",
+        "reviewed_at": "",
+        "source_urls": [
+          "https://www.liverpoolfc.com/news/jurgen-klopp-announces-decision-step-down-liverpool-manager-end-season",
+          "https://www.skysports.com/football/news/11095/13056662/klopp-to-leave-liverpool-at-end-of-season"
+        ],
+        "label_basis": "PROVISIONAL HUMAN-REVIEW CANDIDATE. Liverpool published Klopp's own departure announcement. Sky Sports reported that announced departure and references Klopp's confirmation through Liverpool media. The second report therefore should not be treated as independent merely because it is a separate outlet."
+      }
+    },
+    {
+      "version": "merit-corroboration-golden-case-v1",
+      "id": "2024-hamilton-ferrari-single-primary-source",
+      "claim_id": "golden-hamilton-ferrari-single-source",
+      "legacy_score": {},
+      "corroboration_state": {},
+      "expectations": {
+        "signal": "no_verified_corroboration_boost"
+      },
+      "curation": {
+        "version": "merit-corroboration-curation-v1",
+        "origin": "real_world",
+        "review_status": "draft",
+        "reviewer": "",
+        "reviewed_at": "",
+        "source_urls": [
+          "https://www.ferrari.com/en-EN/corporate/articles/scuderia-ferrari-press-release-01-feb-2024-corporate"
+        ],
+        "label_basis": "PROVISIONAL HUMAN-REVIEW CANDIDATE. This case intentionally represents a one-source evidence snapshot using Ferrari's primary announcement only. An authoritative source can support a claim without, by itself, establishing cross-source corroboration."
+      }
+    }
+  ]
+}

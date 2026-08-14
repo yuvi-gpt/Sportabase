@@ -30,112 +30,6 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from google import genai
 from lingua import LanguageDetectorBuilder
-from app.db.schema import SCHEMA
-from app.db.connection import connect_database
-from app.db.migrations import initialize_database
-from app.intelligence.sources import (
-    source_domain_for_url as _source_domain_for_url_impl,
-    source_key_for_url as _source_key_for_url_impl,
-    source_id_for_url as _source_id_for_url_impl,
-    upsert_intelligence_source as _upsert_intelligence_source_impl,
-)
-from app.intelligence.stories import (
-    story_id_for_canonical_key as _story_id_for_canonical_key_impl,
-    upsert_intelligence_story as _upsert_intelligence_story_impl,
-)
-from app.intelligence.claims import (
-    claim_id_for_canonical_key as _claim_id_for_canonical_key_impl,
-    upsert_intelligence_claim as _upsert_intelligence_claim_impl,
-    claim_link_id_for_record as _claim_link_id_for_record_impl,
-    record_claim_link as _record_claim_link_impl,
-)
-from app.intelligence.reporters import (
-    reporter_id_for_identity_key as _reporter_id_for_identity_key_impl,
-    upsert_intelligence_reporter as _upsert_intelligence_reporter_impl,
-)
-from app.intelligence.observations import (
-    record_source_observation as _record_source_observation_impl,
-    record_reporter_observation as _record_reporter_observation_impl,
-)
-from app.intelligence.evidence import (
-    evidence_key_for_record as _evidence_key_for_record_impl,
-    record_evidence as _record_evidence_impl,
-    record_evidence_link as _record_evidence_link_impl,
-)
-from app.intelligence.dependencies import (
-    _observation_dependency_identity as _observation_dependency_identity_impl,
-    observation_dependency_id_for_record as _observation_dependency_id_for_record_impl,
-    record_observation_dependency as _record_observation_dependency_impl,
-)
-from app.intelligence.independence_assertions import (
-    OBSERVATION_INDEPENDENCE_ASSERTION_VERSION,
-    OBSERVATION_INDEPENDENCE_VERIFICATION_VOCABULARY,
-    observation_independence_assertion_id_for_record as _observation_independence_assertion_id_for_record_impl,
-    record_observation_independence_assertion as _record_observation_independence_assertion_impl,
-)
-from app.intelligence.context import (
-    EVIDENCE_CONTEXT_VERSION,
-    MEDIA_EVIDENCE_CONTEXT_POLICY_VERSION,
-    _evidence_context_confidence,
-    _deduplicate_evidence_context_entries,
-    _evidence_context_row,
-    build_evidence_context,
-    evidence_context_hash,
-    load_evidence_context_for_source as _load_evidence_context_for_source_impl,
-    load_evidence_context_for_reporter as _load_evidence_context_for_reporter_impl,
-    load_evidence_context_for_media_item as _load_evidence_context_for_media_item_impl,
-    load_expanded_evidence_context_for_media_item as _load_expanded_evidence_context_for_media_item_impl,
-    evidence_context_hash_for_media_item as _evidence_context_hash_for_media_item_impl,
-    expanded_evidence_context_hash_for_media_item as _expanded_evidence_context_hash_for_media_item_impl,
-    load_evidence_context_for_story as _load_evidence_context_for_story_impl,
-    load_evidence_context_for_subject as _load_evidence_context_for_subject_impl,
-)
-from app.intelligence.features import (
-    EVIDENCE_SIGNAL_POLICY_VERSION,
-    EVIDENCE_FEATURE_VERSION,
-    EVIDENCE_ACTOR_FEATURE_VERSION,
-    OBSERVATION_DEPENDENCY_POLICY_VERSION,
-    OBSERVATION_DEPENDENCY_RELATIONSHIP_VOCABULARY,
-    EVIDENCE_SIGNAL_VOCABULARY,
-    CLAIM_DEPENDENCY_FEATURE_VERSION,
-    inspect_observation_dependency_vocabulary,
-    inspect_evidence_signal_vocabulary,
-    build_evidence_signal_features,
-    build_evidence_actor_features,
-    build_claim_dependency_features,
-)
-from app.analysis.evidence import (
-    EVIDENCE_ANALYSIS_BUNDLE_VERSION,
-    build_evidence_analysis_bundle,
-    evidence_analysis_bundle_hash,
-    load_evidence_analysis_bundle_for_media_item as _load_evidence_analysis_bundle_for_media_item_impl,
-    load_evidence_analysis_state_for_media_item as _load_evidence_analysis_state_for_media_item_impl,
-)
-from app.analysis.independence import (
-    CLAIM_INDEPENDENCE_POLICY_VERSION,
-    CLAIM_INDEPENDENCE_STATUS_VOCABULARY,
-    build_claim_independence_assessment,
-)
-from app.analysis.stance import (
-    CLAIM_STANCE_POLICY_VERSION,
-    CLAIM_LINK_STANCE_RELATIONSHIP_VOCABULARY,
-    CLAIM_STANCE_STATUS_VOCABULARY,
-    build_claim_stance_analysis,
-)
-from app.analysis.support import (
-    CLAIM_SUPPORT_PROVENANCE_VERSION,
-    CLAIM_SUPPORT_PROVENANCE_STATUS_VOCABULARY,
-    build_claim_support_provenance,
-)
-from app.analysis.corroboration import (
-    CLAIM_CORROBORATION_POLICY_VERSION,
-    CLAIM_CORROBORATION_STATUS_VOCABULARY,
-    build_claim_corroboration_assessment,
-)
-from app.services.article_intelligence_shadow import (
-    ARTICLE_INTELLIGENCE_SHADOW_VERSION,
-    run_article_intelligence_shadow,
-)
 # from app.routes.insights import router as insights_router
 
 
@@ -212,27 +106,6 @@ ADMIN_API_KEY = os.getenv(
     "SPORTABASE_ADMIN_API_KEY",
     "",
 ).strip()
-
-INTELLIGENCE_SHADOW_ENABLED = (
-    os.getenv(
-        "SPORTABASE_INTELLIGENCE_SHADOW_ENABLED",
-        "0",
-    )
-    .strip()
-    .lower()
-    in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-)
-
-BRAVE_NEWS_API_KEY = os.getenv(
-    "SPORTABASE_BRAVE_NEWS_API_KEY",
-    "",
-).strip()
-
 
 GEMINI_INPUT_COST_PER_MILLION_USD = float(
     os.getenv(
@@ -422,19 +295,625 @@ class ContentResolveResponse(BaseModel):
 # -----------------------------
 # db
 # -----------------------------
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS stories (
+  id TEXT PRIMARY KEY,
+  source TEXT NOT NULL,
+  sport TEXT NOT NULL,
+  title TEXT NOT NULL,
+  link TEXT NOT NULL,
+  published TEXT,
+  summary TEXT,
+  tldr_json TEXT,
+  merit_score INTEGER,
+  badge TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories(created_at);
+CREATE INDEX IF NOT EXISTS idx_stories_sport ON stories(sport);
+CREATE INDEX IF NOT EXISTS idx_stories_source ON stories(source);
+
+CREATE TABLE IF NOT EXISTS analysis_cache (
+  cache_key TEXT PRIMARY KEY,
+  mode TEXT NOT NULL,
+  request_url TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  analysis_version TEXT NOT NULL,
+  response_json TEXT NOT NULL,
+  article_type TEXT,
+  created_at TEXT NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_cache_expires_at
+ON analysis_cache(expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_cache_mode
+ON analysis_cache(mode);
+
+CREATE TABLE IF NOT EXISTS gemini_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL,
+  usage_day TEXT NOT NULL,
+  client_key TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  model TEXT NOT NULL,
+  status TEXT NOT NULL,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  thought_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  cache_hit INTEGER NOT NULL DEFAULT 0,
+  inflight_join INTEGER NOT NULL DEFAULT 0,
+  latency_ms INTEGER NOT NULL DEFAULT 0,
+  failure_status_code INTEGER,
+  failure_type TEXT NOT NULL DEFAULT '',
+  failure_detail TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_gemini_usage_day
+ON gemini_usage(usage_day);
+
+CREATE INDEX IF NOT EXISTS idx_gemini_usage_client_day
+ON gemini_usage(client_key, usage_day);
+
+CREATE TABLE IF NOT EXISTS intelligence_sources (
+  id TEXT PRIMARY KEY,
+  source_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  source_type TEXT NOT NULL DEFAULT 'publisher',
+  canonical_domain TEXT,
+  publication_founded_at TEXT,
+  domain_registered_at TEXT,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_sources_domain
+ON intelligence_sources(canonical_domain);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_sources_type
+ON intelligence_sources(source_type);
+
+CREATE TABLE IF NOT EXISTS intelligence_reporters (
+  id TEXT PRIMARY KEY,
+  identity_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL DEFAULT '',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_reporters_name
+ON intelligence_reporters(display_name);
+
+CREATE TABLE IF NOT EXISTS media_items (
+  id TEXT PRIMARY KEY,
+  canonical_url TEXT NOT NULL UNIQUE,
+  mode TEXT NOT NULL,
+  source_id TEXT,
+  reporter_id TEXT,
+  title TEXT NOT NULL DEFAULT '',
+  published_at TEXT,
+  latest_content_hash TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id),
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_source
+ON media_items(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_reporter
+ON media_items(reporter_id);
+
+CREATE INDEX IF NOT EXISTS idx_media_items_mode
+ON media_items(mode);
+
+CREATE TABLE IF NOT EXISTS intelligence_stories (
+  id TEXT PRIMARY KEY,
+  canonical_key TEXT NOT NULL UNIQUE,
+  canonical_title TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'developing',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_stories_status
+ON intelligence_stories(status);
+
+CREATE TABLE IF NOT EXISTS intelligence_claims (
+  id TEXT PRIMARY KEY,
+  canonical_key TEXT NOT NULL UNIQUE,
+  subject_key TEXT NOT NULL,
+  canonical_text TEXT NOT NULL DEFAULT '',
+  claim_type TEXT NOT NULL DEFAULT 'assertion',
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_claims_subject
+ON intelligence_claims(subject_key);
+
+CREATE INDEX IF NOT EXISTS idx_intelligence_claims_type
+ON intelligence_claims(claim_type);
+
+CREATE TABLE IF NOT EXISTS story_media_links (
+  story_id TEXT NOT NULL,
+  media_item_id TEXT NOT NULL,
+  relationship_type TEXT NOT NULL DEFAULT 'reports',
+  confidence REAL NOT NULL DEFAULT 0.0,
+  linked_at TEXT NOT NULL,
+  PRIMARY KEY(story_id, media_item_id),
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_story_media_links_media
+ON story_media_links(media_item_id);
+
+CREATE TABLE IF NOT EXISTS source_observations (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  media_item_id TEXT,
+  story_id TEXT,
+  subject_key TEXT NOT NULL,
+  observation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unresolved',
+  claim_summary TEXT NOT NULL DEFAULT '',
+  provenance_url TEXT NOT NULL DEFAULT '',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_source_time
+ON source_observations(source_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_subject_time
+ON source_observations(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_media
+ON source_observations(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_source_observations_story
+ON source_observations(story_id);
+
+CREATE TABLE IF NOT EXISTS reporter_observations (
+  id TEXT PRIMARY KEY,
+  reporter_id TEXT NOT NULL,
+  source_id TEXT,
+  media_item_id TEXT,
+  story_id TEXT,
+  subject_key TEXT NOT NULL,
+  observation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unresolved',
+  claim_summary TEXT NOT NULL DEFAULT '',
+  provenance_url TEXT NOT NULL DEFAULT '',
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE SET NULL,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_reporter_time
+ON reporter_observations(reporter_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_source_time
+ON reporter_observations(source_id, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_subject_time
+ON reporter_observations(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_media
+ON reporter_observations(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_reporter_observations_story
+ON reporter_observations(story_id);
+
+CREATE TABLE IF NOT EXISTS evidence_records (
+  id TEXT PRIMARY KEY,
+  evidence_key TEXT NOT NULL UNIQUE,
+  evidence_type TEXT NOT NULL,
+  subject_key TEXT NOT NULL,
+  claim_summary TEXT NOT NULL DEFAULT '',
+  canonical_url TEXT NOT NULL DEFAULT '',
+  reference_key TEXT NOT NULL DEFAULT '',
+  verification_status TEXT NOT NULL DEFAULT 'unverified',
+  published_at TEXT,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_type
+ON evidence_records(evidence_type);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_subject_time
+ON evidence_records(subject_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_url
+ON evidence_records(canonical_url);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_records_verification
+ON evidence_records(verification_status);
+
+CREATE TABLE IF NOT EXISTS evidence_links (
+  id TEXT PRIMARY KEY,
+  evidence_id TEXT NOT NULL,
+  media_item_id TEXT,
+  story_id TEXT,
+  source_id TEXT,
+  reporter_id TEXT,
+  relationship_type TEXT NOT NULL DEFAULT 'supports',
+  confidence REAL,
+  linked_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (media_item_id IS NOT NULL)
+    + (story_id IS NOT NULL)
+    + (source_id IS NOT NULL)
+    + (reporter_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(reporter_id)
+    REFERENCES intelligence_reporters(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_evidence
+ON evidence_links(evidence_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_media
+ON evidence_links(media_item_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_story
+ON evidence_links(story_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_source
+ON evidence_links(source_id);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_links_reporter
+ON evidence_links(reporter_id);
+
+CREATE TABLE IF NOT EXISTS claim_links (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  source_observation_id TEXT,
+  reporter_observation_id TEXT,
+  evidence_id TEXT,
+  relationship_type TEXT NOT NULL,
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (source_observation_id IS NOT NULL)
+    + (reporter_observation_id IS NOT NULL)
+    + (evidence_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id),
+  FOREIGN KEY(source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_claim
+ON claim_links(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_source_observation
+ON claim_links(source_observation_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_reporter_observation
+ON claim_links(reporter_observation_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_links_evidence
+ON claim_links(evidence_id);
+
+CREATE TABLE IF NOT EXISTS observation_dependencies (
+  id TEXT PRIMARY KEY,
+  downstream_source_observation_id TEXT,
+  downstream_reporter_observation_id TEXT,
+  upstream_source_observation_id TEXT,
+  upstream_reporter_observation_id TEXT,
+  upstream_source_id TEXT,
+  upstream_reporter_id TEXT,
+  relationship_type TEXT NOT NULL,
+  confidence REAL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    confidence IS NULL
+    OR (
+      confidence >= 0.0
+      AND confidence <= 1.0
+    )
+  ),
+  CHECK (
+    (downstream_source_observation_id IS NOT NULL)
+    + (downstream_reporter_observation_id IS NOT NULL)
+    = 1
+  ),
+  CHECK (
+    (upstream_source_observation_id IS NOT NULL)
+    + (upstream_reporter_observation_id IS NOT NULL)
+    + (upstream_source_id IS NOT NULL)
+    + (upstream_reporter_id IS NOT NULL)
+    = 1
+  ),
+  FOREIGN KEY(downstream_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(downstream_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(upstream_source_observation_id)
+    REFERENCES source_observations(id),
+  FOREIGN KEY(upstream_reporter_observation_id)
+    REFERENCES reporter_observations(id),
+  FOREIGN KEY(upstream_source_id)
+    REFERENCES intelligence_sources(id),
+  FOREIGN KEY(upstream_reporter_id)
+    REFERENCES intelligence_reporters(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_downstream_source
+ON observation_dependencies(
+  downstream_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_downstream_reporter
+ON observation_dependencies(
+  downstream_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_source_observation
+ON observation_dependencies(
+  upstream_source_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_reporter_observation
+ON observation_dependencies(
+  upstream_reporter_observation_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_source
+ON observation_dependencies(
+  upstream_source_id
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_dependencies_upstream_reporter
+ON observation_dependencies(
+  upstream_reporter_id
+);
+
+CREATE TABLE IF NOT EXISTS analysis_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  media_item_id TEXT NOT NULL,
+  story_id TEXT,
+  analyzed_at TEXT NOT NULL,
+  mode TEXT NOT NULL,
+  analysis_version TEXT NOT NULL,
+  scoring_version TEXT NOT NULL DEFAULT '',
+  content_hash TEXT NOT NULL,
+  context_hash TEXT NOT NULL DEFAULT '',
+  merit_score INTEGER,
+  evidence_score INTEGER,
+  logic_score INTEGER,
+  badge TEXT NOT NULL DEFAULT '',
+  verdict TEXT NOT NULL DEFAULT '',
+  article_type TEXT NOT NULL DEFAULT '',
+  score_components_json TEXT NOT NULL DEFAULT '{}',
+  score_calculation_json TEXT NOT NULL DEFAULT '{}',
+  reasons_json TEXT NOT NULL DEFAULT '[]',
+  response_json TEXT NOT NULL DEFAULT '{}',
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_media_time
+ON analysis_snapshots(media_item_id, analyzed_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_story_time
+ON analysis_snapshots(story_id, analyzed_at);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_analysis_version
+ON analysis_snapshots(analysis_version);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_snapshots_scoring_version
+ON analysis_snapshots(scoring_version);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_snapshots_identity
+ON analysis_snapshots(
+  media_item_id,
+  mode,
+  content_hash,
+  analysis_version,
+  scoring_version
+);
+
+CREATE TABLE IF NOT EXISTS user_history (
+  client_key TEXT NOT NULL,
+  media_item_id TEXT NOT NULL,
+  first_analyzed_at TEXT NOT NULL,
+  last_analyzed_at TEXT NOT NULL,
+  analysis_count INTEGER NOT NULL DEFAULT 1,
+  last_snapshot_id INTEGER,
+  PRIMARY KEY(client_key, media_item_id),
+  FOREIGN KEY(media_item_id)
+    REFERENCES media_items(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(last_snapshot_id)
+    REFERENCES analysis_snapshots(id)
+    ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_history_recent
+ON user_history(client_key, last_analyzed_at);
+"""
 
 
 def db_conn() -> sqlite3.Connection:
-    return connect_database(
-        DB_PATH
+    conn = sqlite3.connect(
+        str(DB_PATH),
+        timeout=30,
+        check_same_thread=False,
     )
+    conn.row_factory = sqlite3.Row
+
+    conn.execute("PRAGMA busy_timeout=30000;")
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+
+    return conn
 
 
 def init_db():
-    initialize_database(
-        db_conn,
-        SCHEMA,
-    )
+    conn = db_conn()
+    try:
+        conn.executescript(SCHEMA)
+
+        existing_columns = {
+            str(row["name"])
+            for row in conn.execute(
+                "PRAGMA table_info(gemini_usage)"
+            ).fetchall()
+        }
+
+        migration_columns = {
+            "inflight_join": (
+                "INTEGER NOT NULL DEFAULT 0"
+            ),
+            "latency_ms": (
+                "INTEGER NOT NULL DEFAULT 0"
+            ),
+            "failure_status_code": "INTEGER",
+            "failure_type": (
+                "TEXT NOT NULL DEFAULT ''"
+            ),
+            "failure_detail": (
+                "TEXT NOT NULL DEFAULT ''"
+            ),
+        }
+
+        for (
+            column_name,
+            column_definition,
+        ) in migration_columns.items():
+            if column_name in existing_columns:
+                continue
+
+            conn.execute(
+                "ALTER TABLE gemini_usage "
+                f"ADD COLUMN {column_name} "
+                f"{column_definition}"
+            )
+
+        snapshot_columns = {
+            str(row["name"])
+            for row in conn.execute(
+                "PRAGMA table_info(analysis_snapshots)"
+            ).fetchall()
+        }
+
+        if "context_hash" not in snapshot_columns:
+            conn.execute(
+                "ALTER TABLE analysis_snapshots "
+                "ADD COLUMN context_hash "
+                "TEXT NOT NULL DEFAULT ''"
+            )
+
+        conn.execute(
+            "DROP INDEX IF EXISTS "
+            "idx_analysis_snapshots_identity"
+        )
+
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX
+            idx_analysis_snapshots_identity
+            ON analysis_snapshots(
+              media_item_id,
+              mode,
+              content_hash,
+              context_hash,
+              analysis_version,
+              scoring_version
+            )
+            """
+        )
+
+        conn.commit()
+    finally:
+        conn.close()
 
 
 init_db()
@@ -1538,20 +2017,59 @@ def analysis_content_hash(
 def source_domain_for_url(
     url: str,
 ) -> str:
-    return _source_domain_for_url_impl(
-        url,
-        normalize_url=normalized_analysis_url,
+    canonical_url = normalized_analysis_url(
+        url
     )
+
+    if not canonical_url:
+        return ""
+
+    try:
+        parsed = urlparse(
+            canonical_url
+        )
+
+        hostname = str(
+            parsed.hostname or ""
+        ).strip().lower()
+
+    except Exception:
+        return ""
+
+    if hostname.startswith("www."):
+        hostname = hostname[4:]
+
+    return hostname
 
 
 def source_key_for_url(
     url: str,
     source_type: str = "publisher",
 ) -> str:
-    return _source_key_for_url_impl(
-        url,
-        source_type,
-        domain_resolver=source_domain_for_url,
+    canonical_domain = (
+        source_domain_for_url(
+            url
+        )
+    )
+
+    normalized_source_type = str(
+        source_type or ""
+    ).strip().lower()
+
+    if not canonical_domain:
+        raise ValueError(
+            "Source domain is required."
+        )
+
+    if not normalized_source_type:
+        raise ValueError(
+            "Source type is required."
+        )
+
+    return (
+        normalized_source_type
+        + "|"
+        + canonical_domain
     )
 
 
@@ -1559,11 +2077,17 @@ def source_id_for_url(
     url: str,
     source_type: str = "publisher",
 ) -> str:
-    return _source_id_for_url_impl(
+    source_key = source_key_for_url(
         url,
         source_type,
-        key_resolver=source_key_for_url,
     )
+
+    return hashlib.sha256(
+        (
+            "source|"
+            + source_key
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_intelligence_source(
@@ -1582,29 +2106,176 @@ def upsert_intelligence_source(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_source_impl(
-        url=url,
-        display_name=display_name,
-        source_type=source_type,
-        publication_founded_at=(
-            publication_founded_at
-        ),
-        domain_registered_at=(
-            domain_registered_at
-        ),
-        metadata=metadata,
-        seen_at=seen_at,
-        domain_resolver=source_domain_for_url,
-        connection_factory=db_conn,
+    canonical_domain = (
+        source_domain_for_url(
+            url
+        )
     )
+
+    normalized_source_type = str(
+        source_type or ""
+    ).strip().lower()
+
+    if not canonical_domain:
+        raise ValueError(
+            "Source domain is required."
+        )
+
+    if not normalized_source_type:
+        raise ValueError(
+            "Source type is required."
+        )
+
+    source_key = (
+        normalized_source_type
+        + "|"
+        + canonical_domain
+    )
+
+    source_id = hashlib.sha256(
+        (
+            "source|"
+            + source_key
+        ).encode("utf-8")
+    ).hexdigest()
+
+    normalized_display_name = str(
+        display_name or ""
+    ).strip()
+
+    normalized_founded_at = (
+        str(
+            publication_founded_at or ""
+        ).strip()
+        or None
+    )
+
+    normalized_registered_at = (
+        str(
+            domain_registered_at or ""
+        ).strip()
+        or None
+    )
+
+    normalized_seen_at = (
+        str(
+            seen_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    conn = db_conn()
+
+    try:
+        conn.execute(
+            """
+            INSERT INTO intelligence_sources (
+              id,
+              source_key,
+              display_name,
+              source_type,
+              canonical_domain,
+              publication_founded_at,
+              domain_registered_at,
+              first_seen_at,
+              last_seen_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?
+            )
+            ON CONFLICT(source_key)
+            DO UPDATE SET
+              display_name = CASE
+                WHEN excluded.display_name != ''
+                THEN excluded.display_name
+                ELSE intelligence_sources.display_name
+              END,
+              publication_founded_at = COALESCE(
+                excluded.publication_founded_at,
+                intelligence_sources.publication_founded_at
+              ),
+              domain_registered_at = COALESCE(
+                excluded.domain_registered_at,
+                intelligence_sources.domain_registered_at
+              ),
+              last_seen_at =
+                excluded.last_seen_at,
+              metadata_json = CASE
+                WHEN excluded.metadata_json != '{}'
+                THEN excluded.metadata_json
+                ELSE intelligence_sources.metadata_json
+              END
+            """,
+            (
+                source_id,
+                source_key,
+                normalized_display_name,
+                normalized_source_type,
+                canonical_domain,
+                normalized_founded_at,
+                normalized_registered_at,
+                normalized_seen_at,
+                normalized_seen_at,
+                metadata_json,
+            ),
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM intelligence_sources
+            WHERE source_key = ?
+            """,
+            (
+                source_key,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Source persistence failed."
+        )
+
+    return dict(row)
 
 
 def story_id_for_canonical_key(
     canonical_key: str,
 ) -> str:
-    return _story_id_for_canonical_key_impl(
-        canonical_key
-    )
+    normalized_canonical_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            canonical_key or ""
+        ).strip(),
+    ).lower()
+
+    if not normalized_canonical_key:
+        raise ValueError(
+            "Story canonical key is required."
+        )
+
+    return hashlib.sha256(
+        (
+            "story|"
+            + normalized_canonical_key
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_intelligence_story(
@@ -1617,23 +2288,141 @@ def upsert_intelligence_story(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_story_impl(
-        canonical_key=canonical_key,
-        canonical_title=canonical_title,
-        status=status,
-        metadata=metadata,
-        seen_at=seen_at,
-        id_resolver=story_id_for_canonical_key,
-        connection_factory=db_conn,
+    normalized_canonical_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            canonical_key or ""
+        ).strip(),
+    ).lower()
+
+    if not normalized_canonical_key:
+        raise ValueError(
+            "Story canonical key is required."
+        )
+
+    normalized_status = str(
+        status or ""
+    ).strip().lower()
+
+    if not normalized_status:
+        raise ValueError(
+            "Story status is required."
+        )
+
+    story_id = story_id_for_canonical_key(
+        normalized_canonical_key
     )
+
+    normalized_canonical_title = str(
+        canonical_title or ""
+    ).strip()
+
+    normalized_seen_at = (
+        str(
+            seen_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    conn = db_conn()
+
+    try:
+        conn.execute(
+            """
+            INSERT INTO intelligence_stories (
+              id,
+              canonical_key,
+              canonical_title,
+              status,
+              first_seen_at,
+              last_seen_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(canonical_key)
+            DO UPDATE SET
+              canonical_title = CASE
+                WHEN excluded.canonical_title != ''
+                THEN excluded.canonical_title
+                ELSE intelligence_stories.canonical_title
+              END,
+              status = excluded.status,
+              last_seen_at =
+                excluded.last_seen_at,
+              metadata_json = CASE
+                WHEN excluded.metadata_json != '{}'
+                THEN excluded.metadata_json
+                ELSE intelligence_stories.metadata_json
+              END
+            """,
+            (
+                story_id,
+                normalized_canonical_key,
+                normalized_canonical_title,
+                normalized_status,
+                normalized_seen_at,
+                normalized_seen_at,
+                metadata_json,
+            ),
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM intelligence_stories
+            WHERE canonical_key = ?
+            """,
+            (
+                normalized_canonical_key,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Story persistence failed."
+        )
+
+    return dict(row)
 
 
 def claim_id_for_canonical_key(
     canonical_key: str,
 ) -> str:
-    return _claim_id_for_canonical_key_impl(
-        canonical_key
-    )
+    normalized_canonical_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            canonical_key or ""
+        ).strip(),
+    ).lower()
+
+    if not normalized_canonical_key:
+        raise ValueError(
+            "Claim canonical key is required."
+        )
+
+    return hashlib.sha256(
+        (
+            "claim|"
+            + normalized_canonical_key
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_intelligence_claim(
@@ -1647,63 +2436,155 @@ def upsert_intelligence_claim(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_claim_impl(
-        canonical_key=canonical_key,
-        subject_key=subject_key,
-        canonical_text=canonical_text,
-        claim_type=claim_type,
-        metadata=metadata,
-        seen_at=seen_at,
-        id_resolver=claim_id_for_canonical_key,
-        connection_factory=db_conn,
+    normalized_canonical_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            canonical_key or ""
+        ).strip(),
+    ).lower()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_canonical_text = str(
+        canonical_text or ""
+    ).strip()
+
+    normalized_claim_type = str(
+        claim_type or ""
+    ).strip().lower()
+
+    if not normalized_canonical_key:
+        raise ValueError(
+            "Claim canonical key is required."
+        )
+
+    if not normalized_subject_key:
+        raise ValueError(
+            "Claim subject key is required."
+        )
+
+    if not normalized_claim_type:
+        raise ValueError(
+            "Claim type is required."
+        )
+
+    claim_id = (
+        claim_id_for_canonical_key(
+            normalized_canonical_key
+        )
     )
 
-
-def claim_link_id_for_record(
-    *,
-    claim_id: str,
-    relationship_type: str,
-    observed_at: str,
-    confidence: Optional[float] = None,
-    source_observation_id: Optional[str] = None,
-    reporter_observation_id: Optional[str] = None,
-    evidence_id: Optional[str] = None,
-) -> str:
-    return _claim_link_id_for_record_impl(
-        claim_id=claim_id,
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        source_observation_id=source_observation_id,
-        reporter_observation_id=reporter_observation_id,
-        evidence_id=evidence_id,
+    normalized_seen_at = (
+        str(
+            seen_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
     )
 
-
-def record_claim_link(
-    *,
-    claim_id: str,
-    relationship_type: str,
-    observed_at: str,
-    confidence: Optional[float] = None,
-    source_observation_id: Optional[str] = None,
-    reporter_observation_id: Optional[str] = None,
-    evidence_id: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-    recorded_at: Optional[str] = None,
-) -> Dict[str, Any]:
-    return _record_claim_link_impl(
-        claim_id=claim_id,
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        source_observation_id=source_observation_id,
-        reporter_observation_id=reporter_observation_id,
-        evidence_id=evidence_id,
-        metadata=metadata,
-        recorded_at=recorded_at,
-        connection_factory=db_conn,
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
     )
+
+    conn = db_conn()
+
+    try:
+        existing = conn.execute(
+            """
+            SELECT *
+            FROM intelligence_claims
+            WHERE canonical_key = ?
+            """,
+            (
+                normalized_canonical_key,
+            ),
+        ).fetchone()
+
+        if (
+            existing is not None
+            and str(
+                existing["subject_key"]
+                or ""
+            ).strip()
+            != normalized_subject_key
+        ):
+            raise ValueError(
+                "Claim canonical key is already "
+                "assigned to a different subject."
+            )
+
+        conn.execute(
+            """
+            INSERT INTO intelligence_claims (
+              id,
+              canonical_key,
+              subject_key,
+              canonical_text,
+              claim_type,
+              first_seen_at,
+              last_seen_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(canonical_key)
+            DO UPDATE SET
+              canonical_text = CASE
+                WHEN excluded.canonical_text != ''
+                THEN excluded.canonical_text
+                ELSE intelligence_claims.canonical_text
+              END,
+              claim_type =
+                excluded.claim_type,
+              last_seen_at =
+                excluded.last_seen_at,
+              metadata_json = CASE
+                WHEN excluded.metadata_json != '{}'
+                THEN excluded.metadata_json
+                ELSE intelligence_claims.metadata_json
+              END
+            """,
+            (
+                claim_id,
+                normalized_canonical_key,
+                normalized_subject_key,
+                normalized_canonical_text,
+                normalized_claim_type,
+                normalized_seen_at,
+                normalized_seen_at,
+                metadata_json,
+            ),
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM intelligence_claims
+            WHERE canonical_key = ?
+            """,
+            (
+                normalized_canonical_key,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Claim persistence failed."
+        )
+
+    return dict(row)
 
 
 def link_media_item_to_story(
@@ -1837,9 +2718,25 @@ def link_media_item_to_story(
 def reporter_id_for_identity_key(
     identity_key: str,
 ) -> str:
-    return _reporter_id_for_identity_key_impl(
-        identity_key
-    )
+    normalized_identity_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            identity_key or ""
+        ).strip(),
+    ).lower()
+
+    if not normalized_identity_key:
+        raise ValueError(
+            "Reporter identity key is required."
+        )
+
+    return hashlib.sha256(
+        (
+            "reporter|"
+            + normalized_identity_key
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def upsert_intelligence_reporter(
@@ -1851,14 +2748,107 @@ def upsert_intelligence_reporter(
     ] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _upsert_intelligence_reporter_impl(
-        identity_key=identity_key,
-        display_name=display_name,
-        metadata=metadata,
-        seen_at=seen_at,
-        id_resolver=reporter_id_for_identity_key,
-        connection_factory=db_conn,
+    normalized_identity_key = re.sub(
+        r"\s+",
+        " ",
+        str(
+            identity_key or ""
+        ).strip(),
+    ).lower()
+
+    if not normalized_identity_key:
+        raise ValueError(
+            "Reporter identity key is required."
+        )
+
+    reporter_id = (
+        reporter_id_for_identity_key(
+            normalized_identity_key
+        )
     )
+
+    normalized_display_name = str(
+        display_name or ""
+    ).strip()
+
+    normalized_seen_at = (
+        str(
+            seen_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    conn = db_conn()
+
+    try:
+        conn.execute(
+            """
+            INSERT INTO intelligence_reporters (
+              id,
+              identity_key,
+              display_name,
+              first_seen_at,
+              last_seen_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(identity_key)
+            DO UPDATE SET
+              display_name = CASE
+                WHEN excluded.display_name != ''
+                THEN excluded.display_name
+                ELSE intelligence_reporters.display_name
+              END,
+              last_seen_at =
+                excluded.last_seen_at,
+              metadata_json = CASE
+                WHEN excluded.metadata_json != '{}'
+                THEN excluded.metadata_json
+                ELSE intelligence_reporters.metadata_json
+              END
+            """,
+            (
+                reporter_id,
+                normalized_identity_key,
+                normalized_display_name,
+                normalized_seen_at,
+                normalized_seen_at,
+                metadata_json,
+            ),
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM intelligence_reporters
+            WHERE identity_key = ?
+            """,
+            (
+                normalized_identity_key,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Reporter persistence failed."
+        )
+
+    return dict(row)
 
 
 def record_source_observation(
@@ -1876,22 +2866,238 @@ def record_source_observation(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_source_observation_impl(
-        source_id=source_id,
-        subject_key=subject_key,
-        observation_type=observation_type,
-        observed_at=observed_at,
-        status=status,
-        claim_summary=claim_summary,
-        provenance_url=provenance_url,
-        confidence=confidence,
-        media_item_id=media_item_id,
-        story_id=story_id,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        normalize_url=normalized_analysis_url,
-        connection_factory=db_conn,
+    normalized_source_id = str(
+        source_id or ""
+    ).strip()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_observation_type = str(
+        observation_type or ""
+    ).strip().lower()
+
+    normalized_status = str(
+        status or ""
+    ).strip().lower()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    if not normalized_source_id:
+        raise ValueError(
+            "Source observation source ID is required."
+        )
+
+    if not normalized_subject_key:
+        raise ValueError(
+            "Source observation subject key is required."
+        )
+
+    if not normalized_observation_type:
+        raise ValueError(
+            "Source observation type is required."
+        )
+
+    if not normalized_status:
+        raise ValueError(
+            "Source observation status is required."
+        )
+
+    if not normalized_observed_at:
+        raise ValueError(
+            "Source observation observed time is required."
+        )
+
+    normalized_claim_summary = str(
+        claim_summary or ""
+    ).strip()
+
+    raw_provenance_url = str(
+        provenance_url or ""
+    ).strip()
+
+    normalized_provenance_url = (
+        normalized_analysis_url(
+            raw_provenance_url
+        )
+        if raw_provenance_url
+        else ""
     )
+
+    normalized_media_item_id = (
+        str(
+            media_item_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_story_id = (
+        str(
+            story_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_recorded_at = (
+        str(
+            recorded_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    normalized_confidence = None
+
+    if confidence is not None:
+        try:
+            normalized_confidence = float(
+                confidence
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Source observation confidence "
+                "must be numeric."
+            ) from exc
+
+        if not (
+            0.0
+            <= normalized_confidence
+            <= 1.0
+        ):
+            raise ValueError(
+                "Source observation confidence "
+                "must be between 0 and 1."
+            )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    identity_payload = json.dumps(
+        {
+            "source_id": normalized_source_id,
+            "media_item_id": (
+                normalized_media_item_id
+                or ""
+            ),
+            "story_id": (
+                normalized_story_id
+                or ""
+            ),
+            "subject_key": (
+                normalized_subject_key
+            ),
+            "observation_type": (
+                normalized_observation_type
+            ),
+            "status": normalized_status,
+            "provenance_url": (
+                normalized_provenance_url
+            ),
+            "confidence": (
+                normalized_confidence
+            ),
+            "observed_at": (
+                normalized_observed_at
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+    observation_id = hashlib.sha256(
+        (
+            "source-observation|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO source_observations (
+              id,
+              source_id,
+              media_item_id,
+              story_id,
+              subject_key,
+              observation_type,
+              status,
+              claim_summary,
+              provenance_url,
+              confidence,
+              observed_at,
+              recorded_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(id)
+            DO NOTHING
+            """,
+            (
+                observation_id,
+                normalized_source_id,
+                normalized_media_item_id,
+                normalized_story_id,
+                normalized_subject_key,
+                normalized_observation_type,
+                normalized_status,
+                normalized_claim_summary,
+                normalized_provenance_url,
+                normalized_confidence,
+                normalized_observed_at,
+                normalized_recorded_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE id = ?
+            """,
+            (
+                observation_id,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Source observation persistence failed."
+        )
+
+    return {
+        "observation": dict(row),
+        "created": created,
+    }
 
 
 def record_reporter_observation(
@@ -1910,23 +3116,257 @@ def record_reporter_observation(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_reporter_observation_impl(
-        reporter_id=reporter_id,
-        subject_key=subject_key,
-        observation_type=observation_type,
-        observed_at=observed_at,
-        status=status,
-        claim_summary=claim_summary,
-        provenance_url=provenance_url,
-        confidence=confidence,
-        source_id=source_id,
-        media_item_id=media_item_id,
-        story_id=story_id,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        normalize_url=normalized_analysis_url,
-        connection_factory=db_conn,
+    normalized_reporter_id = str(
+        reporter_id or ""
+    ).strip()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_observation_type = str(
+        observation_type or ""
+    ).strip().lower()
+
+    normalized_status = str(
+        status or ""
+    ).strip().lower()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    if not normalized_reporter_id:
+        raise ValueError(
+            "Reporter observation reporter ID is required."
+        )
+
+    if not normalized_subject_key:
+        raise ValueError(
+            "Reporter observation subject key is required."
+        )
+
+    if not normalized_observation_type:
+        raise ValueError(
+            "Reporter observation type is required."
+        )
+
+    if not normalized_status:
+        raise ValueError(
+            "Reporter observation status is required."
+        )
+
+    if not normalized_observed_at:
+        raise ValueError(
+            "Reporter observation observed time is required."
+        )
+
+    normalized_claim_summary = str(
+        claim_summary or ""
+    ).strip()
+
+    raw_provenance_url = str(
+        provenance_url or ""
+    ).strip()
+
+    normalized_provenance_url = (
+        normalized_analysis_url(
+            raw_provenance_url
+        )
+        if raw_provenance_url
+        else ""
     )
+
+    normalized_source_id = (
+        str(
+            source_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_media_item_id = (
+        str(
+            media_item_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_story_id = (
+        str(
+            story_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_recorded_at = (
+        str(
+            recorded_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    normalized_confidence = None
+
+    if confidence is not None:
+        try:
+            normalized_confidence = float(
+                confidence
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Reporter observation confidence "
+                "must be numeric."
+            ) from exc
+
+        if not (
+            0.0
+            <= normalized_confidence
+            <= 1.0
+        ):
+            raise ValueError(
+                "Reporter observation confidence "
+                "must be between 0 and 1."
+            )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    identity_payload = json.dumps(
+        {
+            "reporter_id": (
+                normalized_reporter_id
+            ),
+            "source_id": (
+                normalized_source_id
+                or ""
+            ),
+            "media_item_id": (
+                normalized_media_item_id
+                or ""
+            ),
+            "story_id": (
+                normalized_story_id
+                or ""
+            ),
+            "subject_key": (
+                normalized_subject_key
+            ),
+            "observation_type": (
+                normalized_observation_type
+            ),
+            "status": (
+                normalized_status
+            ),
+            "provenance_url": (
+                normalized_provenance_url
+            ),
+            "confidence": (
+                normalized_confidence
+            ),
+            "observed_at": (
+                normalized_observed_at
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+    observation_id = hashlib.sha256(
+        (
+            "reporter-observation|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO reporter_observations (
+              id,
+              reporter_id,
+              source_id,
+              media_item_id,
+              story_id,
+              subject_key,
+              observation_type,
+              status,
+              claim_summary,
+              provenance_url,
+              confidence,
+              observed_at,
+              recorded_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(id)
+            DO NOTHING
+            """,
+            (
+                observation_id,
+                normalized_reporter_id,
+                normalized_source_id,
+                normalized_media_item_id,
+                normalized_story_id,
+                normalized_subject_key,
+                normalized_observation_type,
+                normalized_status,
+                normalized_claim_summary,
+                normalized_provenance_url,
+                normalized_confidence,
+                normalized_observed_at,
+                normalized_recorded_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE id = ?
+            """,
+            (
+                observation_id,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Reporter observation persistence failed."
+        )
+
+    return {
+        "observation": dict(row),
+        "created": created,
+    }
+
+
 def evidence_key_for_record(
     *,
     evidence_type: str,
@@ -1936,15 +3376,102 @@ def evidence_key_for_record(
     reference_key: str = "",
     verification_status: str = "unverified",
 ) -> str:
-    return _evidence_key_for_record_impl(
-        evidence_type=evidence_type,
-        subject_key=subject_key,
-        observed_at=observed_at,
-        canonical_url=canonical_url,
-        reference_key=reference_key,
-        verification_status=verification_status,
-        normalize_url=normalized_analysis_url,
+    normalized_evidence_type = str(
+        evidence_type or ""
+    ).strip().lower()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    normalized_verification_status = str(
+        verification_status or ""
+    ).strip().lower()
+
+    raw_canonical_url = str(
+        canonical_url or ""
+    ).strip()
+
+    normalized_canonical_url = (
+        normalized_analysis_url(
+            raw_canonical_url
+        )
+        if raw_canonical_url
+        else ""
     )
+
+    normalized_reference_key = str(
+        reference_key or ""
+    ).strip()
+
+    if not normalized_evidence_type:
+        raise ValueError(
+            "Evidence type is required."
+        )
+
+    if not normalized_subject_key:
+        raise ValueError(
+            "Evidence subject key is required."
+        )
+
+    if not normalized_observed_at:
+        raise ValueError(
+            "Evidence observed time is required."
+        )
+
+    if not normalized_verification_status:
+        raise ValueError(
+            "Evidence verification status is required."
+        )
+
+    if (
+        not normalized_canonical_url
+        and not normalized_reference_key
+    ):
+        raise ValueError(
+            "Evidence requires a canonical URL "
+            "or reference key."
+        )
+
+    identity_payload = json.dumps(
+        {
+            "evidence_type": (
+                normalized_evidence_type
+            ),
+            "subject_key": (
+                normalized_subject_key
+            ),
+            "canonical_url": (
+                normalized_canonical_url
+            ),
+            "reference_key": (
+                normalized_reference_key
+            ),
+            "verification_status": (
+                normalized_verification_status
+            ),
+            "observed_at": (
+                normalized_observed_at
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+    return hashlib.sha256(
+        (
+            "evidence-key|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def record_evidence(
@@ -1960,20 +3487,163 @@ def record_evidence(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_evidence_impl(
-        evidence_type=evidence_type,
-        subject_key=subject_key,
-        observed_at=observed_at,
-        claim_summary=claim_summary,
-        canonical_url=canonical_url,
-        reference_key=reference_key,
-        verification_status=verification_status,
-        published_at=published_at,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        normalize_url=normalized_analysis_url,
-        connection_factory=db_conn,
+    normalized_evidence_type = str(
+        evidence_type or ""
+    ).strip().lower()
+
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    normalized_verification_status = str(
+        verification_status or ""
+    ).strip().lower()
+
+    raw_canonical_url = str(
+        canonical_url or ""
+    ).strip()
+
+    normalized_canonical_url = (
+        normalized_analysis_url(
+            raw_canonical_url
+        )
+        if raw_canonical_url
+        else ""
     )
+
+    normalized_reference_key = str(
+        reference_key or ""
+    ).strip()
+
+    evidence_key = evidence_key_for_record(
+        evidence_type=(
+            normalized_evidence_type
+        ),
+        subject_key=(
+            normalized_subject_key
+        ),
+        observed_at=(
+            normalized_observed_at
+        ),
+        canonical_url=(
+            normalized_canonical_url
+        ),
+        reference_key=(
+            normalized_reference_key
+        ),
+        verification_status=(
+            normalized_verification_status
+        ),
+    )
+
+    evidence_id = hashlib.sha256(
+        (
+            "evidence|"
+            + evidence_key
+        ).encode("utf-8")
+    ).hexdigest()
+
+    normalized_claim_summary = str(
+        claim_summary or ""
+    ).strip()
+
+    normalized_published_at = (
+        str(
+            published_at or ""
+        ).strip()
+        or None
+    )
+
+    normalized_recorded_at = (
+        str(
+            recorded_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO evidence_records (
+              id,
+              evidence_key,
+              evidence_type,
+              subject_key,
+              claim_summary,
+              canonical_url,
+              reference_key,
+              verification_status,
+              published_at,
+              observed_at,
+              recorded_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(evidence_key)
+            DO NOTHING
+            """,
+            (
+                evidence_id,
+                evidence_key,
+                normalized_evidence_type,
+                normalized_subject_key,
+                normalized_claim_summary,
+                normalized_canonical_url,
+                normalized_reference_key,
+                normalized_verification_status,
+                normalized_published_at,
+                normalized_observed_at,
+                normalized_recorded_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM evidence_records
+            WHERE evidence_key = ?
+            """,
+            (
+                evidence_key,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Evidence persistence failed."
+        )
+
+    return {
+        "evidence": dict(row),
+        "created": created,
+    }
 
 
 def record_evidence_link(
@@ -1988,18 +3658,221 @@ def record_evidence_link(
     linked_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_evidence_link_impl(
-        evidence_id=evidence_id,
-        relationship_type=relationship_type,
-        confidence=confidence,
-        media_item_id=media_item_id,
-        story_id=story_id,
-        source_id=source_id,
-        reporter_id=reporter_id,
-        linked_at=linked_at,
-        metadata=metadata,
-        connection_factory=db_conn,
+    normalized_evidence_id = str(
+        evidence_id or ""
+    ).strip()
+
+    normalized_relationship_type = str(
+        relationship_type or ""
+    ).strip().lower()
+
+    if not normalized_evidence_id:
+        raise ValueError(
+            "Evidence link evidence ID is required."
+        )
+
+    if not normalized_relationship_type:
+        raise ValueError(
+            "Evidence link relationship type is required."
+        )
+
+    normalized_media_item_id = (
+        str(
+            media_item_id or ""
+        ).strip()
+        or None
     )
+
+    normalized_story_id = (
+        str(
+            story_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_source_id = (
+        str(
+            source_id or ""
+        ).strip()
+        or None
+    )
+
+    normalized_reporter_id = (
+        str(
+            reporter_id or ""
+        ).strip()
+        or None
+    )
+
+    targets = {
+        "media_item": normalized_media_item_id,
+        "story": normalized_story_id,
+        "source": normalized_source_id,
+        "reporter": normalized_reporter_id,
+    }
+
+    active_targets = [
+        (
+            target_type,
+            target_id,
+        )
+        for (
+            target_type,
+            target_id,
+        ) in targets.items()
+        if target_id is not None
+    ]
+
+    if len(active_targets) != 1:
+        raise ValueError(
+            "Evidence link requires exactly one target."
+        )
+
+    (
+        target_type,
+        target_id,
+    ) = active_targets[0]
+
+    normalized_confidence = None
+
+    if confidence is not None:
+        try:
+            normalized_confidence = float(
+                confidence
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Evidence link confidence "
+                "must be numeric."
+            ) from exc
+
+        if not (
+            0.0
+            <= normalized_confidence
+            <= 1.0
+        ):
+            raise ValueError(
+                "Evidence link confidence "
+                "must be between 0 and 1."
+            )
+
+    normalized_linked_at = (
+        str(
+            linked_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    identity_payload = json.dumps(
+        {
+            "evidence_id": (
+                normalized_evidence_id
+            ),
+            "target_type": (
+                target_type
+            ),
+            "target_id": (
+                target_id
+            ),
+            "relationship_type": (
+                normalized_relationship_type
+            ),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+    )
+
+    link_id = hashlib.sha256(
+        (
+            "evidence-link|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO evidence_links (
+              id,
+              evidence_id,
+              media_item_id,
+              story_id,
+              source_id,
+              reporter_id,
+              relationship_type,
+              confidence,
+              linked_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?
+            )
+            ON CONFLICT(id)
+            DO NOTHING
+            """,
+            (
+                link_id,
+                normalized_evidence_id,
+                normalized_media_item_id,
+                normalized_story_id,
+                normalized_source_id,
+                normalized_reporter_id,
+                normalized_relationship_type,
+                normalized_confidence,
+                normalized_linked_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE id = ?
+            """,
+            (
+                link_id,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Evidence link persistence failed."
+        )
+
+    return {
+        "link": dict(row),
+        "created": created,
+    }
+
+
 def _observation_dependency_identity(
     *,
     relationship_type: str,
@@ -2016,25 +3889,155 @@ def _observation_dependency_identity(
     upstream_source_id: Optional[str] = None,
     upstream_reporter_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _observation_dependency_identity_impl(
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        downstream_source_observation_id=(
-            downstream_source_observation_id
+    normalized_relationship_type = str(
+        relationship_type or ""
+    ).strip().lower()
+
+    normalized_observed_at = str(
+        observed_at or ""
+    ).strip()
+
+    if not normalized_relationship_type:
+        raise ValueError(
+            "Observation dependency relationship "
+            "type is required."
+        )
+
+    if not normalized_observed_at:
+        raise ValueError(
+            "Observation dependency observed "
+            "time is required."
+        )
+
+    downstream_targets = {
+        "source_observation": (
+            str(
+                downstream_source_observation_id
+                or ""
+            ).strip()
+            or None
         ),
-        downstream_reporter_observation_id=(
-            downstream_reporter_observation_id
+        "reporter_observation": (
+            str(
+                downstream_reporter_observation_id
+                or ""
+            ).strip()
+            or None
         ),
-        upstream_source_observation_id=(
-            upstream_source_observation_id
+    }
+
+    active_downstream = [
+        (
+            target_type,
+            target_id,
+        )
+        for (
+            target_type,
+            target_id,
+        ) in downstream_targets.items()
+        if target_id is not None
+    ]
+
+    if len(active_downstream) != 1:
+        raise ValueError(
+            "Observation dependency requires "
+            "exactly one downstream observation."
+        )
+
+    upstream_targets = {
+        "source_observation": (
+            str(
+                upstream_source_observation_id
+                or ""
+            ).strip()
+            or None
         ),
-        upstream_reporter_observation_id=(
-            upstream_reporter_observation_id
+        "reporter_observation": (
+            str(
+                upstream_reporter_observation_id
+                or ""
+            ).strip()
+            or None
         ),
-        upstream_source_id=upstream_source_id,
-        upstream_reporter_id=upstream_reporter_id,
-    )
+        "source": (
+            str(
+                upstream_source_id or ""
+            ).strip()
+            or None
+        ),
+        "reporter": (
+            str(
+                upstream_reporter_id or ""
+            ).strip()
+            or None
+        ),
+    }
+
+    active_upstream = [
+        (
+            target_type,
+            target_id,
+        )
+        for (
+            target_type,
+            target_id,
+        ) in upstream_targets.items()
+        if target_id is not None
+    ]
+
+    if len(active_upstream) != 1:
+        raise ValueError(
+            "Observation dependency requires "
+            "exactly one upstream target."
+        )
+
+    normalized_confidence = None
+
+    if confidence is not None:
+        try:
+            normalized_confidence = float(
+                confidence
+            )
+        except (
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "Observation dependency confidence "
+                "must be numeric."
+            ) from exc
+
+        if not (
+            0.0
+            <= normalized_confidence
+            <= 1.0
+        ):
+            raise ValueError(
+                "Observation dependency confidence "
+                "must be between 0 and 1."
+            )
+
+    (
+        downstream_type,
+        downstream_id,
+    ) = active_downstream[0]
+
+    (
+        upstream_type,
+        upstream_id,
+    ) = active_upstream[0]
+
+    return {
+        "downstream_type": downstream_type,
+        "downstream_id": downstream_id,
+        "upstream_type": upstream_type,
+        "upstream_id": upstream_id,
+        "relationship_type": (
+            normalized_relationship_type
+        ),
+        "confidence": normalized_confidence,
+        "observed_at": normalized_observed_at,
+    }
 
 
 def observation_dependency_id_for_record(
@@ -2053,25 +4056,47 @@ def observation_dependency_id_for_record(
     upstream_source_id: Optional[str] = None,
     upstream_reporter_id: Optional[str] = None,
 ) -> str:
-    return _observation_dependency_id_for_record_impl(
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        downstream_source_observation_id=(
-            downstream_source_observation_id
-        ),
-        downstream_reporter_observation_id=(
-            downstream_reporter_observation_id
-        ),
-        upstream_source_observation_id=(
-            upstream_source_observation_id
-        ),
-        upstream_reporter_observation_id=(
-            upstream_reporter_observation_id
-        ),
-        upstream_source_id=upstream_source_id,
-        upstream_reporter_id=upstream_reporter_id,
+    identity = (
+        _observation_dependency_identity(
+            relationship_type=relationship_type,
+            observed_at=observed_at,
+            confidence=confidence,
+            downstream_source_observation_id=(
+                downstream_source_observation_id
+            ),
+            downstream_reporter_observation_id=(
+                downstream_reporter_observation_id
+            ),
+            upstream_source_observation_id=(
+                upstream_source_observation_id
+            ),
+            upstream_reporter_observation_id=(
+                upstream_reporter_observation_id
+            ),
+            upstream_source_id=upstream_source_id,
+            upstream_reporter_id=(
+                upstream_reporter_id
+            ),
+        )
     )
+
+    identity_payload = json.dumps(
+        identity,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(
+            ",",
+            ":",
+        ),
+        allow_nan=False,
+    )
+
+    return hashlib.sha256(
+        (
+            "observation-dependency|"
+            + identity_payload
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def record_observation_dependency(
@@ -2092,214 +4117,1735 @@ def record_observation_dependency(
     recorded_at: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return _record_observation_dependency_impl(
-        relationship_type=relationship_type,
-        observed_at=observed_at,
-        confidence=confidence,
-        downstream_source_observation_id=(
-            downstream_source_observation_id
-        ),
-        downstream_reporter_observation_id=(
-            downstream_reporter_observation_id
-        ),
-        upstream_source_observation_id=(
-            upstream_source_observation_id
-        ),
-        upstream_reporter_observation_id=(
-            upstream_reporter_observation_id
-        ),
-        upstream_source_id=upstream_source_id,
-        upstream_reporter_id=upstream_reporter_id,
-        recorded_at=recorded_at,
-        metadata=metadata,
-        connection_factory=db_conn,
-    )
-def observation_independence_assertion_id_for_record(
-    *,
-    observed_at: str,
-    provenance_evidence_id: str,
-    verification_status: str = "unverified",
-    confidence: Optional[float] = None,
-    left_source_observation_id:
-        Optional[str] = None,
-    left_reporter_observation_id:
-        Optional[str] = None,
-    right_source_observation_id:
-        Optional[str] = None,
-    right_reporter_observation_id:
-        Optional[str] = None,
-) -> str:
-    return (
-        _observation_independence_assertion_id_for_record_impl(
+    identity = (
+        _observation_dependency_identity(
+            relationship_type=relationship_type,
             observed_at=observed_at,
-            provenance_evidence_id=(
-                provenance_evidence_id
-            ),
-            verification_status=(
-                verification_status
-            ),
             confidence=confidence,
-            left_source_observation_id=(
-                left_source_observation_id
+            downstream_source_observation_id=(
+                downstream_source_observation_id
             ),
-            left_reporter_observation_id=(
-                left_reporter_observation_id
+            downstream_reporter_observation_id=(
+                downstream_reporter_observation_id
             ),
-            right_source_observation_id=(
-                right_source_observation_id
+            upstream_source_observation_id=(
+                upstream_source_observation_id
             ),
-            right_reporter_observation_id=(
-                right_reporter_observation_id
+            upstream_reporter_observation_id=(
+                upstream_reporter_observation_id
+            ),
+            upstream_source_id=upstream_source_id,
+            upstream_reporter_id=(
+                upstream_reporter_id
             ),
         )
     )
 
-
-def record_observation_independence_assertion(
-    *,
-    observed_at: str,
-    provenance_evidence_id: str,
-    verification_status: str = "unverified",
-    confidence: Optional[float] = None,
-    left_source_observation_id:
-        Optional[str] = None,
-    left_reporter_observation_id:
-        Optional[str] = None,
-    right_source_observation_id:
-        Optional[str] = None,
-    right_reporter_observation_id:
-        Optional[str] = None,
-    recorded_at: Optional[str] = None,
-    metadata: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    return (
-        _record_observation_independence_assertion_impl(
-            observed_at=observed_at,
-            provenance_evidence_id=(
-                provenance_evidence_id
+    dependency_id = (
+        observation_dependency_id_for_record(
+            relationship_type=(
+                identity["relationship_type"]
             ),
-            verification_status=(
-                verification_status
+            observed_at=identity["observed_at"],
+            confidence=identity["confidence"],
+            downstream_source_observation_id=(
+                identity["downstream_id"]
+                if identity["downstream_type"]
+                == "source_observation"
+                else None
             ),
-            confidence=confidence,
-            left_source_observation_id=(
-                left_source_observation_id
+            downstream_reporter_observation_id=(
+                identity["downstream_id"]
+                if identity["downstream_type"]
+                == "reporter_observation"
+                else None
             ),
-            left_reporter_observation_id=(
-                left_reporter_observation_id
+            upstream_source_observation_id=(
+                identity["upstream_id"]
+                if identity["upstream_type"]
+                == "source_observation"
+                else None
             ),
-            right_source_observation_id=(
-                right_source_observation_id
+            upstream_reporter_observation_id=(
+                identity["upstream_id"]
+                if identity["upstream_type"]
+                == "reporter_observation"
+                else None
             ),
-            right_reporter_observation_id=(
-                right_reporter_observation_id
+            upstream_source_id=(
+                identity["upstream_id"]
+                if identity["upstream_type"]
+                == "source"
+                else None
             ),
-            recorded_at=recorded_at,
-            metadata=metadata,
-            connection_factory=db_conn,
+            upstream_reporter_id=(
+                identity["upstream_id"]
+                if identity["upstream_type"]
+                == "reporter"
+                else None
+            ),
         )
     )
 
-
-def load_evidence_context_for_source(
-    *,
-    source_id: str,
-) -> Dict[str, Any]:
-    return _load_evidence_context_for_source_impl(
-        source_id=source_id,
-        connection_factory=db_conn,
+    downstream_source_id = (
+        identity["downstream_id"]
+        if identity["downstream_type"]
+        == "source_observation"
+        else None
     )
 
-
-def load_evidence_context_for_reporter(
-    *,
-    reporter_id: str,
-) -> Dict[str, Any]:
-    return _load_evidence_context_for_reporter_impl(
-        reporter_id=reporter_id,
-        connection_factory=db_conn,
+    downstream_reporter_id = (
+        identity["downstream_id"]
+        if identity["downstream_type"]
+        == "reporter_observation"
+        else None
     )
 
-
-def load_evidence_context_for_media_item(
-    *,
-    media_item_id: str,
-) -> Dict[str, Any]:
-    return _load_evidence_context_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    upstream_source_observation = (
+        identity["upstream_id"]
+        if identity["upstream_type"]
+        == "source_observation"
+        else None
     )
 
-
-def load_expanded_evidence_context_for_media_item(
-    *,
-    media_item_id: str,
-) -> Dict[str, Any]:
-    return _load_expanded_evidence_context_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    upstream_reporter_observation = (
+        identity["upstream_id"]
+        if identity["upstream_type"]
+        == "reporter_observation"
+        else None
     )
 
+    upstream_source = (
+        identity["upstream_id"]
+        if identity["upstream_type"]
+        == "source"
+        else None
+    )
 
-def evidence_context_hash_for_media_item(
+    upstream_reporter = (
+        identity["upstream_id"]
+        if identity["upstream_type"]
+        == "reporter"
+        else None
+    )
+
+    normalized_recorded_at = (
+        str(
+            recorded_at or ""
+        ).strip()
+        or datetime.now(
+            timezone.utc
+        ).isoformat()
+    )
+
+    metadata_json = json.dumps(
+        metadata or {},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+    conn = db_conn()
+
+    try:
+        cursor = conn.execute(
+            """
+            INSERT INTO observation_dependencies (
+              id,
+              downstream_source_observation_id,
+              downstream_reporter_observation_id,
+              upstream_source_observation_id,
+              upstream_reporter_observation_id,
+              upstream_source_id,
+              upstream_reporter_id,
+              relationship_type,
+              confidence,
+              observed_at,
+              recorded_at,
+              metadata_json
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?
+            )
+            ON CONFLICT(id)
+            DO NOTHING
+            """,
+            (
+                dependency_id,
+                downstream_source_id,
+                downstream_reporter_id,
+                upstream_source_observation,
+                upstream_reporter_observation,
+                upstream_source,
+                upstream_reporter,
+                identity["relationship_type"],
+                identity["confidence"],
+                identity["observed_at"],
+                normalized_recorded_at,
+                metadata_json,
+            ),
+        )
+
+        created = (
+            cursor.rowcount == 1
+        )
+
+        row = conn.execute(
+            """
+            SELECT *
+            FROM observation_dependencies
+            WHERE id = ?
+            """,
+            (
+                dependency_id,
+            ),
+        ).fetchone()
+
+        conn.commit()
+
+    finally:
+        conn.close()
+
+    if row is None:
+        raise RuntimeError(
+            "Observation dependency "
+            "persistence failed."
+        )
+
+    return {
+        "dependency": dict(row),
+        "created": created,
+    }
+
+
+EVIDENCE_CONTEXT_VERSION = "evidence-context-v2"
+
+
+def _evidence_context_confidence(
+    value: Any,
     *,
-    media_item_id: str,
+    field_name: str,
+) -> Optional[float]:
+    if value is None:
+        return None
+
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{field_name} must be numeric."
+        ) from exc
+
+    if not 0.0 <= normalized <= 1.0:
+        raise ValueError(
+            f"{field_name} must be between 0 and 1."
+        )
+
+    return normalized
+
+
+def _deduplicate_evidence_context_entries(
+    entries: list,
+    *,
+    collection_name: str,
+) -> list:
+    by_id: Dict[str, Dict[str, Any]] = {}
+
+    for entry in entries:
+        entry_id = str(
+            entry.get("id") or ""
+        ).strip()
+
+        if not entry_id:
+            raise ValueError(
+                f"{collection_name} entry ID is required."
+            )
+
+        existing = by_id.get(entry_id)
+
+        if (
+            existing is not None
+            and existing != entry
+        ):
+            raise ValueError(
+                f"{collection_name} contains conflicting "
+                f"rows for ID {entry_id}."
+            )
+
+        by_id[entry_id] = entry
+
+    return [
+        by_id[entry_id]
+        for entry_id in sorted(by_id)
+    ]
+
+
+def _evidence_context_row(
+    row: Any,
+    *,
+    collection_name: str,
+) -> Dict[str, Any]:
+    try:
+        normalized = dict(row)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{collection_name} rows must be mapping-like."
+        ) from exc
+
+    return normalized
+
+
+def build_evidence_context(
+    *,
+    subject_key: str = "",
+    media_item_id: str = "",
+    story_id: str = "",
+    source_id: str = "",
+    reporter_id: str = "",
+    source_observations: Optional[list] = None,
+    reporter_observations: Optional[list] = None,
+    evidence_records: Optional[list] = None,
+    evidence_links: Optional[list] = None,
+) -> Dict[str, Any]:
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
+
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    normalized_story_id = str(
+        story_id or ""
+    ).strip()
+
+    normalized_source_id = str(
+        source_id or ""
+    ).strip()
+
+    normalized_reporter_id = str(
+        reporter_id or ""
+    ).strip()
+
+    normalized_source_observations = []
+
+    for raw_row in source_observations or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="source_observations",
+        )
+
+        normalized_source_observations.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "source_id": str(
+                    row.get("source_id") or ""
+                ).strip(),
+                "media_item_id": str(
+                    row.get("media_item_id") or ""
+                ).strip(),
+                "story_id": str(
+                    row.get("story_id") or ""
+                ).strip(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "observation_type": str(
+                    row.get("observation_type") or ""
+                ).strip().lower(),
+                "status": str(
+                    row.get("status") or ""
+                ).strip().lower(),
+                "provenance_url": str(
+                    row.get("provenance_url") or ""
+                ).strip(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Source observation confidence"
+                        ),
+                    )
+                ),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    normalized_reporter_observations = []
+
+    for raw_row in reporter_observations or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="reporter_observations",
+        )
+
+        normalized_reporter_observations.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "reporter_id": str(
+                    row.get("reporter_id") or ""
+                ).strip(),
+                "source_id": str(
+                    row.get("source_id") or ""
+                ).strip(),
+                "media_item_id": str(
+                    row.get("media_item_id") or ""
+                ).strip(),
+                "story_id": str(
+                    row.get("story_id") or ""
+                ).strip(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "observation_type": str(
+                    row.get("observation_type") or ""
+                ).strip().lower(),
+                "status": str(
+                    row.get("status") or ""
+                ).strip().lower(),
+                "provenance_url": str(
+                    row.get("provenance_url") or ""
+                ).strip(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Reporter observation confidence"
+                        ),
+                    )
+                ),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    normalized_evidence_records = []
+
+    for raw_row in evidence_records or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="evidence_records",
+        )
+
+        normalized_evidence_records.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "evidence_key": str(
+                    row.get("evidence_key") or ""
+                ).strip(),
+                "evidence_type": str(
+                    row.get("evidence_type") or ""
+                ).strip().lower(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "canonical_url": str(
+                    row.get("canonical_url") or ""
+                ).strip(),
+                "reference_key": str(
+                    row.get("reference_key") or ""
+                ).strip(),
+                "verification_status": str(
+                    row.get("verification_status") or ""
+                ).strip().lower(),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    normalized_evidence_links = []
+
+    for raw_row in evidence_links or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="evidence_links",
+        )
+
+        targets = [
+            (
+                target_type,
+                str(
+                    row.get(column_name) or ""
+                ).strip(),
+            )
+            for target_type, column_name in (
+                ("media_item", "media_item_id"),
+                ("story", "story_id"),
+                ("source", "source_id"),
+                ("reporter", "reporter_id"),
+            )
+            if str(
+                row.get(column_name) or ""
+            ).strip()
+        ]
+
+        if len(targets) != 1:
+            raise ValueError(
+                "Evidence context link requires exactly "
+                "one target."
+            )
+
+        target_type, target_id = targets[0]
+
+        normalized_evidence_links.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "evidence_id": str(
+                    row.get("evidence_id") or ""
+                ).strip(),
+                "target_type": target_type,
+                "target_id": target_id,
+                "relationship_type": str(
+                    row.get("relationship_type") or ""
+                ).strip().lower(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Evidence link confidence"
+                        ),
+                    )
+                ),
+            }
+        )
+
+    return {
+        "version": EVIDENCE_CONTEXT_VERSION,
+        "scope": {
+            "subject_key": normalized_subject_key,
+            "media_item_id": normalized_media_item_id,
+            "story_id": normalized_story_id,
+            "source_id": normalized_source_id,
+            "reporter_id": normalized_reporter_id,
+        },
+        "source_observations": (
+            _deduplicate_evidence_context_entries(
+                normalized_source_observations,
+                collection_name="source_observations",
+            )
+        ),
+        "reporter_observations": (
+            _deduplicate_evidence_context_entries(
+                normalized_reporter_observations,
+                collection_name="reporter_observations",
+            )
+        ),
+        "evidence_records": (
+            _deduplicate_evidence_context_entries(
+                normalized_evidence_records,
+                collection_name="evidence_records",
+            )
+        ),
+        "evidence_links": (
+            _deduplicate_evidence_context_entries(
+                normalized_evidence_links,
+                collection_name="evidence_links",
+            )
+        ),
+    }
+
+
+def evidence_context_hash(
+    context: Dict[str, Any],
 ) -> str:
-    return _evidence_context_hash_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    if not isinstance(context, dict):
+        raise ValueError(
+            "Evidence context must be a dictionary."
+        )
+
+    canonical_json = json.dumps(
+        context,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+
+    return hashlib.sha256(
+        (
+            "evidence-context|"
+            + canonical_json
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+EVIDENCE_ANALYSIS_BUNDLE_VERSION = (
+    "evidence-analysis-v2"
+)
+
+EVIDENCE_SIGNAL_POLICY_VERSION = (
+    "evidence-signals-v1"
+)
+
+EVIDENCE_FEATURE_VERSION = (
+    "evidence-features-v1"
+)
+
+EVIDENCE_ACTOR_FEATURE_VERSION = (
+    "evidence-actors-v1"
+)
+
+OBSERVATION_DEPENDENCY_POLICY_VERSION = (
+    "dependency-relationships-v1"
+)
+
+OBSERVATION_DEPENDENCY_RELATIONSHIP_VOCABULARY = (
+    "attributed_to",
+    "derived_from",
+)
+
+EVIDENCE_SIGNAL_VOCABULARY = {
+    "story_relationship_types": (
+        "confirms",
+        "reports",
+    ),
+    "observation_types": (
+        "report",
+    ),
+    "observation_statuses": (
+        "confirmed",
+        "unresolved",
+    ),
+    "evidence_types": (
+        "independent_report",
+        "official_statement",
+        "primary_document",
+        "quote",
+    ),
+    "verification_statuses": (
+        "unverified",
+        "verified",
+    ),
+    "evidence_relationship_types": (
+        "contradicts",
+        "published_by",
+        "supports",
+    ),
+}
+
+
+def inspect_observation_dependency_vocabulary(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Observation dependency vocabulary "
+            "inspection requires a dictionary."
+        )
+
+    observed = set()
+
+    for row in bundle.get(
+        "observation_dependencies",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        relationship_type = str(
+            row.get(
+                "relationship_type",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if relationship_type:
+            observed.add(
+                relationship_type
+            )
+
+    allowed = set(
+        OBSERVATION_DEPENDENCY_RELATIONSHIP_VOCABULARY
+    )
+
+    return {
+        "version": (
+            OBSERVATION_DEPENDENCY_POLICY_VERSION
+        ),
+        "recognized": sorted(
+            observed & allowed
+        ),
+        "unknown": sorted(
+            observed - allowed
+        ),
+    }
+
+
+def _evidence_analysis_text(
+    value: Any,
+) -> str:
+    return " ".join(
+        str(value or "").split()
     )
 
 
-def expanded_evidence_context_hash_for_media_item(
+def build_evidence_analysis_bundle(
     *,
     media_item_id: str,
+    story_links: Optional[list] = None,
+    source_observations: Optional[list] = None,
+    reporter_observations: Optional[list] = None,
+    evidence_records: Optional[list] = None,
+    evidence_links: Optional[list] = None,
+    observation_dependencies: Optional[list] = None,
+) -> Dict[str, Any]:
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    if not normalized_media_item_id:
+        raise ValueError(
+            "Evidence analysis media item ID "
+            "is required."
+        )
+
+    normalized_story_links = {}
+    normalized_source_observations = []
+    normalized_reporter_observations = []
+    normalized_evidence_records = []
+    normalized_evidence_links = []
+    normalized_observation_dependencies = []
+
+    for raw_row in story_links or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="story_links",
+        )
+
+        story_id = str(
+            row.get("story_id") or ""
+        ).strip()
+
+        if not story_id:
+            raise ValueError(
+                "Evidence analysis story link "
+                "requires a story ID."
+            )
+
+        normalized_row = {
+            "story_id": story_id,
+            "relationship_type": str(
+                row.get("relationship_type") or ""
+            ).strip().lower(),
+            "confidence": (
+                _evidence_context_confidence(
+                    row.get("confidence"),
+                    field_name=(
+                        "Story media link confidence"
+                    ),
+                )
+            ),
+        }
+
+        existing = normalized_story_links.get(
+            story_id
+        )
+
+        if (
+            existing is not None
+            and existing != normalized_row
+        ):
+            raise ValueError(
+                "Evidence analysis contains "
+                "conflicting story links."
+            )
+
+        normalized_story_links[
+            story_id
+        ] = normalized_row
+
+    for raw_row in source_observations or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="source_observations",
+        )
+
+        normalized_source_observations.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "source_id": str(
+                    row.get("source_id") or ""
+                ).strip(),
+                "media_item_id": str(
+                    row.get("media_item_id") or ""
+                ).strip(),
+                "story_id": str(
+                    row.get("story_id") or ""
+                ).strip(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "observation_type": str(
+                    row.get("observation_type") or ""
+                ).strip().lower(),
+                "status": str(
+                    row.get("status") or ""
+                ).strip().lower(),
+                "claim_summary": (
+                    _evidence_analysis_text(
+                        row.get("claim_summary")
+                    )
+                ),
+                "provenance_url": str(
+                    row.get("provenance_url") or ""
+                ).strip(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Source observation "
+                            "confidence"
+                        ),
+                    )
+                ),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    for raw_row in reporter_observations or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name=(
+                "reporter_observations"
+            ),
+        )
+
+        normalized_reporter_observations.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "reporter_id": str(
+                    row.get("reporter_id") or ""
+                ).strip(),
+                "source_id": str(
+                    row.get("source_id") or ""
+                ).strip(),
+                "media_item_id": str(
+                    row.get("media_item_id") or ""
+                ).strip(),
+                "story_id": str(
+                    row.get("story_id") or ""
+                ).strip(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "observation_type": str(
+                    row.get("observation_type") or ""
+                ).strip().lower(),
+                "status": str(
+                    row.get("status") or ""
+                ).strip().lower(),
+                "claim_summary": (
+                    _evidence_analysis_text(
+                        row.get("claim_summary")
+                    )
+                ),
+                "provenance_url": str(
+                    row.get("provenance_url") or ""
+                ).strip(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Reporter observation "
+                            "confidence"
+                        ),
+                    )
+                ),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    for raw_row in evidence_records or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="evidence_records",
+        )
+
+        normalized_evidence_records.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "evidence_key": str(
+                    row.get("evidence_key") or ""
+                ).strip(),
+                "evidence_type": str(
+                    row.get("evidence_type") or ""
+                ).strip().lower(),
+                "subject_key": str(
+                    row.get("subject_key") or ""
+                ).strip(),
+                "claim_summary": (
+                    _evidence_analysis_text(
+                        row.get("claim_summary")
+                    )
+                ),
+                "canonical_url": str(
+                    row.get("canonical_url") or ""
+                ).strip(),
+                "reference_key": str(
+                    row.get("reference_key") or ""
+                ).strip(),
+                "verification_status": str(
+                    row.get(
+                        "verification_status"
+                    ) or ""
+                ).strip().lower(),
+                "observed_at": str(
+                    row.get("observed_at") or ""
+                ).strip(),
+            }
+        )
+
+    for raw_row in evidence_links or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name="evidence_links",
+        )
+
+        targets = [
+            (
+                target_type,
+                str(
+                    row.get(column_name) or ""
+                ).strip(),
+            )
+            for target_type, column_name in (
+                (
+                    "media_item",
+                    "media_item_id",
+                ),
+                (
+                    "story",
+                    "story_id",
+                ),
+                (
+                    "source",
+                    "source_id",
+                ),
+                (
+                    "reporter",
+                    "reporter_id",
+                ),
+            )
+            if str(
+                row.get(column_name) or ""
+            ).strip()
+        ]
+
+        if len(targets) != 1:
+            raise ValueError(
+                "Evidence analysis link requires "
+                "exactly one target."
+            )
+
+        target_type, target_id = targets[0]
+
+        normalized_evidence_links.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "evidence_id": str(
+                    row.get("evidence_id") or ""
+                ).strip(),
+                "target_type": target_type,
+                "target_id": target_id,
+                "relationship_type": str(
+                    row.get(
+                        "relationship_type"
+                    ) or ""
+                ).strip().lower(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row.get("confidence"),
+                        field_name=(
+                            "Evidence link "
+                            "confidence"
+                        ),
+                    )
+                ),
+            }
+        )
+
+    for raw_row in observation_dependencies or []:
+        row = _evidence_context_row(
+            raw_row,
+            collection_name=(
+                "observation_dependencies"
+            ),
+        )
+
+        identity = (
+            _observation_dependency_identity(
+                relationship_type=row.get(
+                    "relationship_type"
+                ),
+                observed_at=row.get(
+                    "observed_at"
+                ),
+                confidence=row.get(
+                    "confidence"
+                ),
+                downstream_source_observation_id=(
+                    row.get(
+                        "downstream_source_observation_id"
+                    )
+                ),
+                downstream_reporter_observation_id=(
+                    row.get(
+                        "downstream_reporter_observation_id"
+                    )
+                ),
+                upstream_source_observation_id=(
+                    row.get(
+                        "upstream_source_observation_id"
+                    )
+                ),
+                upstream_reporter_observation_id=(
+                    row.get(
+                        "upstream_reporter_observation_id"
+                    )
+                ),
+                upstream_source_id=row.get(
+                    "upstream_source_id"
+                ),
+                upstream_reporter_id=row.get(
+                    "upstream_reporter_id"
+                ),
+            )
+        )
+
+        normalized_observation_dependencies.append(
+            {
+                "id": str(
+                    row.get("id") or ""
+                ).strip(),
+                "downstream_type": (
+                    identity[
+                        "downstream_type"
+                    ]
+                ),
+                "downstream_id": (
+                    identity[
+                        "downstream_id"
+                    ]
+                ),
+                "upstream_type": (
+                    identity[
+                        "upstream_type"
+                    ]
+                ),
+                "upstream_id": (
+                    identity[
+                        "upstream_id"
+                    ]
+                ),
+                "relationship_type": (
+                    identity[
+                        "relationship_type"
+                    ]
+                ),
+                "confidence": (
+                    identity["confidence"]
+                ),
+                "observed_at": (
+                    identity["observed_at"]
+                ),
+            }
+        )
+
+
+    return {
+        "version": (
+            EVIDENCE_ANALYSIS_BUNDLE_VERSION
+        ),
+        "scope": {
+            "media_item_id": (
+                normalized_media_item_id
+            ),
+        },
+        "story_links": [
+            normalized_story_links[key]
+            for key in sorted(
+                normalized_story_links
+            )
+        ],
+        "source_observations": (
+            _deduplicate_evidence_context_entries(
+                normalized_source_observations,
+                collection_name=(
+                    "source_observations"
+                ),
+            )
+        ),
+        "reporter_observations": (
+            _deduplicate_evidence_context_entries(
+                normalized_reporter_observations,
+                collection_name=(
+                    "reporter_observations"
+                ),
+            )
+        ),
+        "evidence_records": (
+            _deduplicate_evidence_context_entries(
+                normalized_evidence_records,
+                collection_name=(
+                    "evidence_records"
+                ),
+            )
+        ),
+        "evidence_links": (
+            _deduplicate_evidence_context_entries(
+                normalized_evidence_links,
+                collection_name=(
+                    "evidence_links"
+                ),
+            )
+        ),
+        "observation_dependencies": (
+            _deduplicate_evidence_context_entries(
+                normalized_observation_dependencies,
+                collection_name=(
+                    "observation_dependencies"
+                ),
+            )
+        ),
+    }
+
+
+def inspect_evidence_signal_vocabulary(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence signal vocabulary "
+            "inspection requires a dictionary."
+        )
+
+    observed = {
+        "story_relationship_types": set(),
+        "observation_types": set(),
+        "observation_statuses": set(),
+        "evidence_types": set(),
+        "verification_statuses": set(),
+        "evidence_relationship_types": set(),
+    }
+
+    for row in bundle.get(
+        "story_links",
+        [],
+    ):
+        if isinstance(row, dict):
+            value = str(
+                row.get(
+                    "relationship_type",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            if value:
+                observed[
+                    "story_relationship_types"
+                ].add(value)
+
+    for collection_name in (
+        "source_observations",
+        "reporter_observations",
+    ):
+        for row in bundle.get(
+            collection_name,
+            [],
+        ):
+            if not isinstance(row, dict):
+                continue
+
+            observation_type = str(
+                row.get(
+                    "observation_type",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            status = str(
+                row.get(
+                    "status",
+                    "",
+                )
+                or ""
+            ).strip().lower()
+
+            if observation_type:
+                observed[
+                    "observation_types"
+                ].add(
+                    observation_type
+                )
+
+            if status:
+                observed[
+                    "observation_statuses"
+                ].add(status)
+
+    for row in bundle.get(
+        "evidence_records",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        evidence_type = str(
+            row.get(
+                "evidence_type",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        verification_status = str(
+            row.get(
+                "verification_status",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if evidence_type:
+            observed[
+                "evidence_types"
+            ].add(evidence_type)
+
+        if verification_status:
+            observed[
+                "verification_statuses"
+            ].add(
+                verification_status
+            )
+
+    for row in bundle.get(
+        "evidence_links",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        relationship_type = str(
+            row.get(
+                "relationship_type",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if relationship_type:
+            observed[
+                "evidence_relationship_types"
+            ].add(
+                relationship_type
+            )
+
+    recognized = {}
+    unknown = {}
+
+    for category in sorted(
+        EVIDENCE_SIGNAL_VOCABULARY
+    ):
+        allowed = set(
+            EVIDENCE_SIGNAL_VOCABULARY[
+                category
+            ]
+        )
+
+        values = observed[category]
+
+        recognized[category] = sorted(
+            values & allowed
+        )
+
+        unknown[category] = sorted(
+            values - allowed
+        )
+
+    return {
+        "version": (
+            EVIDENCE_SIGNAL_POLICY_VERSION
+        ),
+        "recognized": recognized,
+        "unknown": unknown,
+    }
+
+
+def build_evidence_signal_features(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence signal features require "
+            "a dictionary."
+        )
+
+    vocabulary_report = (
+        inspect_evidence_signal_vocabulary(
+            bundle
+        )
+    )
+
+    counts = {
+        category: {
+            value: 0
+            for value in (
+                EVIDENCE_SIGNAL_VOCABULARY[
+                    category
+                ]
+            )
+        }
+        for category in sorted(
+            EVIDENCE_SIGNAL_VOCABULARY
+        )
+    }
+
+    def increment(
+        category: str,
+        value: Any,
+    ) -> None:
+        normalized_value = str(
+            value or ""
+        ).strip().lower()
+
+        if (
+            normalized_value
+            in counts[category]
+        ):
+            counts[
+                category
+            ][
+                normalized_value
+            ] += 1
+
+    for row in bundle.get(
+        "story_links",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        increment(
+            "story_relationship_types",
+            row.get(
+                "relationship_type"
+            ),
+        )
+
+    for collection_name in (
+        "source_observations",
+        "reporter_observations",
+    ):
+        for row in bundle.get(
+            collection_name,
+            [],
+        ):
+            if not isinstance(row, dict):
+                continue
+
+            increment(
+                "observation_types",
+                row.get(
+                    "observation_type"
+                ),
+            )
+
+            increment(
+                "observation_statuses",
+                row.get(
+                    "status"
+                ),
+            )
+
+    for row in bundle.get(
+        "evidence_records",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        increment(
+            "evidence_types",
+            row.get(
+                "evidence_type"
+            ),
+        )
+
+        increment(
+            "verification_statuses",
+            row.get(
+                "verification_status"
+            ),
+        )
+
+    for row in bundle.get(
+        "evidence_links",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        increment(
+            "evidence_relationship_types",
+            row.get(
+                "relationship_type"
+            ),
+        )
+
+    return {
+        "version": (
+            EVIDENCE_FEATURE_VERSION
+        ),
+        "policy_version": (
+            EVIDENCE_SIGNAL_POLICY_VERSION
+        ),
+        "counts": counts,
+        "unknown": (
+            vocabulary_report[
+                "unknown"
+            ]
+        ),
+    }
+
+
+def build_evidence_actor_features(
+    bundle: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence actor features require "
+            "a dictionary."
+        )
+
+    observation_source_ids = set()
+    reporter_ids = set()
+    subject_keys = set()
+
+    for row in bundle.get(
+        "source_observations",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        source_id = str(
+            row.get("source_id") or ""
+        ).strip()
+
+        subject_key = str(
+            row.get("subject_key") or ""
+        ).strip()
+
+        if source_id:
+            observation_source_ids.add(
+                source_id
+            )
+
+        if subject_key:
+            subject_keys.add(
+                subject_key
+            )
+
+    for row in bundle.get(
+        "reporter_observations",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        source_id = str(
+            row.get("source_id") or ""
+        ).strip()
+
+        reporter_id = str(
+            row.get("reporter_id") or ""
+        ).strip()
+
+        subject_key = str(
+            row.get("subject_key") or ""
+        ).strip()
+
+        if source_id:
+            observation_source_ids.add(
+                source_id
+            )
+
+        if reporter_id:
+            reporter_ids.add(
+                reporter_id
+            )
+
+        if subject_key:
+            subject_keys.add(
+                subject_key
+            )
+
+    for row in bundle.get(
+        "evidence_records",
+        [],
+    ):
+        if not isinstance(row, dict):
+            continue
+
+        subject_key = str(
+            row.get("subject_key") or ""
+        ).strip()
+
+        if subject_key:
+            subject_keys.add(
+                subject_key
+            )
+
+    normalized_sources = sorted(
+        observation_source_ids
+    )
+
+    normalized_reporters = sorted(
+        reporter_ids
+    )
+
+    normalized_subjects = sorted(
+        subject_keys
+    )
+
+    return {
+        "version": (
+            EVIDENCE_ACTOR_FEATURE_VERSION
+        ),
+        "distinct": {
+            "observation_source_ids": (
+                normalized_sources
+            ),
+            "reporter_ids": (
+                normalized_reporters
+            ),
+            "subject_keys": (
+                normalized_subjects
+            ),
+        },
+        "counts": {
+            "observation_sources": len(
+                normalized_sources
+            ),
+            "reporters": len(
+                normalized_reporters
+            ),
+            "subjects": len(
+                normalized_subjects
+            ),
+        },
+    }
+
+
+def evidence_analysis_bundle_hash(
+    bundle: Dict[str, Any],
 ) -> str:
-    return _expanded_evidence_context_hash_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    if not isinstance(bundle, dict):
+        raise ValueError(
+            "Evidence analysis bundle must "
+            "be a dictionary."
+        )
+
+    canonical_json = json.dumps(
+        bundle,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
     )
 
-
-def load_evidence_context_for_story(
-    *,
-    story_id: str,
-) -> Dict[str, Any]:
-    return _load_evidence_context_for_story_impl(
-        story_id=story_id,
-        connection_factory=db_conn,
-    )
-
-
-def load_evidence_context_for_subject(
-    *,
-    subject_key: str,
-) -> Dict[str, Any]:
-    return _load_evidence_context_for_subject_impl(
-        subject_key=subject_key,
-        connection_factory=db_conn,
-    )
-
-
-
-
-
-
-
-
-
-
-
-
+    return hashlib.sha256(
+        (
+            "evidence-analysis|"
+            + canonical_json
+        ).encode("utf-8")
+    ).hexdigest()
 
 
 def load_evidence_analysis_bundle_for_media_item(
     *,
     media_item_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_analysis_bundle_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    if not normalized_media_item_id:
+        raise ValueError(
+            "Evidence analysis media item ID "
+            "is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        story_links = conn.execute(
+            """
+            SELECT
+              story_id,
+              relationship_type,
+              confidence
+            FROM story_media_links
+            WHERE media_item_id = ?
+            ORDER BY story_id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT DISTINCT
+              evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.media_item_id = ?
+               OR evidence_links.story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        observation_dependencies = conn.execute(
+            """
+            SELECT *
+            FROM observation_dependencies
+            WHERE downstream_source_observation_id
+                  IN (
+                    SELECT id
+                    FROM source_observations
+                    WHERE media_item_id = ?
+                       OR story_id IN (
+                            SELECT story_id
+                            FROM story_media_links
+                            WHERE media_item_id = ?
+                       )
+                  )
+               OR downstream_reporter_observation_id
+                  IN (
+                    SELECT id
+                    FROM reporter_observations
+                    WHERE media_item_id = ?
+                       OR story_id IN (
+                            SELECT story_id
+                            FROM story_media_links
+                            WHERE media_item_id = ?
+                       )
+                  )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_analysis_bundle(
+        media_item_id=normalized_media_item_id,
+        story_links=story_links,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+        observation_dependencies=(
+            observation_dependencies
+        ),
     )
 
 
@@ -2307,54 +5853,584 @@ def load_evidence_analysis_state_for_media_item(
     *,
     media_item_id: str,
 ) -> Dict[str, Any]:
-    return _load_evidence_analysis_state_for_media_item_impl(
-        media_item_id=media_item_id,
-        connection_factory=db_conn,
+    bundle = (
+        load_evidence_analysis_bundle_for_media_item(
+            media_item_id=media_item_id,
+        )
+    )
+
+    return {
+        "bundle": bundle,
+        "context_hash": (
+            evidence_analysis_bundle_hash(
+                bundle
+            )
+        ),
+    }
+
+
+def load_evidence_context_for_source(
+    *,
+    source_id: str,
+) -> Dict[str, Any]:
+    normalized_source_id = str(
+        source_id or ""
+    ).strip()
+
+    if not normalized_source_id:
+        raise ValueError(
+            "Evidence context source ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE source_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_source_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE source_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_source_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE source_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_source_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.source_id = ?
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_source_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        source_id=normalized_source_id,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
     )
 
 
+def load_evidence_context_for_reporter(
+    *,
+    reporter_id: str,
+) -> Dict[str, Any]:
+    normalized_reporter_id = str(
+        reporter_id or ""
+    ).strip()
+
+    if not normalized_reporter_id:
+        raise ValueError(
+            "Evidence context reporter ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE reporter_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_reporter_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE reporter_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_reporter_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.reporter_id = ?
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_reporter_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        reporter_id=normalized_reporter_id,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
 
 
+def load_evidence_context_for_media_item(
+    *,
+    media_item_id: str,
+) -> Dict[str, Any]:
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    if not normalized_media_item_id:
+        raise ValueError(
+            "Evidence context media item ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE media_item_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE media_item_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE media_item_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.media_item_id = ?
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        media_item_id=normalized_media_item_id,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
 
 
+MEDIA_EVIDENCE_CONTEXT_POLICY_VERSION = (
+    "media-evidence-graph-v1"
+)
 
 
+def load_expanded_evidence_context_for_media_item(
+    *,
+    media_item_id: str,
+) -> Dict[str, Any]:
+    normalized_media_item_id = str(
+        media_item_id or ""
+    ).strip()
+
+    if not normalized_media_item_id:
+        raise ValueError(
+            "Expanded evidence context media item "
+            "ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        story_links = conn.execute(
+            """
+            SELECT
+              story_id,
+              relationship_type,
+              confidence
+            FROM story_media_links
+            WHERE media_item_id = ?
+            ORDER BY story_id
+            """,
+            (
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE media_item_id = ?
+               OR story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT DISTINCT
+              evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.media_item_id = ?
+               OR evidence_links.story_id IN (
+                    SELECT story_id
+                    FROM story_media_links
+                    WHERE media_item_id = ?
+               )
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_media_item_id,
+                normalized_media_item_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    context = build_evidence_context(
+        media_item_id=normalized_media_item_id,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
+
+    context["expansion"] = {
+        "policy": (
+            MEDIA_EVIDENCE_CONTEXT_POLICY_VERSION
+        ),
+        "story_links": [
+            {
+                "story_id": str(
+                    row["story_id"] or ""
+                ).strip(),
+                "relationship_type": str(
+                    row["relationship_type"] or ""
+                ).strip().lower(),
+                "confidence": (
+                    _evidence_context_confidence(
+                        row["confidence"],
+                        field_name=(
+                            "Story media link confidence"
+                        ),
+                    )
+                ),
+            }
+            for row in story_links
+        ],
+    }
+
+    return context
 
 
+def evidence_context_hash_for_media_item(
+    *,
+    media_item_id: str,
+) -> str:
+    context = (
+        load_evidence_context_for_media_item(
+            media_item_id=media_item_id,
+        )
+    )
+
+    return evidence_context_hash(
+        context
+    )
 
 
+def expanded_evidence_context_hash_for_media_item(
+    *,
+    media_item_id: str,
+) -> str:
+    context = (
+        load_expanded_evidence_context_for_media_item(
+            media_item_id=media_item_id,
+        )
+    )
+
+    return evidence_context_hash(
+        context
+    )
 
 
+def load_evidence_context_for_story(
+    *,
+    story_id: str,
+) -> Dict[str, Any]:
+    normalized_story_id = str(
+        story_id or ""
+    ).strip()
+
+    if not normalized_story_id:
+        raise ValueError(
+            "Evidence context story ID is required."
+        )
+
+    conn = db_conn()
+
+    try:
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE story_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE story_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+        evidence_links = conn.execute(
+            """
+            SELECT *
+            FROM evidence_links
+            WHERE story_id = ?
+            ORDER BY id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+        evidence_records = conn.execute(
+            """
+            SELECT evidence_records.*
+            FROM evidence_records
+            INNER JOIN evidence_links
+              ON evidence_links.evidence_id =
+                 evidence_records.id
+            WHERE evidence_links.story_id = ?
+            ORDER BY evidence_records.id
+            """,
+            (
+                normalized_story_id,
+            ),
+        ).fetchall()
+
+    finally:
+        conn.close()
+
+    return build_evidence_context(
+        story_id=normalized_story_id,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
 
 
+def load_evidence_context_for_subject(
+    *,
+    subject_key: str,
+) -> Dict[str, Any]:
+    normalized_subject_key = str(
+        subject_key or ""
+    ).strip()
 
+    if not normalized_subject_key:
+        raise ValueError(
+            "Evidence context subject key is required."
+        )
 
+    conn = db_conn()
 
+    try:
+        source_observations = conn.execute(
+            """
+            SELECT *
+            FROM source_observations
+            WHERE subject_key = ?
+            ORDER BY id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
 
+        reporter_observations = conn.execute(
+            """
+            SELECT *
+            FROM reporter_observations
+            WHERE subject_key = ?
+            ORDER BY id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
 
+        evidence_records = conn.execute(
+            """
+            SELECT *
+            FROM evidence_records
+            WHERE subject_key = ?
+            ORDER BY id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
 
+        evidence_links = conn.execute(
+            """
+            SELECT evidence_links.*
+            FROM evidence_links
+            INNER JOIN evidence_records
+              ON evidence_records.id =
+                 evidence_links.evidence_id
+            WHERE evidence_records.subject_key = ?
+            ORDER BY evidence_links.id
+            """,
+            (
+                normalized_subject_key,
+            ),
+        ).fetchall()
 
+    finally:
+        conn.close()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return build_evidence_context(
+        subject_key=normalized_subject_key,
+        source_observations=source_observations,
+        reporter_observations=reporter_observations,
+        evidence_records=evidence_records,
+        evidence_links=evidence_links,
+    )
 
 
 def media_item_id_for_url(
@@ -8642,50 +12718,6 @@ def extractive_fallback(text: str, max_bullets: int = 3) -> List[str]:
     return out
 
 
-
-def gemini_candidate_semantics(
-    *,
-    claim: Dict[str, Any],
-    candidate: Dict[str, Any],
-    client_key: str = "anonymous",
-) -> Dict[str, Any]:
-    from app.services.corroboration_semantics import (
-        assess_candidate_semantics_with_gemini,
-    )
-
-    return assess_candidate_semantics_with_gemini(
-        claim=claim,
-        candidate=candidate,
-        client=gemini_client(),
-        client_key=client_key,
-        generator=generate_gemini_content,
-    )
-
-
-
-def gemini_candidate_collection_semantics(
-    *,
-    claim: Dict[str, Any],
-    collection: Dict[str, Any],
-    client_key: str = "anonymous",
-    max_assessments: int = 8,
-) -> Dict[str, Any]:
-    from app.services.corroboration_semantics import (
-        assess_candidate_collection_semantics_with_gemini,
-    )
-
-    return (
-        assess_candidate_collection_semantics_with_gemini(
-            claim=claim,
-            collection=collection,
-            client=gemini_client(),
-            client_key=client_key,
-            generator=generate_gemini_content,
-            max_assessments=max_assessments,
-        )
-    )
-
-
 def gemini_tldr(
     title: str,
     text: str,
@@ -13155,8 +17187,6 @@ def analyze(
         content=cache_content,
         variant=(
             f"max_bullets:{req.max_bullets}"
-            "|intelligence_shadow:"
-            f"{int(INTELLIGENCE_SHADOW_ENABLED)}"
         ),
         context_hash=(
             article_evidence_context_hash
@@ -13590,95 +17620,6 @@ def analyze(
             title=req.title,
             content_hash=content_hash,
         )
-
-        try:
-            shadow_client = (
-                gemini_client()
-                if INTELLIGENCE_SHADOW_ENABLED
-                else None
-            )
-
-            intelligence_shadow = (
-                run_article_intelligence_shadow(
-                    enabled=(
-                        INTELLIGENCE_SHADOW_ENABLED
-                    ),
-                    media_item_id=(
-                        media_item["id"]
-                    ),
-                    observed_at=(
-                        media_item[
-                            "first_seen_at"
-                        ]
-                    ),
-                    title=req.title,
-                    article_text=(
-                        cleaned_text
-                    ),
-                    url=req.url,
-                    article_type=(
-                        response.article_type
-                    ),
-                    type_confidence=(
-                        response.type_confidence
-                    ),
-                    legacy_score={
-                        "total": (
-                            response.merit_score
-                        ),
-                        "components": dict(
-                            response.score_components
-                        ),
-                    },
-                    news_api_key=(
-                        BRAVE_NEWS_API_KEY
-                    ),
-                    normalize_url=(
-                        normalized_analysis_url
-                    ),
-                    fetch_article=(
-                        fetch_safe_article_html
-                    ),
-                    extract_article=(
-                        extract_article_content
-                    ),
-                    gemini_client=(
-                        shadow_client
-                    ),
-                    gemini_client_key=(
-                        client_key
-                    ),
-                    gemini_generator=(
-                        generate_gemini_content
-                    ),
-                    connection_factory=(
-                        db_conn
-                    ),
-                )
-            )
-
-        except Exception as error:
-            intelligence_shadow = {
-                "version": (
-                    ARTICLE_INTELLIGENCE_SHADOW_VERSION
-                ),
-                "status": "failed",
-                "mode": "shadow",
-                "error_type": (
-                    type(error).__name__
-                ),
-                "error": str(
-                    error
-                )[:240],
-                "live_merit_effect_enabled": (
-                    False
-                ),
-                "truth_established": False,
-            }
-
-        response.debug[
-            "intelligence_shadow"
-        ] = intelligence_shadow
 
         snapshot_result = (
             persist_analysis_snapshot(
