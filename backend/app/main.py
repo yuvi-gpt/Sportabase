@@ -159,6 +159,13 @@ from app.services.content_resolution import (
     validate_safe_remote_url,
     youtube_video_id_from_url,
 )
+from app.services.analysis_history import (
+    find_analysis_snapshot as _find_analysis_snapshot_history_impl,
+    media_item_id_for_url as _media_item_id_for_url_history_impl,
+    persist_analysis_snapshot as _persist_analysis_snapshot_history_impl,
+    record_user_history as _record_user_history_history_impl,
+    upsert_media_item as _upsert_media_item_history_impl,
+)
 # from app.routes.insights import router as insights_router
 
 
@@ -1194,21 +1201,14 @@ def load_evidence_analysis_state_for_media_item(
 def media_item_id_for_url(
     url: str,
 ) -> str:
-    canonical_url = normalized_analysis_url(
-        url
-    )
-
-    if not canonical_url:
-        raise ValueError(
-            "Media item URL is required."
+    return (
+        _media_item_id_for_url_history_impl(
+            url,
+            normalize_url=(
+                normalized_analysis_url
+            ),
         )
-
-    return hashlib.sha256(
-        (
-            "media|"
-            + canonical_url
-        ).encode("utf-8")
-    ).hexdigest()
+    )
 
 
 def upsert_media_item(
@@ -1223,168 +1223,27 @@ def upsert_media_item(
     metadata: Optional[Dict[str, Any]] = None,
     seen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    canonical_url = normalized_analysis_url(
-        url
-    )
-
-    if not canonical_url:
-        raise ValueError(
-            "Media item URL is required."
-        )
-
-    normalized_mode = str(
-        mode or ""
-    ).strip().lower()
-
-    if not normalized_mode:
-        raise ValueError(
-            "Media item mode is required."
-        )
-
-    normalized_content_hash = str(
-        content_hash or ""
-    ).strip()
-
-    if not normalized_content_hash:
-        raise ValueError(
-            "Media item content hash is required."
-        )
-
-    normalized_title = str(
-        title or ""
-    ).strip()
-
-    normalized_published_at = (
-        str(
-            published_at or ""
-        ).strip()
-        or None
-    )
-
-    normalized_source_id = (
-        str(
-            source_id or ""
-        ).strip()
-        or None
-    )
-
-    normalized_reporter_id = (
-        str(
-            reporter_id or ""
-        ).strip()
-        or None
-    )
-
-    normalized_seen_at = (
-        str(
-            seen_at or ""
-        ).strip()
-        or datetime.now(
-            timezone.utc
-        ).isoformat()
-    )
-
-    metadata_json = json.dumps(
-        metadata or {},
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-    media_item_id = (
-        media_item_id_for_url(
-            canonical_url
-        )
-    )
-
-    conn = db_conn()
-
-    try:
-        conn.execute(
-            """
-            INSERT INTO media_items (
-              id,
-              canonical_url,
-              mode,
-              source_id,
-              reporter_id,
-              title,
-              published_at,
-              latest_content_hash,
-              first_seen_at,
-              last_seen_at,
-              metadata_json
-            )
-            VALUES (
-              ?, ?, ?, ?, ?, ?,
-              ?, ?, ?, ?, ?
-            )
-            ON CONFLICT(canonical_url)
-            DO UPDATE SET
-              mode = excluded.mode,
-              source_id = COALESCE(
-                excluded.source_id,
-                media_items.source_id
-              ),
-              reporter_id = COALESCE(
-                excluded.reporter_id,
-                media_items.reporter_id
-              ),
-              title = CASE
-                WHEN excluded.title != ''
-                THEN excluded.title
-                ELSE media_items.title
-              END,
-              published_at = COALESCE(
-                excluded.published_at,
-                media_items.published_at
-              ),
-              latest_content_hash =
-                excluded.latest_content_hash,
-              last_seen_at =
-                excluded.last_seen_at,
-              metadata_json = CASE
-                WHEN excluded.metadata_json != '{}'
-                THEN excluded.metadata_json
-                ELSE media_items.metadata_json
-              END
-            """,
-            (
-                media_item_id,
-                canonical_url,
-                normalized_mode,
-                normalized_source_id,
-                normalized_reporter_id,
-                normalized_title,
-                normalized_published_at,
-                normalized_content_hash,
-                normalized_seen_at,
-                normalized_seen_at,
-                metadata_json,
+    return (
+        _upsert_media_item_history_impl(
+            url=url,
+            mode=mode,
+            title=title,
+            content_hash=content_hash,
+            published_at=published_at,
+            source_id=source_id,
+            reporter_id=reporter_id,
+            metadata=metadata,
+            seen_at=seen_at,
+            normalize_url=(
+                normalized_analysis_url
             ),
-        )
-
-        row = conn.execute(
-            """
-            SELECT *
-            FROM media_items
-            WHERE canonical_url = ?
-            """,
-            (
-                canonical_url,
+            id_resolver=(
+                media_item_id_for_url
             ),
-        ).fetchone()
-
-        conn.commit()
-
-    finally:
-        conn.close()
-
-    if row is None:
-        raise RuntimeError(
-            "Media item persistence failed."
+            connection_factory=db_conn,
         )
+    )
 
-    return dict(row)
 
 def find_analysis_snapshot(
     *,
@@ -1395,72 +1254,28 @@ def find_analysis_snapshot(
     analysis_version: Optional[str] = None,
     scoring_version: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-    normalized_media_item_id = str(
-        media_item_id or ""
-    ).strip()
-
-    normalized_mode = str(
-        mode or ""
-    ).strip().lower()
-
-    normalized_content_hash = str(
-        content_hash or ""
-    ).strip()
-
-    normalized_context_hash = str(
-        context_hash or ""
-    ).strip()
-
-    normalized_analysis_version = str(
-        analysis_version
-        or ANALYSIS_VERSION
-    ).strip()
-
-    normalized_scoring_version = str(
-        scoring_version
-        or SCORING_VERSION
-    ).strip()
-
-    if (
-        not normalized_media_item_id
-        or not normalized_mode
-        or not normalized_content_hash
-        or not normalized_analysis_version
-        or not normalized_scoring_version
-    ):
-        return None
-
-    conn = db_conn()
-
-    try:
-        row = conn.execute(
-            """
-            SELECT *
-            FROM analysis_snapshots
-            WHERE media_item_id = ?
-              AND mode = ?
-              AND content_hash = ?
-              AND context_hash = ?
-              AND analysis_version = ?
-              AND scoring_version = ?
-            LIMIT 1
-            """,
-            (
-                normalized_media_item_id,
-                normalized_mode,
-                normalized_content_hash,
-                normalized_context_hash,
-                normalized_analysis_version,
-                normalized_scoring_version,
+    return (
+        _find_analysis_snapshot_history_impl(
+            media_item_id=media_item_id,
+            mode=mode,
+            content_hash=content_hash,
+            context_hash=context_hash,
+            analysis_version=(
+                analysis_version
             ),
-        ).fetchone()
-    finally:
-        conn.close()
+            scoring_version=(
+                scoring_version
+            ),
+            default_analysis_version=(
+                ANALYSIS_VERSION
+            ),
+            default_scoring_version=(
+                SCORING_VERSION
+            ),
+            connection_factory=db_conn,
+        )
+    )
 
-    if row is None:
-        return None
-
-    return dict(row)
 
 def persist_analysis_snapshot(
     *,
@@ -1487,241 +1302,44 @@ def persist_analysis_snapshot(
     ] = None,
     reasons: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
-    normalized_media_item_id = str(
-        media_item_id or ""
-    ).strip()
-
-    if not normalized_media_item_id:
-        raise ValueError(
-            "Snapshot media item ID is required."
+    return (
+        _persist_analysis_snapshot_history_impl(
+            media_item_id=media_item_id,
+            mode=mode,
+            content_hash=content_hash,
+            response=response,
+            context_hash=context_hash,
+            analyzed_at=analyzed_at,
+            analysis_version=(
+                analysis_version
+            ),
+            scoring_version=(
+                scoring_version
+            ),
+            story_id=story_id,
+            merit_score=merit_score,
+            evidence_score=evidence_score,
+            logic_score=logic_score,
+            badge=badge,
+            verdict=verdict,
+            article_type=article_type,
+            score_components=(
+                score_components
+            ),
+            score_calculation=(
+                score_calculation
+            ),
+            reasons=reasons,
+            default_analysis_version=(
+                ANALYSIS_VERSION
+            ),
+            default_scoring_version=(
+                SCORING_VERSION
+            ),
+            connection_factory=db_conn,
         )
-
-    normalized_mode = str(
-        mode or ""
-    ).strip().lower()
-
-    if not normalized_mode:
-        raise ValueError(
-            "Snapshot mode is required."
-        )
-
-    normalized_content_hash = str(
-        content_hash or ""
-    ).strip()
-
-    if not normalized_content_hash:
-        raise ValueError(
-            "Snapshot content hash is required."
-        )
-
-    normalized_context_hash = str(
-        context_hash or ""
-    ).strip()
-
-    normalized_analysis_version = str(
-        analysis_version
-        or ANALYSIS_VERSION
-    ).strip()
-
-    if not normalized_analysis_version:
-        raise ValueError(
-            "Snapshot analysis version is required."
-        )
-
-    normalized_scoring_version = str(
-        scoring_version
-        or SCORING_VERSION
-    ).strip()
-
-    if not normalized_scoring_version:
-        raise ValueError(
-            "Snapshot scoring version is required."
-        )
-
-    normalized_analyzed_at = (
-        str(
-            analyzed_at or ""
-        ).strip()
-        or datetime.now(
-            timezone.utc
-        ).isoformat()
     )
 
-    normalized_story_id = (
-        str(
-            story_id or ""
-        ).strip()
-        or None
-    )
-
-    response_json = json.dumps(
-        response or {},
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-    components_json = json.dumps(
-        score_components or {},
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-    calculation_json = json.dumps(
-        score_calculation or {},
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-
-    reasons_json = json.dumps(
-        reasons or [],
-        ensure_ascii=False,
-    )
-
-    identity_values = (
-        normalized_media_item_id,
-        normalized_mode,
-        normalized_content_hash,
-        normalized_context_hash,
-        normalized_analysis_version,
-        normalized_scoring_version,
-    )
-
-    conn = db_conn()
-
-    try:
-        existing = conn.execute(
-            """
-            SELECT *
-            FROM analysis_snapshots
-            WHERE media_item_id = ?
-              AND mode = ?
-              AND content_hash = ?
-              AND context_hash = ?
-              AND analysis_version = ?
-              AND scoring_version = ?
-            LIMIT 1
-            """,
-            identity_values,
-        ).fetchone()
-
-        if existing is not None:
-            return {
-                "snapshot": dict(existing),
-                "created": False,
-            }
-
-        try:
-            cursor = conn.execute(
-                """
-                INSERT INTO analysis_snapshots (
-                  media_item_id,
-                  story_id,
-                  analyzed_at,
-                  mode,
-                  analysis_version,
-                  scoring_version,
-                  content_hash,
-                  context_hash,
-                  merit_score,
-                  evidence_score,
-                  logic_score,
-                  badge,
-                  verdict,
-                  article_type,
-                  score_components_json,
-                  score_calculation_json,
-                  reasons_json,
-                  response_json
-                )
-                VALUES (
-                  ?, ?, ?, ?, ?, ?, ?, ?,
-                  ?, ?, ?, ?, ?, ?, ?,
-                  ?, ?, ?
-                )
-                """,
-                (
-                    normalized_media_item_id,
-                    normalized_story_id,
-                    normalized_analyzed_at,
-                    normalized_mode,
-                    normalized_analysis_version,
-                    normalized_scoring_version,
-                    normalized_content_hash,
-                    normalized_context_hash,
-                    merit_score,
-                    evidence_score,
-                    logic_score,
-                    str(
-                        badge or ""
-                    ).strip(),
-                    str(
-                        verdict or ""
-                    ).strip(),
-                    str(
-                        article_type or ""
-                    ).strip(),
-                    components_json,
-                    calculation_json,
-                    reasons_json,
-                    response_json,
-                ),
-            )
-
-            snapshot_id = int(
-                cursor.lastrowid
-            )
-
-            row = conn.execute(
-                """
-                SELECT *
-                FROM analysis_snapshots
-                WHERE id = ?
-                """,
-                (
-                    snapshot_id,
-                ),
-            ).fetchone()
-
-            conn.commit()
-
-        except sqlite3.IntegrityError:
-            conn.rollback()
-
-            existing = conn.execute(
-                """
-                SELECT *
-                FROM analysis_snapshots
-                WHERE media_item_id = ?
-                  AND mode = ?
-                  AND content_hash = ?
-                  AND context_hash = ?
-                  AND analysis_version = ?
-                  AND scoring_version = ?
-                LIMIT 1
-                """,
-                identity_values,
-            ).fetchone()
-
-            if existing is None:
-                raise
-
-            return {
-                "snapshot": dict(existing),
-                "created": False,
-            }
-
-    finally:
-        conn.close()
-
-    if row is None:
-        raise RuntimeError(
-            "Snapshot persistence failed."
-        )
-
-    return {
-        "snapshot": dict(row),
-        "created": True,
-    }
 
 def record_user_history(
     *,
@@ -1730,142 +1348,17 @@ def record_user_history(
     snapshot_id: Optional[int] = None,
     analyzed_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    normalized_client_key = str(
-        client_key or ""
-    ).strip()
-
-    if not normalized_client_key:
-        raise ValueError(
-            "User history client key is required."
+    return (
+        _record_user_history_history_impl(
+            client_key=client_key,
+            media_item_id=media_item_id,
+            snapshot_id=snapshot_id,
+            analyzed_at=analyzed_at,
+            connection_factory=db_conn,
         )
-
-    normalized_media_item_id = str(
-        media_item_id or ""
-    ).strip()
-
-    if not normalized_media_item_id:
-        raise ValueError(
-            "User history media item ID is required."
-        )
-
-    normalized_analyzed_at = (
-        str(
-            analyzed_at or ""
-        ).strip()
-        or datetime.now(
-            timezone.utc
-        ).isoformat()
     )
 
-    normalized_snapshot_id = None
 
-    if snapshot_id is not None:
-        normalized_snapshot_id = int(
-            snapshot_id
-        )
-
-        if normalized_snapshot_id <= 0:
-            raise ValueError(
-                "Snapshot ID must be positive."
-            )
-
-    conn = db_conn()
-
-    try:
-        media_row = conn.execute(
-            """
-            SELECT id
-            FROM media_items
-            WHERE id = ?
-            """,
-            (
-                normalized_media_item_id,
-            ),
-        ).fetchone()
-
-        if media_row is None:
-            raise ValueError(
-                "User history media item does not exist."
-            )
-
-        if normalized_snapshot_id is not None:
-            snapshot_row = conn.execute(
-                """
-                SELECT id
-                FROM analysis_snapshots
-                WHERE id = ?
-                  AND media_item_id = ?
-                """,
-                (
-                    normalized_snapshot_id,
-                    normalized_media_item_id,
-                ),
-            ).fetchone()
-
-            if snapshot_row is None:
-                raise ValueError(
-                    "Snapshot does not belong to "
-                    "the supplied media item."
-                )
-
-        conn.execute(
-            """
-            INSERT INTO user_history (
-              client_key,
-              media_item_id,
-              first_analyzed_at,
-              last_analyzed_at,
-              analysis_count,
-              last_snapshot_id
-            )
-            VALUES (?, ?, ?, ?, 1, ?)
-            ON CONFLICT(
-              client_key,
-              media_item_id
-            )
-            DO UPDATE SET
-              last_analyzed_at =
-                excluded.last_analyzed_at,
-              analysis_count =
-                user_history.analysis_count + 1,
-              last_snapshot_id = COALESCE(
-                excluded.last_snapshot_id,
-                user_history.last_snapshot_id
-              )
-            """,
-            (
-                normalized_client_key,
-                normalized_media_item_id,
-                normalized_analyzed_at,
-                normalized_analyzed_at,
-                normalized_snapshot_id,
-            ),
-        )
-
-        row = conn.execute(
-            """
-            SELECT *
-            FROM user_history
-            WHERE client_key = ?
-              AND media_item_id = ?
-            """,
-            (
-                normalized_client_key,
-                normalized_media_item_id,
-            ),
-        ).fetchone()
-
-        conn.commit()
-
-    finally:
-        conn.close()
-
-    if row is None:
-        raise RuntimeError(
-            "User history persistence failed."
-        )
-
-    return dict(row)
 
 def make_analysis_cache_key(
     mode: str,
