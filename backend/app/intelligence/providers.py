@@ -274,6 +274,145 @@ _PROVIDER_ROWS = {
         ),
     },
 
+    "averitec": {
+        "display_name": "AVeriTeC",
+        "sports": [
+            "*",
+        ],
+        "competitions": [
+            "*",
+        ],
+        "data_family": "benchmark",
+        "access_mode": (
+            "remote_bulk_json"
+        ),
+        "adapter_status": (
+            "research_only"
+        ),
+        "capabilities": [
+            "real_world_claim",
+            "human_veracity",
+            "web_evidence",
+            "justification",
+            "conflicting_evidence",
+        ],
+        "base_url": (
+            "https://raw.githubusercontent.com/"
+            "MichSchli/AVeriTeC/main/data"
+        ),
+        "license_class": (
+            "cc-by-nc-4.0"
+        ),
+        "benchmark_capabilities": {
+            "natural_claims": True,
+            "human_veracity_labels": True,
+            "evidence_annotations": True,
+            "web_evidence": True,
+            "conflicting_evidence_label": True,
+            "independence_labels": False,
+            "corroboration_labels": False,
+            "sports_specific": False,
+        },
+        "usage_note": (
+            "Research/evaluation only under "
+            "CC BY-NC 4.0. Does not establish "
+            "source independence."
+        ),
+    },
+
+    "fever": {
+        "display_name": "FEVER",
+        "sports": [
+            "*",
+        ],
+        "competitions": [
+            "*",
+        ],
+        "data_family": "benchmark",
+        "access_mode": (
+            "remote_bulk_jsonl"
+        ),
+        "adapter_status": (
+            "benchmark_active"
+        ),
+        "capabilities": [
+            "generated_claim",
+            "human_veracity",
+            "evidence_annotation",
+            "support",
+            "refute",
+            "not_enough_info",
+        ],
+        "base_url": (
+            "https://fever.ai/dataset/"
+            "fever.html"
+        ),
+        "license_class": (
+            "wikipedia-terms-cc-by-sa"
+        ),
+        "benchmark_capabilities": {
+            "natural_claims": False,
+            "human_veracity_labels": True,
+            "evidence_annotations": True,
+            "web_evidence": False,
+            "conflicting_evidence_label": False,
+            "independence_labels": False,
+            "corroboration_labels": False,
+            "sports_specific": False,
+        },
+        "usage_note": (
+            "Synthetic Wikipedia-derived "
+            "claims for semantic stress "
+            "testing. Not independence "
+            "ground truth."
+        ),
+    },
+
+    "multifc": {
+        "display_name": "MultiFC",
+        "sports": [
+            "*",
+        ],
+        "competitions": [
+            "*",
+        ],
+        "data_family": "benchmark",
+        "access_mode": (
+            "external_dataset"
+        ),
+        "adapter_status": (
+            "registered_schema_review"
+        ),
+        "capabilities": [
+            "real_world_claim",
+            "human_veracity",
+            "textual_sources",
+            "metadata",
+        ],
+        "base_url": (
+            "https://aclanthology.org/"
+            "D19-1475/"
+        ),
+        "license_class": (
+            "license-review-required"
+        ),
+        "benchmark_capabilities": {
+            "natural_claims": True,
+            "human_veracity_labels": True,
+            "evidence_annotations": True,
+            "web_evidence": True,
+            "conflicting_evidence_label": False,
+            "independence_labels": False,
+            "corroboration_labels": False,
+            "sports_specific": False,
+        },
+        "usage_note": (
+            "Registered pending exact "
+            "distribution/schema/license "
+            "review before ingestion."
+        ),
+    },
+
     "gdelt": {
         "display_name": "GDELT",
         "sports": [
@@ -398,6 +537,20 @@ def _normalized_provider(
                     "usage_note"
                 )
             )
+        ),
+        "license_class": (
+            _key(
+                row.get(
+                    "license_class"
+                )
+            )
+        ),
+        "benchmark_capabilities": dict(
+            row.get(
+                "benchmark_capabilities",
+                {},
+            )
+            or {}
         ),
         "live_merit_enabled": False,
     }
