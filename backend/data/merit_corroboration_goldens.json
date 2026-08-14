@@ -1,0 +1,5 @@
+{
+  "version": "merit-corroboration-golden-dataset-v1",
+  "description": "Human-reviewed real-world Merit corroboration cases. Do not treat model-generated or synthetic cases as real-world gold labels.",
+  "cases": []
+}
