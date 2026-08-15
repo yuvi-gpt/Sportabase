@@ -652,6 +652,89 @@ CREATE INDEX IF NOT EXISTS idx_corpus_record_links_claim
 ON corpus_record_links(claim_id);
 
 
+
+CREATE TABLE IF NOT EXISTS adjudication_state_revisions (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  state_version TEXT NOT NULL,
+  adjudication_version TEXT NOT NULL,
+  adjudication_sha256 TEXT NOT NULL,
+  as_of TEXT NOT NULL,
+  previous_revision_id TEXT,
+  trigger_type TEXT NOT NULL,
+  trigger_evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+  revision_json TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE,
+
+  FOREIGN KEY(previous_revision_id)
+    REFERENCES adjudication_state_revisions(id)
+    ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_adjudication_state_revisions_claim
+ON adjudication_state_revisions(
+  claim_id,
+  as_of
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_adjudication_state_revisions_previous
+ON adjudication_state_revisions(
+  previous_revision_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_adjudication_state_revisions_trigger
+ON adjudication_state_revisions(
+  trigger_type
+);
+
+
+CREATE TABLE IF NOT EXISTS adjudication_state_transitions (
+  id TEXT PRIMARY KEY,
+  revision_id TEXT NOT NULL,
+  claim_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  from_state_json TEXT,
+  to_state_json TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+
+  FOREIGN KEY(revision_id)
+    REFERENCES adjudication_state_revisions(id)
+    ON DELETE CASCADE,
+
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_adjudication_state_transitions_revision
+ON adjudication_state_transitions(
+  revision_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_adjudication_state_transitions_claim
+ON adjudication_state_transitions(
+  claim_id,
+  field
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS
+idx_adjudication_state_transition_field
+ON adjudication_state_transitions(
+  revision_id,
+  field
+);
+
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
