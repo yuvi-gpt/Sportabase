@@ -27,6 +27,21 @@ export type ArticleAnalyzeRequest = {
   max_bullets?: number;
 };
 
+export type ArticleIntelligencePublic = {
+  version: string;
+  status: string;
+  label: string;
+  detail: string;
+  signal: string;
+  candidate_count: number;
+  verification_pairs: number;
+  corroboration_status: string;
+  independence_status: string;
+  contested: boolean;
+  provisional: boolean;
+  affects_merit_score: boolean;
+};
+
 export type ArticleAnalyzeResponse = {
   url: string;
   title: string;
@@ -49,6 +64,13 @@ export type ArticleAnalyzeResponse = {
   localized_article_type: string;
   localized_reasons: string[];
   ui_labels: Record<string, string>;
+
+  /*
+   * Optional keeps local development fixtures and
+   * previously persisted responses backwards-compatible.
+   * Current backend responses provide this field.
+   */
+  intelligence?: ArticleIntelligencePublic;
 
   debug: Record<string, unknown>;
 };

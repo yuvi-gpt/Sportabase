@@ -11,6 +11,10 @@ import type {
 } from '../lib/api';
 
 import {
+  normalizeArticleIntelligence,
+} from '../lib/article-intelligence';
+
+import {
   clampScore,
   getScoreTheme,
 } from '../theme/score-theme';
@@ -85,6 +89,11 @@ export function ArticleAnalysisResults({
   const badge =
     result.badge.trim() ||
     'Analysis complete';
+
+  const intelligence =
+    normalizeArticleIntelligence(
+      result.intelligence,
+    );
 
   return (
     <View style={styles.container}>
@@ -256,6 +265,103 @@ export function ArticleAnalysisResults({
         )}
       </View>
 
+      {intelligence ? (
+        <View
+          style={[
+            styles.intelligenceCard,
+            intelligence.status === 'available'
+              ? {
+                  borderColor:
+                    `${scoreTheme.start}66`,
+                }
+              : undefined,
+          ]}
+        >
+          <View style={styles.intelligenceHeader}>
+            <View style={styles.intelligenceHeading}>
+              <Text
+                style={[
+                  styles.sectionLabel,
+                  {
+                    color: scoreTheme.start,
+                  },
+                ]}
+              >
+                EVIDENCE INTELLIGENCE
+              </Text>
+
+              <Text style={styles.intelligenceTitle}>
+                {intelligence.label}
+              </Text>
+            </View>
+
+            <View style={styles.intelligenceStatusPill}>
+              <Text style={styles.intelligenceStatusText}>
+                {intelligence.status === 'available'
+                  ? 'ASSESSED'
+                  : 'LIMITED'}
+              </Text>
+            </View>
+          </View>
+
+          {intelligence.detail ? (
+            <Text style={styles.intelligenceDetail}>
+              {intelligence.detail}
+            </Text>
+          ) : null}
+
+          {intelligence.status === 'available' ? (
+            <View style={styles.intelligenceGrid}>
+              <View style={styles.intelligenceMetric}>
+                <Text style={styles.intelligenceMetricLabel}>
+                  CORROBORATION
+                </Text>
+
+                <Text style={styles.intelligenceMetricValue}>
+                  {intelligence.corroborationLabel}
+                </Text>
+              </View>
+
+              <View style={styles.intelligenceMetric}>
+                <Text style={styles.intelligenceMetricLabel}>
+                  INDEPENDENCE
+                </Text>
+
+                <Text style={styles.intelligenceMetricValue}>
+                  {intelligence.independenceLabel}
+                </Text>
+              </View>
+
+              <View style={styles.intelligenceMetric}>
+                <Text style={styles.intelligenceMetricLabel}>
+                  SOURCES FOUND
+                </Text>
+
+                <Text style={styles.intelligenceMetricValue}>
+                  {intelligence.candidateCount}
+                </Text>
+              </View>
+
+              <View style={styles.intelligenceMetric}>
+                <Text style={styles.intelligenceMetricLabel}>
+                  PAIRS CHECKED
+                </Text>
+
+                <Text style={styles.intelligenceMetricValue}>
+                  {intelligence.verificationPairs}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
+          <Text style={styles.intelligenceNote}>
+            {intelligence.affectsMeritScore
+              ? 'This evidence signal is included in the displayed Merit Score.'
+              : 'This evidence signal is informational while validation remains active and does not alter the displayed Merit Score.'}
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.metaCard}>
         <View style={styles.metaItem}>
           <Text style={styles.metaLabel}>
@@ -418,6 +524,87 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
     fontSize: 14,
     lineHeight: 22,
+  },
+  intelligenceCard: {
+    padding: 20,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  intelligenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 14,
+  },
+  intelligenceHeading: {
+    flex: 1,
+  },
+  intelligenceTitle: {
+    marginTop: 7,
+    color: COLORS.text,
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: '800',
+  },
+  intelligenceStatusPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  intelligenceStatusText: {
+    color: COLORS.text,
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  intelligenceDetail: {
+    marginTop: 14,
+    color: COLORS.muted,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  intelligenceGrid: {
+    marginTop: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  intelligenceMetric: {
+    width: '48%',
+    minHeight: 70,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: COLORS.surfaceRaised,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  intelligenceMetricLabel: {
+    color: COLORS.muted,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  intelligenceMetricValue: {
+    marginTop: 7,
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '800',
+  },
+  intelligenceNote: {
+    marginTop: 15,
+    paddingTop: 13,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    color: COLORS.muted,
+    fontSize: 11,
+    lineHeight: 17,
   },
   metaCard: {
     flexDirection: 'row',
