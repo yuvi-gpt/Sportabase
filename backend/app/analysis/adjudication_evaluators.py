@@ -188,8 +188,73 @@ def build_authority_state_adjudication(
         )
     )
 
+    derivation = normalized_snapshot[
+        "derivation"
+    ]
+
+    human_approved = (
+        normalized_snapshot[
+            "review"
+        ][
+            "status"
+        ]
+        == "approved"
+    )
+
+    machine_verified = (
+        derivation[
+            "mode"
+        ]
+        == "machine_verified"
+    )
+
+    reference_input_trusted = (
+        human_approved
+        or machine_verified
+    )
+
+    learning_signal = dict(
+        result[
+            "learning_signal"
+        ]
+    )
+
+    if (
+        not correction
+        and result[
+            "automatic"
+        ][
+            "tier"
+        ]
+        == "auto_gold"
+        and not reference_input_trusted
+    ):
+        learning_signal = {
+            **learning_signal,
+            "status": (
+                "reference_blocked_"
+                "untrusted_snapshot"
+            ),
+            "training_eligible": (
+                False
+            ),
+            "reference_input_trusted": (
+                False
+            ),
+        }
+
+    elif learning_signal:
+        learning_signal[
+            "reference_input_trusted"
+        ] = (
+            reference_input_trusted
+        )
+
     return {
         **result,
+        "learning_signal": (
+            learning_signal
+        ),
         "evaluator": {
             "version": (
                 AUTHORITY_STATE_EVALUATOR_VERSION
@@ -208,6 +273,17 @@ def build_authority_state_adjudication(
             "stored_derived_authority_is_not_trusted": (
                 True
             ),
+            "snapshot_derivation_mode": (
+                derivation[
+                    "mode"
+                ]
+            ),
+            "snapshot_human_approved": (
+                human_approved
+            ),
+            "reference_input_trusted": (
+                reference_input_trusted
+            ),
         },
         "policy": {
             **result[
@@ -218,6 +294,12 @@ def build_authority_state_adjudication(
             "reported_unconfirmed_is_not_auto_gold_from_authority_policy_alone": True,
             "unconfirmed_is_not_auto_gold_from_absence_of_authority": True,
             "authority_is_recomputed_from_snapshot_observations": True,
+            "auto_gold_and_training_eligibility_are_separate": True,
+            "untrusted_snapshot_cannot_self_train_from_auto_gold": True,
+            "machine_verified_snapshot_may_supply_training_reference": True,
+            "human_approved_snapshot_remains_a_trusted_reference_path": True,
+            "model_assisted_snapshot_is_not_self_validating": True,
+            "manual_draft_snapshot_is_not_self_validating": True,
             "automatic_authority_adjudication_does_not_establish_truth": True,
             "automatic_authority_adjudication_does_not_change_live_merit": True,
         },

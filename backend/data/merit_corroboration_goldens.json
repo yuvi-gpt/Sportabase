@@ -134,7 +134,16 @@
           "reviewed_at": "",
           "rationale": "Draft snapshot only. Ferrari's role as a primary stakeholder, the official release date, evidence provenance, and capture method are recorded. The as_of timestamp is an end-of-day curation boundary, not an invented publication time. No human approval has been granted."
         },
-        "outcome": {}
+        "outcome": {},
+        "derivation": {
+          "mode": "manual_draft",
+          "producer": "sportabase-real-world-curation",
+          "producer_version": "real-world-validation-v1",
+          "evidence_ids": [
+            "ferrari-team-statement-2024-02-01"
+          ],
+          "note": "The structured snapshot was manually assembled during architecture validation. It is not approved human gold and is not machine-verified training data."
+        }
       }
     }
   ]

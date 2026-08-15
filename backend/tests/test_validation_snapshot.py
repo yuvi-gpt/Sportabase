@@ -23,6 +23,7 @@ from app.analysis.validation_snapshot import (
     SNAPSHOT_CAPTURE_STATUSES,
     SNAPSHOT_CAPTURE_TIME_BASES,
     SNAPSHOT_CAPTURE_TIME_PRECISIONS,
+    SNAPSHOT_DERIVATION_MODES,
     SNAPSHOT_INDEPENDENCE_STATUSES,
     build_claim_evidence_snapshot,
 )
@@ -126,6 +127,7 @@ class ClaimEvidenceSnapshotTests(
         *,
         review=None,
         outcome=None,
+        derivation=None,
         as_of=(
             "2026-08-14T11:00:00+00:00"
         ),
@@ -155,6 +157,9 @@ class ClaimEvidenceSnapshotTests(
             ),
             "observations": observations,
             "review": review,
+            "derivation": (
+                derivation
+            ),
             "outcome": outcome,
         }
 
@@ -252,6 +257,145 @@ class ClaimEvidenceSnapshotTests(
         self.assertIn(
             "legacy_observed_at",
             SNAPSHOT_AVAILABILITY_BASES,
+        )
+
+        self.assertEqual(
+            set(
+                SNAPSHOT_DERIVATION_MODES
+            ),
+            {
+                "machine_verified",
+                "model_assisted",
+                "manual_draft",
+                "mixed",
+                "unknown",
+            },
+        )
+
+    def test_snapshot_derivation_defaults_to_unknown(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation()
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "derivation"
+            ],
+            {
+                "mode": "unknown",
+                "producer": "",
+                "producer_version": "",
+                "evidence_ids": [],
+                "note": "",
+            },
+        )
+
+    def test_machine_verified_derivation_requires_audit_lineage(
+        self,
+    ):
+        incomplete = [
+            {
+                "mode": "machine_verified",
+                "producer": "",
+                "producer_version": "v1",
+                "evidence_ids": [
+                    "observation-1",
+                ],
+            },
+            {
+                "mode": "machine_verified",
+                "producer": (
+                    "authority-pipeline"
+                ),
+                "producer_version": "",
+                "evidence_ids": [
+                    "observation-1",
+                ],
+            },
+            {
+                "mode": "machine_verified",
+                "producer": (
+                    "authority-pipeline"
+                ),
+                "producer_version": "v1",
+                "evidence_ids": [],
+            },
+        ]
+
+        for derivation in incomplete:
+            with self.subTest(
+                derivation=derivation
+            ):
+                with self.assertRaises(
+                    ValueError
+                ):
+                    self.build(
+                        [
+                            self.observation()
+                        ],
+                        derivation=(
+                            derivation
+                        ),
+                    )
+
+    def test_machine_verified_derivation_is_preserved(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation()
+            ],
+            derivation={
+                "mode": (
+                    "machine_verified"
+                ),
+                "producer": (
+                    "authority-pipeline"
+                ),
+                "producer_version": (
+                    "authority-pipeline-v1"
+                ),
+                "evidence_ids": [
+                    "observation-1",
+                ],
+                "note": (
+                    "Required source identity "
+                    "and evidence fields were "
+                    "machine verified."
+                ),
+            },
+        )
+
+        self.assertEqual(
+            result[
+                "derivation"
+            ][
+                "mode"
+            ],
+            "machine_verified",
+        )
+
+        self.assertEqual(
+            result[
+                "derivation"
+            ][
+                "evidence_ids"
+            ],
+            [
+                "observation-1",
+            ],
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "machine_verified_derivation_requires_evidence_lineage"
+            ]
         )
 
     def test_primary_stakeholder_statement_confirms_snapshot(

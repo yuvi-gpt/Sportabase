@@ -83,6 +83,14 @@ SNAPSHOT_AVAILABILITY_BASES = (
     "unknown",
 )
 
+SNAPSHOT_DERIVATION_MODES = (
+    "machine_verified",
+    "model_assisted",
+    "manual_draft",
+    "mixed",
+    "unknown",
+)
+
 
 def _clean(
     value: Any,
@@ -1209,6 +1217,109 @@ def build_claim_evidence_snapshot(
                     "for every observation."
                 )
 
+    raw_derivation = case.get(
+        "derivation",
+        {},
+    )
+
+    if raw_derivation is None:
+        raw_derivation = {}
+
+    if not isinstance(
+        raw_derivation,
+        dict,
+    ):
+        raise ValueError(
+            "Claim evidence snapshot derivation "
+            "must be a dictionary."
+        )
+
+    derivation_mode = _choice(
+        raw_derivation.get(
+            "mode",
+            "unknown",
+        ),
+        label=(
+            "Claim evidence snapshot "
+            "derivation mode"
+        ),
+        allowed=(
+            SNAPSHOT_DERIVATION_MODES
+        ),
+    )
+
+    derivation_producer = _clean(
+        raw_derivation.get(
+            "producer"
+        )
+    )
+
+    derivation_producer_version = (
+        _clean(
+            raw_derivation.get(
+                "producer_version"
+            )
+        )
+    )
+
+    derivation_evidence_ids = (
+        raw_derivation.get(
+            "evidence_ids",
+            [],
+        )
+    )
+
+    if not isinstance(
+        derivation_evidence_ids,
+        list,
+    ):
+        raise ValueError(
+            "Claim evidence snapshot derivation "
+            "evidence_ids must be a list."
+        )
+
+    derivation_evidence_ids = sorted(
+        {
+            _clean(
+                value
+            )
+            for value
+            in derivation_evidence_ids
+            if _clean(
+                value
+            )
+        }
+    )
+
+    derivation_note = _clean(
+        raw_derivation.get(
+            "note"
+        )
+    )
+
+    if (
+        derivation_mode
+        == "machine_verified"
+    ):
+        if not derivation_producer:
+            raise ValueError(
+                "Machine-verified snapshot "
+                "derivation requires a producer."
+            )
+
+        if not derivation_producer_version:
+            raise ValueError(
+                "Machine-verified snapshot "
+                "derivation requires a "
+                "producer_version."
+            )
+
+        if not derivation_evidence_ids:
+            raise ValueError(
+                "Machine-verified snapshot "
+                "derivation requires evidence_ids."
+            )
+
     outcome = case.get(
         "outcome",
         {},
@@ -1251,6 +1362,23 @@ def build_claim_evidence_snapshot(
                 rationale
             ),
         },
+        "derivation": {
+            "mode": (
+                derivation_mode
+            ),
+            "producer": (
+                derivation_producer
+            ),
+            "producer_version": (
+                derivation_producer_version
+            ),
+            "evidence_ids": (
+                derivation_evidence_ids
+            ),
+            "note": (
+                derivation_note
+            ),
+        },
         "outcome": dict(
             outcome
         ),
@@ -1277,6 +1405,11 @@ def build_claim_evidence_snapshot(
             "date_precision_does_not_invent_clock_time": True,
             "approved_snapshots_require_known_evidence_availability": True,
             "availability_time_is_separate_from_capture_time": True,
+            "snapshot_derivation_is_auditable": True,
+            "machine_verified_derivation_requires_evidence_lineage": True,
+            "model_assisted_derivation_is_not_self_validating": True,
+            "manual_draft_derivation_is_not_automatic_training_data": True,
+            "derivation_metadata_does_not_establish_truth": True,
             "snapshot_does_not_change_live_merit": True,
         },
     }

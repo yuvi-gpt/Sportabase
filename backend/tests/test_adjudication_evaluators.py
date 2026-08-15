@@ -98,6 +98,8 @@ class AuthorityStateAdjudicationTests(
     def snapshot(
         self,
         observations,
+        *,
+        derivation=None,
     ):
         return {
             "version": (
@@ -124,6 +126,9 @@ class AuthorityStateAdjudicationTests(
                 "reviewed_at": "",
                 "rationale": "",
             },
+            "derivation": (
+                derivation
+            ),
             "outcome": {},
         }
 
@@ -132,12 +137,16 @@ class AuthorityStateAdjudicationTests(
         observations,
         *,
         correction=None,
+        derivation=None,
     ):
         return (
             build_authority_state_adjudication(
                 evidence_snapshot=(
                     self.snapshot(
-                        observations
+                        observations,
+                        derivation=(
+                            derivation
+                        ),
                     )
                 ),
                 correction=(
@@ -435,6 +444,181 @@ class AuthorityStateAdjudicationTests(
             ]
         )
 
+    def test_untrusted_draft_auto_gold_is_not_training_eligible(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation()
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "automatic"
+            ][
+                "tier"
+            ],
+            "auto_gold",
+        )
+
+        self.assertEqual(
+            result[
+                "automatic"
+            ][
+                "value"
+            ],
+            "stakeholder_confirmed",
+        )
+
+        self.assertEqual(
+            result[
+                "learning_signal"
+            ][
+                "status"
+            ],
+            (
+                "reference_blocked_"
+                "untrusted_snapshot"
+            ),
+        )
+
+        self.assertFalse(
+            result[
+                "learning_signal"
+            ][
+                "training_eligible"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "evaluator"
+            ][
+                "reference_input_trusted"
+            ]
+        )
+
+    def test_machine_verified_auto_gold_is_training_eligible(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation()
+            ],
+            derivation={
+                "mode": (
+                    "machine_verified"
+                ),
+                "producer": (
+                    "authority-pipeline"
+                ),
+                "producer_version": (
+                    "authority-pipeline-v1"
+                ),
+                "evidence_ids": [
+                    "observation-1",
+                ],
+                "note": (
+                    "Machine-verified "
+                    "authority inputs."
+                ),
+            },
+        )
+
+        self.assertEqual(
+            result[
+                "automatic"
+            ][
+                "tier"
+            ],
+            "auto_gold",
+        )
+
+        self.assertTrue(
+            result[
+                "learning_signal"
+            ][
+                "training_eligible"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "learning_signal"
+            ][
+                "reference_input_trusted"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "evaluator"
+            ][
+                "reference_input_trusted"
+            ]
+        )
+
+    def test_model_assisted_snapshot_cannot_self_train(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation()
+            ],
+            derivation={
+                "mode": (
+                    "model_assisted"
+                ),
+                "producer": (
+                    "semantic-model"
+                ),
+                "producer_version": (
+                    "semantic-model-v1"
+                ),
+                "evidence_ids": [
+                    "observation-1",
+                ],
+                "note": (
+                    "Model proposed the "
+                    "structured observation."
+                ),
+            },
+        )
+
+        self.assertEqual(
+            result[
+                "automatic"
+            ][
+                "tier"
+            ],
+            "auto_gold",
+        )
+
+        self.assertFalse(
+            result[
+                "learning_signal"
+            ][
+                "training_eligible"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "evaluator"
+            ][
+                "reference_input_trusted"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "untrusted_snapshot_cannot_self_train_from_auto_gold"
+            ]
+        )
+
     def test_manual_correction_preserves_automatic_reference(
         self,
     ):
@@ -594,6 +778,43 @@ class AuthorityStateAdjudicationTests(
                     "2024-02-01"
                 )
             ],
+        )
+
+        self.assertEqual(
+            result[
+                "evaluator"
+            ][
+                "snapshot_derivation_mode"
+            ],
+            "manual_draft",
+        )
+
+        self.assertFalse(
+            result[
+                "evaluator"
+            ][
+                "reference_input_trusted"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "learning_signal"
+            ][
+                "training_eligible"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "learning_signal"
+            ][
+                "status"
+            ],
+            (
+                "reference_blocked_"
+                "untrusted_snapshot"
+            ),
         )
 
     def test_evaluator_does_not_change_live_merit(
