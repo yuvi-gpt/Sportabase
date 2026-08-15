@@ -119,7 +119,12 @@
               "status": "partial",
               "captured_at": "",
               "content_sha256": "fe8c8d75a0c3f9a88c2e9ae6b36561a7d29d30e2a2bf41eee74c8c5c3a60708d",
-              "note": "Direct HTTP retrieval was unavailable with HTTP 403 during the review packet. Ferrari's official indexed Formula 1 page provided the announcement title and text. The exact retrospective capture timestamp was not preserved, so it is intentionally left blank."
+              "note": "Direct HTTP retrieval was unavailable with HTTP 403 during the review packet. Ferrari's official indexed Formula 1 page provided the announcement title and text. The exact retrospective capture timestamp was not preserved, so it is intentionally left blank.",
+              "time": {
+                "precision": "unknown",
+                "value": "",
+                "basis": "unknown"
+              }
             }
           }
         ],

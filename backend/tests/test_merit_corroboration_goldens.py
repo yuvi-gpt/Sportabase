@@ -569,6 +569,24 @@ class MeritCorroborationGoldenDatasetTests(
 
         self.assertEqual(
             capture[
+                "time"
+            ],
+            {
+                "precision": "unknown",
+                "value": "",
+                "basis": "unknown",
+            },
+        )
+
+        self.assertIn(
+            "not preserved",
+            capture[
+                "note"
+            ],
+        )
+
+        self.assertEqual(
+            capture[
                 "content_sha256"
             ],
             (

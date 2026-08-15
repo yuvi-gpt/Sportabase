@@ -53,6 +53,20 @@ SNAPSHOT_CAPTURE_STATUSES = (
     "unknown",
 )
 
+SNAPSHOT_CAPTURE_TIME_PRECISIONS = (
+    "timestamp",
+    "date",
+    "unknown",
+)
+
+SNAPSHOT_CAPTURE_TIME_BASES = (
+    "capture_timestamp",
+    "capture_date",
+    "review_session_date",
+    "legacy_captured_at",
+    "unknown",
+)
+
 SNAPSHOT_AVAILABILITY_PRECISIONS = (
     "timestamp",
     "date",
@@ -567,6 +581,157 @@ def build_claim_evidence_snapshot(
             required=False,
         )
 
+        raw_capture_time = raw_capture.get(
+            "time"
+        )
+
+        if raw_capture_time is None:
+            if captured_at:
+                capture_time_precision = (
+                    "timestamp"
+                )
+
+                capture_time_value = (
+                    captured_at
+                )
+
+                capture_time_basis = (
+                    "legacy_captured_at"
+                )
+
+            else:
+                capture_time_precision = (
+                    "unknown"
+                )
+
+                capture_time_value = ""
+
+                capture_time_basis = (
+                    "unknown"
+                )
+
+        else:
+            if not isinstance(
+                raw_capture_time,
+                dict,
+            ):
+                raise ValueError(
+                    "Validation observation "
+                    "capture time must be a "
+                    "dictionary."
+                )
+
+            capture_time_precision = (
+                _choice(
+                    raw_capture_time.get(
+                        "precision",
+                        "unknown",
+                    ),
+                    label=(
+                        "Validation observation "
+                        "capture time precision"
+                    ),
+                    allowed=(
+                        SNAPSHOT_CAPTURE_TIME_PRECISIONS
+                    ),
+                )
+            )
+
+            capture_time_basis = _choice(
+                raw_capture_time.get(
+                    "basis",
+                    "unknown",
+                ),
+                label=(
+                    "Validation observation "
+                    "capture time basis"
+                ),
+                allowed=(
+                    SNAPSHOT_CAPTURE_TIME_BASES
+                ),
+            )
+
+            raw_capture_time_value = (
+                raw_capture_time.get(
+                    "value"
+                )
+            )
+
+            if (
+                capture_time_precision
+                == "timestamp"
+            ):
+                capture_time_value = (
+                    _timestamp(
+                        raw_capture_time_value,
+                        label=(
+                            "Validation observation "
+                            "capture time value"
+                        ),
+                    )
+                )
+
+            elif (
+                capture_time_precision
+                == "date"
+            ):
+                capture_time_value = (
+                    _calendar_date(
+                        raw_capture_time_value,
+                        label=(
+                            "Validation observation "
+                            "capture time value"
+                        ),
+                    )
+                )
+
+            else:
+                capture_time_value = (
+                    _clean(
+                        raw_capture_time_value
+                    )
+                )
+
+                if capture_time_value:
+                    raise ValueError(
+                        "Unknown capture time "
+                        "cannot contain a value."
+                    )
+
+            if (
+                capture_time_precision
+                == "unknown"
+                and capture_time_basis
+                != "unknown"
+            ):
+                raise ValueError(
+                    "Unknown capture time "
+                    "must use unknown basis."
+                )
+
+            if (
+                capture_time_precision
+                != "unknown"
+                and capture_time_basis
+                == "unknown"
+            ):
+                raise ValueError(
+                    "Known capture time requires "
+                    "a known basis."
+                )
+
+            if captured_at:
+                if (
+                    capture_time_precision
+                    != "timestamp"
+                    or capture_time_value
+                    != captured_at
+                ):
+                    raise ValueError(
+                        "Explicit capture time "
+                        "conflicts with captured_at."
+                    )
+
         content_sha256 = _sha256(
             raw_capture.get(
                 "content_sha256"
@@ -753,6 +918,17 @@ def build_claim_evidence_snapshot(
                 "captured_at": (
                     captured_at
                 ),
+                "time": {
+                    "precision": (
+                        capture_time_precision
+                    ),
+                    "value": (
+                        capture_time_value
+                    ),
+                    "basis": (
+                        capture_time_basis
+                    ),
+                },
                 "content_sha256": (
                     content_sha256
                 ),
@@ -1004,13 +1180,24 @@ def build_claim_evidence_snapshot(
                     "observation."
                 )
 
-            if not capture[
-                "captured_at"
-            ]:
+            capture_time = capture[
+                "time"
+            ]
+
+            if (
+                capture_time[
+                    "precision"
+                ]
+                == "unknown"
+                and not capture[
+                    "note"
+                ]
+            ):
                 raise ValueError(
                     "Approved claim evidence "
-                    "snapshot requires captured_at "
-                    "for every observation."
+                    "snapshot with unknown capture "
+                    "time requires an explanatory "
+                    "capture note."
                 )
 
             if not capture[
@@ -1082,6 +1269,9 @@ def build_claim_evidence_snapshot(
             "approved_snapshots_require_auditable_capture": True,
             "capture_time_is_separate_from_evidence_as_of_time": True,
             "retrospective_capture_may_postdate_snapshot_as_of": True,
+            "capture_time_preserves_known_precision": True,
+            "unknown_capture_time_may_be_preserved_if_explained": True,
+            "approval_does_not_require_fabricated_capture_timestamp": True,
             "capture_hash_does_not_establish_truth": True,
             "evidence_availability_preserves_time_precision": True,
             "date_precision_does_not_invent_clock_time": True,

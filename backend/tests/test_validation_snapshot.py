@@ -21,6 +21,8 @@ from app.analysis.validation_snapshot import (
     SNAPSHOT_AVAILABILITY_PRECISIONS,
     SNAPSHOT_CAPTURE_METHODS,
     SNAPSHOT_CAPTURE_STATUSES,
+    SNAPSHOT_CAPTURE_TIME_BASES,
+    SNAPSHOT_CAPTURE_TIME_PRECISIONS,
     SNAPSHOT_INDEPENDENCE_STATUSES,
     build_claim_evidence_snapshot,
 )
@@ -53,6 +55,7 @@ class ClaimEvidenceSnapshotTests(
         captured_at=(
             "2026-08-15T00:00:00+00:00"
         ),
+        capture_time=None,
         content_sha256=(
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -104,6 +107,9 @@ class ClaimEvidenceSnapshotTests(
                 ),
                 "captured_at": (
                     captured_at
+                ),
+                "time": (
+                    capture_time
                 ),
                 "content_sha256": (
                     content_sha256
@@ -204,6 +210,27 @@ class ClaimEvidenceSnapshotTests(
         self.assertIn(
             "unavailable",
             SNAPSHOT_CAPTURE_STATUSES,
+        )
+
+        self.assertEqual(
+            set(
+                SNAPSHOT_CAPTURE_TIME_PRECISIONS
+            ),
+            {
+                "timestamp",
+                "date",
+                "unknown",
+            },
+        )
+
+        self.assertIn(
+            "legacy_captured_at",
+            SNAPSHOT_CAPTURE_TIME_BASES,
+        )
+
+        self.assertIn(
+            "review_session_date",
+            SNAPSHOT_CAPTURE_TIME_BASES,
         )
 
         self.assertEqual(
@@ -811,15 +838,32 @@ class ClaimEvidenceSnapshotTests(
             ]
         )
 
+        capture = result[
+            "observations"
+        ][0][
+            "capture"
+        ]
+
         self.assertEqual(
-            result[
-                "observations"
-            ][0][
-                "capture"
-            ][
+            capture[
                 "captured_at"
             ],
             "2026-08-15T00:00:00Z",
+        )
+
+        self.assertEqual(
+            capture[
+                "time"
+            ],
+            {
+                "precision": "timestamp",
+                "value": (
+                    "2026-08-15T00:00:00Z"
+                ),
+                "basis": (
+                    "legacy_captured_at"
+                ),
+            },
         )
 
         self.assertTrue(
@@ -829,6 +873,240 @@ class ClaimEvidenceSnapshotTests(
                 "retrospective_capture_may_postdate_snapshot_as_of"
             ]
         )
+
+    def test_capture_date_precision_is_preserved(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation(
+                    captured_at="",
+                    capture_time={
+                        "precision": "date",
+                        "value": "2026-08-15",
+                        "basis": (
+                            "review_session_date"
+                        ),
+                    },
+                )
+            ]
+        )
+
+        capture = result[
+            "observations"
+        ][0][
+            "capture"
+        ]
+
+        self.assertEqual(
+            capture[
+                "captured_at"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            capture[
+                "time"
+            ],
+            {
+                "precision": "date",
+                "value": "2026-08-15",
+                "basis": (
+                    "review_session_date"
+                ),
+            },
+        )
+
+    def test_capture_date_may_postdate_historical_as_of(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation(
+                    observed_at="",
+                    published_at="",
+                    availability={
+                        "precision": "date",
+                        "value": "2024-02-01",
+                        "basis": (
+                            "official_release_date"
+                        ),
+                    },
+                    captured_at="",
+                    capture_time={
+                        "precision": "date",
+                        "value": "2026-08-15",
+                        "basis": (
+                            "review_session_date"
+                        ),
+                    },
+                )
+            ],
+            as_of=(
+                "2024-02-01T23:59:59Z"
+            ),
+        )
+
+        self.assertEqual(
+            result[
+                "observations"
+            ][0][
+                "capture"
+            ][
+                "time"
+            ][
+                "value"
+            ],
+            "2026-08-15",
+        )
+
+    def test_unknown_capture_time_with_explanation_can_be_approved(
+        self,
+    ):
+        review = {
+            "status": "approved",
+            "reviewer": "Human Reviewer",
+            "reviewed_at": (
+                "2026-08-15T01:00:00Z"
+            ),
+            "rationale": (
+                "Reviewed authority, provenance, "
+                "availability, and capture."
+            ),
+        }
+
+        result = self.build(
+            [
+                self.observation(
+                    captured_at="",
+                    capture_time={
+                        "precision": "unknown",
+                        "value": "",
+                        "basis": "unknown",
+                    },
+                    capture_note=(
+                        "The exact retrospective "
+                        "capture time was not preserved."
+                    ),
+                )
+            ],
+            review=review,
+        )
+
+        capture = result[
+            "observations"
+        ][0][
+            "capture"
+        ]
+
+        self.assertEqual(
+            capture[
+                "time"
+            ][
+                "precision"
+            ],
+            "unknown",
+        )
+
+        self.assertEqual(
+            result[
+                "review"
+            ][
+                "status"
+            ],
+            "approved",
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "approval_does_not_require_fabricated_capture_timestamp"
+            ]
+        )
+
+    def test_unknown_capture_time_without_explanation_blocks_approval(
+        self,
+    ):
+        review = {
+            "status": "approved",
+            "reviewer": "Human Reviewer",
+            "reviewed_at": (
+                "2026-08-15T01:00:00Z"
+            ),
+            "rationale": (
+                "Reviewed authority, provenance, "
+                "availability, and capture."
+            ),
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "unknown capture time requires",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        captured_at="",
+                        capture_time={
+                            "precision": "unknown",
+                            "value": "",
+                            "basis": "unknown",
+                        },
+                        capture_note="",
+                    )
+                ],
+                review=review,
+            )
+
+    def test_invalid_capture_date_is_rejected(
+        self,
+    ):
+        with self.assertRaisesRegex(
+            ValueError,
+            "must be YYYY-MM-DD",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        captured_at="",
+                        capture_time={
+                            "precision": "date",
+                            "value": "2026-08-99",
+                            "basis": (
+                                "review_session_date"
+                            ),
+                        },
+                    )
+                ]
+            )
+
+    def test_conflicting_legacy_and_explicit_capture_time_is_rejected(
+        self,
+    ):
+        with self.assertRaisesRegex(
+            ValueError,
+            "conflicts with captured_at",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        captured_at=(
+                            "2026-08-15T00:00:00Z"
+                        ),
+                        capture_time={
+                            "precision": "timestamp",
+                            "value": (
+                                "2026-08-15T01:00:00Z"
+                            ),
+                            "basis": (
+                                "capture_timestamp"
+                            ),
+                        },
+                    )
+                ]
+            )
 
     def test_invalid_capture_sha256_is_rejected(
         self,
@@ -860,12 +1138,6 @@ class ClaimEvidenceSnapshotTests(
                     "capture_status": "unavailable",
                 },
                 "captured or partial evidence",
-            ),
-            (
-                {
-                    "captured_at": "",
-                },
-                "requires captured_at",
             ),
             (
                 {
