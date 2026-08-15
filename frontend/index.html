@@ -1,201 +1,336 @@
 <!doctype html>
-<html>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Sportabase — Rumor Scanner</title>
-    <style>
-      body { font-family: system-ui, Arial; margin: 24px; max-width: 900px; background: #0b0b0b; color: #f5f5f5; }
-      input, button { padding: 10px; font-size: 16px; }
-      input { border: 1px solid #333; border-radius: 10px; background: #111; color: #f5f5f5; }
-      button { border: 1px solid #333; border-radius: 10px; background: #1b1b1b; color: #f5f5f5; cursor: pointer; }
-      button:hover { background: #242424; }
-      .card { border: 1px solid #2f2f2f; border-radius: 12px; padding: 16px; margin-top: 16px; background: #111; }
-      .badge { padding: 4px 8px; border-radius: 8px; background: #232323; font-size: 12px; margin-left: 8px; display: inline-block; }
-      .muted { opacity: .75; font-size: 14px; }
-      .section-title { margin: 0 0 8px 0; font-size: 18px; }
-      .metric { font-size: 13px; line-height: 1.6; }
-      a { color: #8ab4ff; }
-    </style>
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    />
+
+    <meta
+      name="description"
+      content="Sportabase evidence-first sports intelligence."
+    />
+
+    <title>
+      Sportabase ? Sports Intelligence
+    </title>
+
+    <link
+      rel="stylesheet"
+      href="./styles.css"
+    />
+
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/chart.js"
+    ></script>
+
+    <script
+      type="module"
+      src="./app.mjs"
+    ></script>
   </head>
+
   <body>
-    <h1>Sportabase — Rumor Scanner</h1>
-    <p class="muted">Paste a sports article URL and get a Merit Score with a quick summary.</p>
+    <div class="page-shell">
+      <header class="topbar">
+        <a
+          class="brand"
+          href="./"
+          aria-label="Sportabase home"
+        >
+          <span class="brand-mark">
+            SB
+          </span>
 
-    <div id="cricket-insight-card" class="card">
-      <h3 class="section-title">IPL Trend Insight</h3>
-      <div id="insight-status">Loading...</div>
-      <div style="margin-top:16px;">
-        <canvas id="cricketInsightChart" height="120"></canvas>
-      </div>
+          <span>
+            <strong>Sportabase</strong>
+            <small>SPORTS INTELLIGENCE</small>
+          </span>
+        </a>
+
+        <div
+          class="api-state"
+          id="api-state"
+          aria-live="polite"
+        >
+          <span></span>
+          CHECKING API
+        </div>
+      </header>
+
+      <main>
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">
+              EVIDENCE-FIRST ANALYSIS
+            </p>
+
+            <h1>
+              Understand the story,
+              <br />
+              not just the headline.
+            </h1>
+
+            <p class="hero-description">
+              Sportabase reads the article, summarizes
+              the important reporting, scores its Merit,
+              and checks cross-source evidence when that
+              evidence is available.
+            </p>
+          </div>
+
+          <div class="analyzer-card">
+            <label for="article-url">
+              ARTICLE URL
+            </label>
+
+            <div class="url-row">
+              <input
+                id="article-url"
+                type="url"
+                inputmode="url"
+                autocomplete="url"
+                placeholder="https://www.bbc.com/sport/..."
+              />
+
+              <button
+                id="analyze-button"
+                type="button"
+              >
+                Analyze
+              </button>
+            </div>
+
+            <div
+              class="analysis-status"
+              id="analysis-status"
+              aria-live="polite"
+            >
+              Paste a sports article to begin.
+            </div>
+
+            <p class="privacy-note">
+              The article URL and readable text are sent
+              to Sportabase for analysis.
+            </p>
+          </div>
+        </section>
+
+        <section
+          id="results"
+          class="results"
+          hidden
+        >
+          <div class="score-card">
+            <div class="score-top">
+              <div>
+                <p class="section-label">
+                  MERIT SCORE
+                </p>
+
+                <div class="score-value">
+                  <strong id="merit-score">
+                    0
+                  </strong>
+
+                  <span>/100</span>
+                </div>
+              </div>
+
+              <div
+                class="badge"
+                id="merit-badge"
+              >
+                ANALYSIS
+              </div>
+            </div>
+
+            <div class="score-track">
+              <div
+                id="score-fill"
+                class="score-fill"
+              ></div>
+            </div>
+
+            <h2 id="result-title"></h2>
+
+            <div
+              id="article-type"
+              class="type-pill"
+            ></div>
+          </div>
+
+          <div class="content-grid">
+            <article class="result-card">
+              <p class="section-label">
+                TL;DR
+              </p>
+
+              <ul
+                id="summary-list"
+                class="result-list"
+              ></ul>
+            </article>
+
+            <article class="result-card">
+              <p class="section-label">
+                WHY THIS SCORE
+              </p>
+
+              <ul
+                id="reason-list"
+                class="result-list"
+              ></ul>
+            </article>
+          </div>
+
+          <article
+            id="intelligence-card"
+            class="result-card intelligence-card"
+            hidden
+          >
+            <div class="intelligence-header">
+              <div>
+                <p class="section-label">
+                  EVIDENCE INTELLIGENCE
+                </p>
+
+                <h3 id="intelligence-label">
+                  Evidence intelligence
+                </h3>
+              </div>
+
+              <div
+                id="intelligence-state"
+                class="status-pill"
+              >
+                LIMITED
+              </div>
+            </div>
+
+            <p
+              id="intelligence-detail"
+              class="intelligence-detail"
+            ></p>
+
+            <div
+              id="intelligence-metrics"
+              class="intelligence-grid"
+            >
+              <div>
+                <span>CORROBORATION</span>
+                <strong
+                  id="corroboration-value"
+                >
+                  Unknown
+                </strong>
+              </div>
+
+              <div>
+                <span>INDEPENDENCE</span>
+                <strong
+                  id="independence-value"
+                >
+                  Unknown
+                </strong>
+              </div>
+
+              <div>
+                <span>SOURCES FOUND</span>
+                <strong
+                  id="candidate-count"
+                >
+                  0
+                </strong>
+              </div>
+
+              <div>
+                <span>PAIRS CHECKED</span>
+                <strong
+                  id="verification-pairs"
+                >
+                  0
+                </strong>
+              </div>
+            </div>
+
+            <p
+              id="intelligence-note"
+              class="intelligence-note"
+            ></p>
+          </article>
+
+          <article class="result-card source-card">
+            <div>
+              <p class="section-label">
+                ANALYZED STORY
+              </p>
+
+              <h3 id="source-title"></h3>
+
+              <p
+                id="source-domain"
+                class="muted"
+              ></p>
+            </div>
+
+            <a
+              id="source-link"
+              class="secondary-button"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Read source
+            </a>
+          </article>
+        </section>
+
+        <section class="insight-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">
+                LIVE SPORT INTELLIGENCE
+              </p>
+
+              <h2>
+                IPL chasing-bias monitor
+              </h2>
+            </div>
+
+            <span class="secondary-badge">
+              CRICKET
+            </span>
+          </div>
+
+          <article class="insight-card">
+            <div id="insight-status">
+              Loading current trend?
+            </div>
+
+            <div class="chart-shell">
+              <canvas
+                id="cricket-insight-chart"
+                height="120"
+              ></canvas>
+            </div>
+          </article>
+        </section>
+      </main>
+
+      <footer>
+        <span>
+          Sportabase
+        </span>
+
+        <span>
+          Evidence signals remain provisional until
+          validation requirements are satisfied.
+        </span>
+      </footer>
     </div>
-
-    <input id="url" style="width: 100%;" placeholder="https://www.bbc.com/sport/football/..." />
-    <div style="margin-top: 8px;">
-      <button id="btn">Scan</button>
-    </div>
-
-    <div id="out"></div>
-
-    <script>
-      const API = "http://127.0.0.1:8000";
-      const out = document.getElementById("out");
-
-      let cricketInsightChart = null;
-
-      function renderCricketInsightChart(series) {
-        const canvas = document.getElementById("cricketInsightChart");
-        if (!canvas || !series) return;
-
-        const ctx = canvas.getContext("2d");
-
-        if (cricketInsightChart) {
-          cricketInsightChart.destroy();
-        }
-
-        cricketInsightChart = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: series.labels || [],
-            datasets: [
-              {
-                label: "Bowl-first choice rate",
-                data: series.bowl_first_choice_rate || [],
-                borderColor: "#8ab4ff",
-                backgroundColor: "transparent",
-                tension: 0.3
-              },
-              {
-                label: "Chase win rate",
-                data: series.chase_win_rate || [],
-                borderColor: "#81c995",
-                backgroundColor: "transparent",
-                tension: 0.3
-              },
-              {
-                label: "Bat-first win rate",
-                data: series.bat_first_win_rate || [],
-                borderColor: "#f28b82",
-                backgroundColor: "transparent",
-                tension: 0.3
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                labels: {
-                  color: "#eaeaea"
-                }
-              }
-            },
-            scales: {
-              x: {
-                ticks: { color: "#bdbdbd" },
-                grid: { color: "#2a2a2a" }
-              },
-              y: {
-                min: 0,
-                max: 1,
-                ticks: { color: "#bdbdbd" },
-                grid: { color: "#2a2a2a" }
-              }
-            }
-          }
-        });
-      }
-
-      async function loadCricketInsight() {
-        const card = document.getElementById("insight-status");
-        if (!card) return;
-
-        try {
-          const res = await fetch(`${API}/insights/cricket/ipl/chasing-bias?history_limit=5`);
-          if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
-          }
-
-          const data = await res.json();
-          renderCricketInsightChart(data.chart_series);
-
-          const trend = data.trend;
-          const latest = data.latest_metrics;
-          const summary = data.summary;
-
-          if (!trend) {
-            card.innerHTML = `
-              <div><strong>No active trend signal right now.</strong></div>
-              <div style="margin-top:8px;" class="metric">Matches analyzed: ${summary?.matches_analyzed ?? "N/A"}</div>
-            `;
-            return;
-          }
-
-          card.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;">
-              <div style="font-weight:700; font-size:18px;">${trend.title}</div>
-              <span class="badge">${trend.confidence}</span>
-            </div>
-
-            <div style="margin-bottom:12px; font-size:15px; line-height:1.5;">
-              ${trend.insight}
-            </div>
-
-            <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-bottom:12px;">
-              <div class="card" style="margin-top:0; padding:10px;">
-                <div class="muted">Matches analyzed</div>
-                <div style="font-size:20px; font-weight:700;">${summary?.matches_analyzed ?? "N/A"}</div>
-              </div>
-              <div class="card" style="margin-top:0; padding:10px;">
-                <div class="muted">Signal active</div>
-                <div style="font-size:20px; font-weight:700;">${summary?.current_signal_active ? "Yes" : "No"}</div>
-              </div>
-              <div class="card" style="margin-top:0; padding:10px;">
-                <div class="muted">Bowl-first rate</div>
-                <div style="font-size:20px; font-weight:700;">${latest?.rolling_bowl_first_choice_rate ?? "N/A"}</div>
-              </div>
-              <div class="card" style="margin-top:0; padding:10px;">
-                <div class="muted">Chase win rate</div>
-                <div style="font-size:20px; font-weight:700;">${latest?.rolling_chase_win_rate ?? "N/A"}</div>
-              </div>
-            </div>
-
-            <div class="card" style="margin-top:0; padding:10px;">
-              <div class="muted">Bat-first win rate</div>
-              <div style="font-size:20px; font-weight:700;">${latest?.rolling_bat_first_win_rate ?? "N/A"}</div>
-            </div>
-          `;
-        } catch (err) {
-          card.innerHTML = `<div style="color:#ff8080;">Failed to load insight: ${err.message}</div>`;
-        }
-      }
-
-      document.getElementById("btn").onclick = async () => {
-        const url = document.getElementById("url").value.trim();
-        if (!url) return;
-
-        out.innerHTML = "Scanning…";
-
-        try {
-          const res = await fetch(`${API}/scanner/scan?url=${encodeURIComponent(url)}`);
-          const data = await res.json();
-
-          out.innerHTML = `
-            <div class="card">
-              <h3 style="margin:0">${data.title}
-                <span class="badge">${data.badge}</span>
-              </h3>
-              <div class="muted">Merit Score: ${data.merit_score}/100</div>
-              <ul>${(data.summary || []).slice(0, 3).map(s => `<li>${s}</li>`).join("")}</ul>
-              <a href="${data.url}" target="_blank">Read Source →</a>
-            </div>
-          `;
-        } catch (e) {
-          out.textContent = "Scan failed. Check the URL and try again.";
-        }
-      };
-
-      document.addEventListener("DOMContentLoaded", loadCricketInsight);
-    </script>
   </body>
 </html>
