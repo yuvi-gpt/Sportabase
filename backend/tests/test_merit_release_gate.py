@@ -23,6 +23,9 @@ from app.analysis.merit_goldens import (
     MERIT_CORROBORATION_CURATION_VERSION,
     MERIT_CORROBORATION_GOLDEN_DATASET_VERSION,
 )
+from app.analysis.validation_snapshot import (
+    CLAIM_EVIDENCE_SNAPSHOT_VERSION,
+)
 from app.analysis.merit_release import (
     MERIT_LIVE_RELEASE_GATE_VERSION,
     MERIT_LIVE_REQUIRED_SIGNAL_COVERAGE,
@@ -33,6 +36,108 @@ from app.analysis.merit_release import (
 class MeritLiveReleaseGateTests(
     unittest.TestCase
 ):
+    def evidence_snapshot(
+        self,
+        *,
+        index,
+        urls,
+    ):
+        observations = []
+
+        for position, url in enumerate(
+            urls,
+            start=1,
+        ):
+            observations.append(
+                {
+                    "id": (
+                        "snapshot-observation-"
+                        + str(index)
+                        + "-"
+                        + str(position)
+                    ),
+                    "actor_id": (
+                        "fixture-source-"
+                        + str(index)
+                        + "-"
+                        + str(position)
+                    ),
+                    "source_url": url,
+                    "source_role": (
+                        "publisher"
+                    ),
+                    "authority_class": (
+                        "none"
+                    ),
+                    "reliability_class": (
+                        "established"
+                    ),
+                    "provenance_class": (
+                        "firsthand_reporting"
+                    ),
+                    "stance": (
+                        "supports"
+                    ),
+                    "independence_status": (
+                        "unknown"
+                    ),
+                    (
+                        "depends_on_"
+                        "observation_ids"
+                    ): [],
+                    "published_at": (
+                        "2026-08-14T05:00:00Z"
+                    ),
+                    "observed_at": (
+                        "2026-08-14T05:15:00Z"
+                    ),
+                }
+            )
+
+        return {
+            "version": (
+                CLAIM_EVIDENCE_SNAPSHOT_VERSION
+            ),
+            "id": (
+                "release-snapshot-"
+                + str(index)
+            ),
+            "claim_id": (
+                "claim-"
+                + str(index)
+            ),
+            "claim_text": (
+                "Release-gate validation "
+                "fixture claim "
+                + str(index)
+                + "."
+            ),
+            "as_of": (
+                "2026-08-14T05:30:00Z"
+            ),
+            "observations": (
+                observations
+            ),
+            "review": {
+                "status": (
+                    "approved"
+                ),
+                "reviewer": (
+                    "reviewer"
+                ),
+                "reviewed_at": (
+                    "2026-08-14T12:00:00+05:30"
+                ),
+                "rationale": (
+                    "Release-gate fixture "
+                    "with human-review metadata "
+                    "and a time-bounded "
+                    "evidence snapshot."
+                ),
+            },
+            "outcome": {},
+        }
+
     def case(
         self,
         *,
@@ -64,7 +169,20 @@ class MeritLiveReleaseGateTests(
                 )
             )
 
-        return {
+        evidence_snapshot = None
+
+        if (
+            status == "approved"
+            and origin == "real_world"
+        ):
+            evidence_snapshot = (
+                self.evidence_snapshot(
+                    index=index,
+                    urls=urls,
+                )
+            )
+
+        result = {
             "version": (
                 MERIT_CORROBORATION_GOLDEN_CASE_VERSION
             ),
@@ -113,6 +231,13 @@ class MeritLiveReleaseGateTests(
                 ),
             },
         }
+
+        if evidence_snapshot is not None:
+            result[
+                "evidence_snapshot"
+            ] = evidence_snapshot
+
+        return result
 
     def dataset(
         self,

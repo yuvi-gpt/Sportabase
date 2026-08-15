@@ -8,6 +8,9 @@ from urllib.parse import urlsplit, urlunsplit
 from app.analysis.merit_evaluation import (
     MERIT_CORROBORATION_GOLDEN_CASE_VERSION,
 )
+from app.analysis.validation_snapshot import (
+    build_claim_evidence_snapshot,
+)
 
 
 MERIT_CORROBORATION_GOLDEN_DATASET_VERSION = (
@@ -394,6 +397,42 @@ def validate_merit_corroboration_golden_dataset(
             )
         )
 
+        raw_evidence_snapshot = (
+            raw_case.get(
+                "evidence_snapshot"
+            )
+        )
+
+        normalized_evidence_snapshot = None
+
+        if raw_evidence_snapshot is not None:
+            if not isinstance(
+                raw_evidence_snapshot,
+                dict,
+            ):
+                raise ValueError(
+                    "Golden case evidence_snapshot "
+                    "must be a dictionary."
+                )
+
+            normalized_evidence_snapshot = (
+                build_claim_evidence_snapshot(
+                    raw_evidence_snapshot
+                )
+            )
+
+            if (
+                normalized_evidence_snapshot[
+                    "claim_id"
+                ]
+                != claim_id
+            ):
+                raise ValueError(
+                    "Golden case evidence snapshot "
+                    "claim ID must match the "
+                    "golden claim ID."
+                )
+
         approved_real_world = bool(
             origin
             == REAL_WORLD_ORIGIN
@@ -428,6 +467,104 @@ def validate_merit_corroboration_golden_dataset(
                     reviewed_at
                 )
             )
+
+            if (
+                normalized_evidence_snapshot
+                is None
+            ):
+                raise ValueError(
+                    "Approved real-world golden "
+                    "case requires a time-bounded "
+                    "evidence snapshot."
+                )
+
+            snapshot_review = (
+                normalized_evidence_snapshot[
+                    "review"
+                ]
+            )
+
+            if (
+                snapshot_review[
+                    "status"
+                ]
+                != "approved"
+            ):
+                raise ValueError(
+                    "Approved real-world golden "
+                    "case requires an approved "
+                    "evidence snapshot."
+                )
+
+            if (
+                snapshot_review[
+                    "reviewer"
+                ]
+                != reviewer
+            ):
+                raise ValueError(
+                    "Golden curation reviewer "
+                    "must match evidence snapshot "
+                    "reviewer."
+                )
+
+            golden_review_instant = (
+                datetime.fromisoformat(
+                    reviewed_at.replace(
+                        "Z",
+                        "+00:00",
+                    )
+                )
+            )
+
+            snapshot_review_instant = (
+                datetime.fromisoformat(
+                    snapshot_review[
+                        "reviewed_at"
+                    ].replace(
+                        "Z",
+                        "+00:00",
+                    )
+                )
+            )
+
+            if (
+                golden_review_instant
+                != snapshot_review_instant
+            ):
+                raise ValueError(
+                    "Golden curation reviewed_at "
+                    "must match evidence snapshot "
+                    "reviewed_at."
+                )
+
+            snapshot_source_urls = [
+                _source_url(
+                    observation[
+                        "source_url"
+                    ]
+                )
+                for observation
+                in normalized_evidence_snapshot[
+                    "observations"
+                ]
+            ]
+
+            if (
+                sorted(
+                    set(
+                        snapshot_source_urls
+                    )
+                )
+                != sorted(
+                    normalized_urls
+                )
+            ):
+                raise ValueError(
+                    "Golden case source URLs "
+                    "must match evidence snapshot "
+                    "source URLs."
+                )
 
             if (
                 expected_signal
@@ -475,6 +612,16 @@ def validate_merit_corroboration_golden_dataset(
                 normalized_curation
             ),
         }
+
+        if (
+            normalized_evidence_snapshot
+            is not None
+        ):
+            normalized_case[
+                "evidence_snapshot"
+            ] = (
+                normalized_evidence_snapshot
+            )
 
         normalized_cases.append(
             normalized_case
@@ -552,6 +699,11 @@ def validate_merit_corroboration_golden_dataset(
             (
                 "approved_real_world_cases_"
                 "require_human_review_metadata"
+            ): True,
+            (
+                "approved_real_world_cases_"
+                "require_time_bounded_"
+                "evidence_snapshot"
             ): True,
             (
                 "real_world_cases_require_"

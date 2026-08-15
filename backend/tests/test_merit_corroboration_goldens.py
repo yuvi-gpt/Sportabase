@@ -30,6 +30,9 @@ from app.analysis.merit_goldens import (
     select_approved_real_world_golden_cases,
     validate_merit_corroboration_golden_dataset,
 )
+from app.analysis.validation_snapshot import (
+    CLAIM_EVIDENCE_SNAPSHOT_VERSION,
+)
 
 
 class MeritCorroborationGoldenDatasetTests(
@@ -80,6 +83,103 @@ class MeritCorroborationGoldenDatasetTests(
             ],
         }
 
+    def snapshot(
+        self,
+        *,
+        source_urls=None,
+    ):
+        if source_urls is None:
+            source_urls = [
+                "https://a.example/story",
+            ]
+
+        observations = []
+
+        for index, source_url in enumerate(
+            source_urls
+        ):
+            observations.append(
+                {
+                    "id": (
+                        f"snapshot-observation-"
+                        f"{index + 1}"
+                    ),
+                    "actor_id": (
+                        f"source-actor-"
+                        f"{index + 1}"
+                    ),
+                    "source_url": (
+                        source_url
+                    ),
+                    "source_role": (
+                        "publisher"
+                    ),
+                    "authority_class": (
+                        "none"
+                    ),
+                    "reliability_class": (
+                        "established"
+                    ),
+                    "provenance_class": (
+                        "firsthand_reporting"
+                    ),
+                    "stance": (
+                        "supports"
+                    ),
+                    "independence_status": (
+                        "unknown"
+                    ),
+                    (
+                        "depends_on_"
+                        "observation_ids"
+                    ): [],
+                    "published_at": (
+                        "2026-08-14T03:45:00Z"
+                    ),
+                    "observed_at": (
+                        "2026-08-14T04:00:00Z"
+                    ),
+                }
+            )
+
+        return {
+            "version": (
+                CLAIM_EVIDENCE_SNAPSHOT_VERSION
+            ),
+            "id": (
+                "snapshot-case-1"
+            ),
+            "claim_id": (
+                "claim-1"
+            ),
+            "claim_text": (
+                "A reviewed sports claim."
+            ),
+            "as_of": (
+                "2026-08-14T04:15:00Z"
+            ),
+            "observations": (
+                observations
+            ),
+            "review": {
+                "status": (
+                    "approved"
+                ),
+                "reviewer": (
+                    "Yuvraj"
+                ),
+                "reviewed_at": (
+                    "2026-08-14T10:00:00+05:30"
+                ),
+                "rationale": (
+                    "Human-reviewed authority, "
+                    "provenance, timing, and "
+                    "source relationships."
+                ),
+            },
+            "outcome": {},
+        }
+
     def case(
         self,
         *,
@@ -108,6 +208,11 @@ class MeritCorroborationGoldenDatasetTests(
         return {
             "version": (
                 MERIT_CORROBORATION_GOLDEN_CASE_VERSION
+            ),
+            "evidence_snapshot": (
+                self.snapshot(
+                    source_urls=source_urls
+                )
             ),
             "id": (
                 case_id
@@ -357,6 +462,130 @@ class MeritCorroborationGoldenDatasetTests(
             ],
             1,
         )
+
+    def test_approved_real_world_case_requires_evidence_snapshot(
+        self,
+    ):
+        case = self.case()
+
+        del case[
+            "evidence_snapshot"
+        ]
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "time-bounded evidence snapshot",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_evidence_snapshot_claim_must_match_golden_claim(
+        self,
+    ):
+        case = self.case()
+
+        case[
+            "evidence_snapshot"
+        ][
+            "claim_id"
+        ] = "different-claim"
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "claim ID must match",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_approved_golden_requires_approved_snapshot(
+        self,
+    ):
+        case = self.case()
+
+        case[
+            "evidence_snapshot"
+        ][
+            "review"
+        ] = {
+            "status": "draft",
+            "reviewer": "",
+            "reviewed_at": "",
+            "rationale": "",
+        }
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "requires an approved evidence snapshot",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_snapshot_reviewer_must_match_golden_reviewer(
+        self,
+    ):
+        case = self.case()
+
+        case[
+            "evidence_snapshot"
+        ][
+            "review"
+        ][
+            "reviewer"
+        ] = "Different Reviewer"
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "reviewer must match",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_snapshot_sources_must_match_golden_sources(
+        self,
+    ):
+        case = self.case()
+
+        case[
+            "evidence_snapshot"
+        ][
+            "observations"
+        ][0][
+            "source_url"
+        ] = (
+            "https://different.example/story"
+        )
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "source URLs must match",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
 
     def test_draft_real_world_case_is_excluded(
         self,
