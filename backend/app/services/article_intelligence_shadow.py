@@ -19,6 +19,10 @@ from app.services.intelligence_pipeline import (
     SPORTABASE_INTELLIGENCE_PIPELINE_VERSION,
     run_sportabase_intelligence_pipeline,
 )
+from app.services.article_adjudication_runtime import (
+    ARTICLE_ADJUDICATION_RUNTIME_VERSION,
+    run_article_adjudication_runtime,
+)
 
 
 ARTICLE_INTELLIGENCE_SHADOW_VERSION = (
@@ -470,6 +474,9 @@ def run_article_intelligence_shadow(
     seed_persister=(
         persist_article_primary_claim_seed
     ),
+    adjudication_runner=(
+        run_article_adjudication_runtime
+    ),
 ) -> Dict[str, Any]:
     if not enabled:
         return _skip(
@@ -670,6 +677,46 @@ def run_article_intelligence_shadow(
             "cannot enable live Merit."
         )
 
+    try:
+        adjudication_runtime = (
+            adjudication_runner(
+                claim=claim,
+                pipeline=pipeline,
+                as_of=observed_at,
+                connection_factory=(
+                    connection_factory
+                ),
+            )
+        )
+
+        if not isinstance(
+            adjudication_runtime,
+            dict,
+        ):
+            raise ValueError(
+                "Article adjudication runtime "
+                "returned an invalid result."
+            )
+
+    except Exception as error:
+        adjudication_runtime = {
+            "version": (
+                ARTICLE_ADJUDICATION_RUNTIME_VERSION
+            ),
+            "status": "failed",
+            "claim_id": (
+                claim["id"]
+            ),
+            "error_type": (
+                type(error).__name__
+            ),
+            "error": str(
+                error
+            )[:240],
+            "live_merit_effect_enabled": False,
+            "training_eligible": False,
+        }
+
     stages = pipeline.get(
         "stages",
         {},
@@ -818,6 +865,9 @@ def run_article_intelligence_shadow(
         ),
         "live_merit_effect_enabled": False,
         "truth_established": False,
+        "adjudication": (
+            adjudication_runtime
+        ),
         "policy": {
             (
                 "headline_seed_is_"
