@@ -718,7 +718,7 @@ class MeritCorroborationEvaluationTests(
                 )
             )
 
-    def test_passing_evaluation_never_authorizes_live_enablement(
+    def test_passing_evaluation_requires_machine_score_release_certificate(
         self,
     ):
         result = (
@@ -748,16 +748,28 @@ class MeritCorroborationEvaluationTests(
             ][
                 "recommendation"
             ],
-            "shadow_only",
+            (
+                "machine_score_release_"
+                "certificate_required"
+            ),
         )
 
         self.assertTrue(
             result[
                 "policy"
             ][
+                "machine_verified_real_world_score_certificate_is_required_before_enablement"
+            ]
+        )
+
+        self.assertNotIn(
+            (
                 "curated_golden_set_is_"
                 "required_before_enablement"
-            ]
+            ),
+            result[
+                "policy"
+            ],
         )
 
 

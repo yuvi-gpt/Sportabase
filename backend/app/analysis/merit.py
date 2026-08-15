@@ -6,7 +6,7 @@ from app.analysis.corroboration import (
 
 
 MERIT_CORROBORATION_OVERLAY_VERSION = (
-    "merit-corroboration-overlay-v1"
+    "merit-corroboration-overlay-v2"
 )
 
 MERIT_CORROBORATION_SHADOW_MAX_BOOST = 6.0
@@ -469,7 +469,7 @@ def build_merit_corroboration_overlay(
                 "live_merit_effect_is_disabled"
             ): True,
             (
-                "golden_set_validation_is_"
+                "machine_score_release_certificate_is_"
                 "required_before_enablement"
             ): True,
         },

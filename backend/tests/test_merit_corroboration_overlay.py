@@ -648,7 +648,7 @@ class MeritCorroborationOverlayTests(
                 legacy=legacy,
             )
 
-    def test_policy_requires_golden_set_before_enablement(
+    def test_policy_requires_machine_score_release_certificate_before_enablement(
         self,
     ):
         claim = self.claim_state(
@@ -682,9 +682,16 @@ class MeritCorroborationOverlayTests(
 
         self.assertTrue(
             policy[
+                "machine_score_release_certificate_is_required_before_enablement"
+            ]
+        )
+
+        self.assertNotIn(
+            (
                 "golden_set_validation_is_"
                 "required_before_enablement"
-            ]
+            ),
+            policy,
         )
 
 

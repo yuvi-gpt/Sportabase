@@ -7,11 +7,17 @@ from app.analysis.merit import (
 
 
 MERIT_CORROBORATION_EVALUATION_VERSION = (
-    "merit-corroboration-evaluation-v1"
+    "merit-corroboration-evaluation-v2"
 )
 
+MERIT_CORROBORATION_EVALUATION_CASE_VERSION = (
+    "merit-corroboration-evaluation-case-v2"
+)
+
+# Compatibility alias for older callers. The release path no longer
+# treats these deterministic policy fixtures as human-reviewed gold.
 MERIT_CORROBORATION_GOLDEN_CASE_VERSION = (
-    "merit-corroboration-golden-case-v1"
+    MERIT_CORROBORATION_EVALUATION_CASE_VERSION
 )
 
 
@@ -652,14 +658,12 @@ def evaluate_merit_corroboration_cases(
                 False
             ),
             "recommendation": (
-                "shadow_only"
+                "machine_score_release_certificate_required"
             ),
             "reason": (
-                "Passing this deterministic "
-                "evaluation contract does not "
-                "validate the proposed Merit "
-                "weight on a curated real-world "
-                "golden set."
+                "Passing deterministic policy fixtures alone does "
+                "not authorize live scoring. A machine-verifiable "
+                "real-world score-release certificate is required."
             ),
         },
         "policy": {
@@ -672,7 +676,7 @@ def evaluate_merit_corroboration_cases(
                 "not_real_world_validation"
             ): True,
             (
-                "curated_golden_set_is_"
+                "machine_verified_real_world_score_certificate_is_"
                 "required_before_enablement"
             ): True,
             (
