@@ -498,7 +498,15 @@ def init_db():
     )
 
 
-init_db()
+# Importing app.main must be side-effect free with respect
+# to the persistent database. Uvicorn/FastAPI startup still
+# initializes the production schema before requests are
+# served, while tests may explicitly override DB_PATH and
+# call init_db() against temporary databases.
+app.add_event_handler(
+    "startup",
+    init_db,
+)
 
 
 # -----------------------------

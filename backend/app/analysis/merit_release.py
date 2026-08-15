@@ -20,9 +20,13 @@ from app.analysis.shadow_calibration import (
     SHADOW_CALIBRATION_VERSION,
 )
 
+from app.analysis.trusted_validation import (
+    TRUSTED_HOLDOUT_CASE_VERSION,
+)
+
 
 MERIT_LIVE_RELEASE_GATE_VERSION = (
-    "merit-live-release-gate-v2"
+    "merit-live-release-gate-v3"
 )
 
 MERIT_LIVE_MIN_HOLDOUT_CLAIMS = 5
@@ -458,7 +462,7 @@ def _holdout_context(
                 )
             )
             != (
-                LOCAL_CONFIDENCE_CASE_VERSION
+                TRUSTED_HOLDOUT_CASE_VERSION
             )
         ):
             blockers.append(

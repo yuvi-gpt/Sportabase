@@ -288,6 +288,62 @@ class MainDecompositionContractTests(
             ),
         )
 
+    def test_database_initialization_is_deferred_to_startup(
+        self,
+    ):
+        startup_handlers = list(
+            main.app.router.on_startup
+        )
+
+        self.assertIn(
+            main.init_db,
+            startup_handlers,
+            (
+                "Database schema initialization must "
+                "remain registered for application startup."
+            ),
+        )
+
+        top_level_init_calls = []
+
+        for node in self.tree.body:
+            if not isinstance(
+                node,
+                ast.Expr,
+            ):
+                continue
+
+            value = node.value
+
+            if not isinstance(
+                value,
+                ast.Call,
+            ):
+                continue
+
+            function = value.func
+
+            if (
+                isinstance(
+                    function,
+                    ast.Name,
+                )
+                and function.id
+                == "init_db"
+            ):
+                top_level_init_calls.append(
+                    node.lineno
+                )
+
+        self.assertEqual(
+            top_level_init_calls,
+            [],
+            (
+                "Importing app.main must not initialize "
+                "or mutate the persistent database."
+            ),
+        )
+
     def test_public_api_contract_is_present(
         self,
     ):

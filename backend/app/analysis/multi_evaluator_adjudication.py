@@ -559,9 +559,14 @@ def build_multi_evaluator_adjudication(
 
             trusted_judgments[
                 judgment_id
-            ] = run[
-                "reference_trusted"
-            ]
+            ] = bool(
+                run[
+                    "reference_trusted"
+                ]
+                and judgment[
+                    "training_eligible"
+                ]
+            )
 
             judgments_by_field[
                 judgment[
@@ -705,6 +710,7 @@ def build_multi_evaluator_adjudication(
             "model_assisted_evaluator_cannot_self_mark_training_eligible": True,
             "auto_gold_training_requires_trusted_hard_reference": True,
             "machine_verified_evaluator_is_trusted_reference_path": True,
+            "trusted_reference_requires_judgment_training_eligibility": True,
             "automatic_tier_and_training_eligibility_are_separate": True,
             "multi_evaluator_adjudication_does_not_establish_truth": True,
             "multi_evaluator_adjudication_does_not_persist_by_itself": True,

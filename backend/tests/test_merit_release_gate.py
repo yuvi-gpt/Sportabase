@@ -40,6 +40,10 @@ from app.analysis.shadow_calibration import (
     SHADOW_CALIBRATION_VERSION,
 )
 
+from app.analysis.trusted_validation import (
+    TRUSTED_HOLDOUT_CASE_VERSION,
+)
+
 
 class MeritLiveReleaseGateTests(
     unittest.TestCase
@@ -125,7 +129,7 @@ class MeritLiveReleaseGateTests(
             rows.append(
                 {
                     "version": (
-                        LOCAL_CONFIDENCE_CASE_VERSION
+                        TRUSTED_HOLDOUT_CASE_VERSION
                     ),
                     "id": (
                         "holdout-case-"
@@ -346,7 +350,7 @@ class MeritLiveReleaseGateTests(
             (
                 MERIT_LIVE_RELEASE_GATE_VERSION
             ),
-            "merit-live-release-gate-v2",
+            "merit-live-release-gate-v3",
         )
 
         self.assertTrue(
