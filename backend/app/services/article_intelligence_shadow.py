@@ -24,6 +24,19 @@ from app.services.article_adjudication_runtime import (
     run_article_adjudication_runtime,
 )
 
+from app.analysis.snapshot_assembly import (
+    build_model_assisted_evidence_snapshot,
+)
+
+from app.services.observation_semantics import (
+    assess_claim_observation_semantics_with_gemini,
+)
+
+from app.services.model_assisted_baseline_runtime import (
+    MODEL_ASSISTED_BASELINE_RUNTIME_VERSION,
+    persist_model_assisted_baseline_revision,
+)
+
 
 ARTICLE_INTELLIGENCE_SHADOW_VERSION = (
     "article-intelligence-shadow-v1"
@@ -468,6 +481,15 @@ def run_article_intelligence_shadow(
     gemini_client_key: str,
     gemini_generator,
     connection_factory,
+    semantic_assessor=(
+        assess_claim_observation_semantics_with_gemini
+    ),
+    snapshot_builder=(
+        build_model_assisted_evidence_snapshot
+    ),
+    baseline_runtime_runner=(
+        persist_model_assisted_baseline_revision
+    ),
     pipeline_runner=(
         run_sportabase_intelligence_pipeline
     ),
@@ -563,6 +585,295 @@ def run_article_intelligence_shadow(
             "Article intelligence seed "
             "did not produce a claim."
         )
+
+    persisted_source = persisted.get(
+        "source"
+    )
+
+    primary_baseline = {
+        "version": (
+            MODEL_ASSISTED_BASELINE_RUNTIME_VERSION
+        ),
+        "status": "skipped",
+        "reason": (
+            "seed_source_unavailable"
+        ),
+        "bound_evaluator_runs": [],
+        "policy": {
+            "best_effort_shadow_stage": True,
+            "does_not_change_live_merit": True,
+        },
+    }
+
+    if isinstance(
+        persisted_source,
+        dict,
+    ):
+        try:
+            source_id = _clean(
+                persisted_source.get(
+                    "id"
+                )
+            )
+
+            subject_key = _clean(
+                claim.get(
+                    "subject_key"
+                )
+            )
+
+            if not source_id:
+                raise ValueError(
+                    "Primary baseline source ID "
+                    "is required."
+                )
+
+            if not subject_key:
+                raise ValueError(
+                    "Primary baseline claim subject "
+                    "key is required."
+                )
+
+            semantic_source = {
+                "url": (
+                    seed[
+                        "canonical_url"
+                    ]
+                ),
+                "title": (
+                    seed[
+                        "canonical_text"
+                    ]
+                ),
+                "text": (
+                    normalized_text
+                ),
+                "actor_id": (
+                    source_id
+                ),
+                "source_domain": (
+                    source_domain_for_url(
+                        seed[
+                            "canonical_url"
+                        ],
+                        normalize_url=(
+                            normalize_url
+                        ),
+                    )
+                ),
+                "observed_at": (
+                    observed_at
+                ),
+            }
+
+            semantic_result = (
+                semantic_assessor(
+                    claim=claim,
+                    source=(
+                        semantic_source
+                    ),
+                    context={},
+                    client=(
+                        gemini_client
+                    ),
+                    client_key=(
+                        gemini_client_key
+                    ),
+                    generator=(
+                        gemini_generator
+                    ),
+                )
+            )
+
+            if not isinstance(
+                semantic_result,
+                dict,
+            ):
+                raise ValueError(
+                    "Primary semantic assessment "
+                    "returned an invalid result."
+                )
+
+            if (
+                _key(
+                    semantic_result.get(
+                        "status"
+                    )
+                )
+                != "assessed"
+            ):
+                primary_baseline = {
+                    "version": (
+                        MODEL_ASSISTED_BASELINE_RUNTIME_VERSION
+                    ),
+                    "status": "skipped",
+                    "reason": (
+                        _clean(
+                            semantic_result.get(
+                                "reason"
+                            )
+                        )
+                        or (
+                            "primary_semantics_"
+                            "not_assessed"
+                        )
+                    ),
+                    "semantic_result": (
+                        semantic_result
+                    ),
+                    "bound_evaluator_runs": [],
+                    "policy": {
+                        "best_effort_shadow_stage": True,
+                        "does_not_change_live_merit": True,
+                    },
+                }
+
+            else:
+                assessment = (
+                    semantic_result.get(
+                        "assessment"
+                    )
+                )
+
+                if not isinstance(
+                    assessment,
+                    dict,
+                ):
+                    raise ValueError(
+                        "Primary semantic assessment "
+                        "is missing."
+                    )
+
+                assembly = snapshot_builder(
+                    claim=claim,
+                    source=(
+                        semantic_source
+                    ),
+                    semantic_assessment=(
+                        assessment
+                    ),
+                    as_of=(
+                        observed_at
+                    ),
+                )
+
+                if not isinstance(
+                    assembly,
+                    dict,
+                ):
+                    raise ValueError(
+                        "Primary baseline snapshot "
+                        "assembly is invalid."
+                    )
+
+                if (
+                    _key(
+                        assembly.get(
+                            "status"
+                        )
+                    )
+                    != "assembled"
+                ):
+                    primary_baseline = {
+                        "version": (
+                            MODEL_ASSISTED_BASELINE_RUNTIME_VERSION
+                        ),
+                        "status": "skipped",
+                        "reason": (
+                            "primary_snapshot_"
+                            "unresolved"
+                        ),
+                        "assembly": (
+                            assembly
+                        ),
+                        "bound_evaluator_runs": [],
+                        "policy": {
+                            "best_effort_shadow_stage": True,
+                            "does_not_change_live_merit": True,
+                        },
+                    }
+
+                else:
+                    primary_baseline = (
+                        baseline_runtime_runner(
+                            assembly=(
+                                assembly
+                            ),
+                            semantic_assessment=(
+                                assessment
+                            ),
+                            source_id=(
+                                source_id
+                            ),
+                            subject_key=(
+                                subject_key
+                            ),
+                            media_item_id=(
+                                seed[
+                                    "media_item_id"
+                                ]
+                            ),
+                            recorded_at=(
+                                observed_at
+                            ),
+                            normalize_url=(
+                                normalize_url
+                            ),
+                            connection_factory=(
+                                connection_factory
+                            ),
+                        )
+                    )
+
+                    if not isinstance(
+                        primary_baseline,
+                        dict,
+                    ):
+                        raise ValueError(
+                            "Primary baseline runtime "
+                            "returned an invalid result."
+                        )
+
+                    if (
+                        _clean(
+                            primary_baseline.get(
+                                "version"
+                            )
+                        )
+                        != (
+                            MODEL_ASSISTED_BASELINE_RUNTIME_VERSION
+                        )
+                    ):
+                        raise ValueError(
+                            "Primary baseline runtime "
+                            "version is unsupported."
+                        )
+
+        except Exception as error:
+            primary_baseline = {
+                "version": (
+                    MODEL_ASSISTED_BASELINE_RUNTIME_VERSION
+                ),
+                "status": "failed",
+                "reason": (
+                    "primary_baseline_"
+                    "best_effort_failure"
+                ),
+                "error_type": (
+                    type(
+                        error
+                    ).__name__
+                ),
+                "error": str(
+                    error
+                )[:240],
+                "bound_evaluator_runs": [],
+                "policy": {
+                    "best_effort_shadow_stage": True,
+                    "failure_does_not_block_article_pipeline": True,
+                    "does_not_change_live_merit": True,
+                },
+            }
 
     pipeline = pipeline_runner(
         claim=claim,
@@ -677,12 +988,33 @@ def run_article_intelligence_shadow(
             "cannot enable live Merit."
         )
 
+    baseline_evaluator_runs = (
+        primary_baseline.get(
+            "bound_evaluator_runs",
+            [],
+        )
+        if isinstance(
+            primary_baseline,
+            dict,
+        )
+        else []
+    )
+
+    if not isinstance(
+        baseline_evaluator_runs,
+        list,
+    ):
+        baseline_evaluator_runs = []
+
     try:
         adjudication_runtime = (
             adjudication_runner(
                 claim=claim,
                 pipeline=pipeline,
                 as_of=observed_at,
+                additional_evaluator_runs=(
+                    baseline_evaluator_runs
+                ),
                 connection_factory=(
                     connection_factory
                 ),
@@ -827,6 +1159,9 @@ def run_article_intelligence_shadow(
         "claim_id": (
             claim["id"]
         ),
+        "primary_baseline": (
+            primary_baseline
+        ),
         "signal": (
             overlay.get(
                 "signal",
@@ -884,6 +1219,14 @@ def run_article_intelligence_shadow(
             (
                 "shadow_has_no_live_"
                 "merit_effect"
+            ): True,
+            (
+                "primary_model_baseline_"
+                "is_shadow_only"
+            ): True,
+            (
+                "primary_baseline_failure_"
+                "does_not_block_article"
             ): True,
         },
     }

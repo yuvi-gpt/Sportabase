@@ -943,6 +943,10 @@ def run_article_adjudication_runtime(
     ],
     as_of: str,
     connection_factory,
+    additional_evaluator_runs=None,
+    evaluator_run_builder=(
+        build_article_adjudication_evaluator_runs
+    ),
     latest_loader=(
         load_latest_adjudication_state_revision
     ),
@@ -977,8 +981,8 @@ def run_article_adjudication_runtime(
             "database access."
         )
 
-    evaluator_runs = (
-        build_article_adjudication_evaluator_runs(
+    graph_evaluator_runs = (
+        evaluator_run_builder(
             claim_id=(
                 claim_id
             ),
@@ -986,6 +990,57 @@ def run_article_adjudication_runtime(
                 pipeline
             ),
         )
+    )
+
+    if not isinstance(
+        graph_evaluator_runs,
+        list,
+    ):
+        raise ValueError(
+            "Article adjudication graph evaluator "
+            "runs must be a list."
+        )
+
+    if additional_evaluator_runs is None:
+        additional_evaluator_runs = []
+
+    if not isinstance(
+        additional_evaluator_runs,
+        list,
+    ):
+        raise ValueError(
+            "Article adjudication additional "
+            "evaluator runs must be a list."
+        )
+
+    carried_evaluator_runs = []
+
+    for run in additional_evaluator_runs:
+        if not isinstance(
+            run,
+            dict,
+        ):
+            raise ValueError(
+                "Article adjudication additional "
+                "evaluator run must be a dictionary."
+            )
+
+        carried_evaluator_runs.append(
+            run
+        )
+
+    evaluator_runs = sorted(
+        [
+            *graph_evaluator_runs,
+            *carried_evaluator_runs,
+        ],
+        key=lambda row: (
+            _clean(
+                row.get(
+                    "run_id"
+                )
+            )
+        ),
     )
 
     fields_evaluated = sorted(
@@ -1144,6 +1199,16 @@ def run_article_adjudication_runtime(
                 evaluator_runs
             )
         ),
+        "graph_evaluator_run_count": (
+            len(
+                graph_evaluator_runs
+            )
+        ),
+        "carried_evaluator_run_count": (
+            len(
+                carried_evaluator_runs
+            )
+        ),
         "fields_evaluated": (
             fields_evaluated
         ),
@@ -1154,6 +1219,11 @@ def run_article_adjudication_runtime(
             "support_and_contradiction_can_remain_contested": True,
             "absence_of_dependency_does_not_establish_independence": True,
             "model_derived_graph_is_not_trusted_training_truth": True,
+            "model_assisted_baseline_runs_are_carried_forward": (
+                bool(
+                    carried_evaluator_runs
+                )
+            ),
             "does_not_verify_new_evidence": True,
             "does_not_train_model": True,
             "does_not_change_live_merit": True,
