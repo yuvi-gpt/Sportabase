@@ -198,6 +198,9 @@ class MeritLiveReleaseGateTests(
             "corroboration_state": {},
             "expectations": {
                 "signal": signal,
+                "authority_state": (
+                    "reported_unconfirmed"
+                ),
             },
             "curation": {
                 "version": (

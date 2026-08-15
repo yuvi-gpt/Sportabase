@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import urlsplit, urlunsplit
 
+from app.analysis.authority import (
+    CLAIM_CONFIRMATION_STATES,
+)
 from app.analysis.merit_evaluation import (
     MERIT_CORROBORATION_GOLDEN_CASE_VERSION,
 )
@@ -290,6 +293,24 @@ def validate_merit_corroboration_golden_dataset(
                 "signal is required."
             )
 
+        expected_authority_state = (
+            _clean(
+                expectations.get(
+                    "authority_state"
+                )
+            ).lower()
+        )
+
+        if (
+            expected_authority_state
+            and expected_authority_state
+            not in CLAIM_CONFIRMATION_STATES
+        ):
+            raise ValueError(
+                "Golden case expected authority "
+                "state is unsupported."
+            )
+
         curation = raw_case.get(
             "curation"
         )
@@ -478,6 +499,32 @@ def validate_merit_corroboration_golden_dataset(
                     "evidence snapshot."
                 )
 
+            if not expected_authority_state:
+                raise ValueError(
+                    "Approved real-world golden "
+                    "case requires an expected "
+                    "authority state."
+                )
+
+            actual_authority_state = (
+                normalized_evidence_snapshot[
+                    "authority_assessment"
+                ][
+                    "confirmation_state"
+                ]
+            )
+
+            if (
+                actual_authority_state
+                != expected_authority_state
+            ):
+                raise ValueError(
+                    "Golden case expected authority "
+                    "state does not match the "
+                    "evidence snapshot authority "
+                    "assessment."
+                )
+
             snapshot_review = (
                 normalized_evidence_snapshot[
                     "review"
@@ -604,10 +651,23 @@ def validate_merit_corroboration_golden_dataset(
             ),
         }
 
+        normalized_expectations = {
+            **expectations,
+            "signal": expected_signal,
+        }
+
+        if expected_authority_state:
+            normalized_expectations[
+                "authority_state"
+            ] = expected_authority_state
+
         normalized_case = {
             **raw_case,
             "id": case_id,
             "claim_id": claim_id,
+            "expectations": (
+                normalized_expectations
+            ),
             "curation": (
                 normalized_curation
             ),
@@ -704,6 +764,16 @@ def validate_merit_corroboration_golden_dataset(
                 "approved_real_world_cases_"
                 "require_time_bounded_"
                 "evidence_snapshot"
+            ): True,
+            (
+                "approved_real_world_cases_"
+                "require_expected_authority_"
+                "state"
+            ): True,
+            (
+                "authority_expectation_is_"
+                "separate_from_corroboration_"
+                "expectation"
             ): True,
             (
                 "real_world_cases_require_"

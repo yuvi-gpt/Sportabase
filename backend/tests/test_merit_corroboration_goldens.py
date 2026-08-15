@@ -198,6 +198,9 @@ class MeritCorroborationGoldenDatasetTests(
         signal=(
             "support_independence_unknown"
         ),
+        authority_state=(
+            "reported_unconfirmed"
+        ),
         state=None,
     ):
         if source_urls is None:
@@ -234,6 +237,9 @@ class MeritCorroborationGoldenDatasetTests(
             "expectations": {
                 "signal": (
                     signal
+                ),
+                "authority_state": (
+                    authority_state
                 ),
                 "adjustment": 0,
                 "live_total": 60,
@@ -461,6 +467,151 @@ class MeritCorroborationGoldenDatasetTests(
                 "evaluation_eligible"
             ],
             1,
+        )
+
+    def test_approved_real_world_case_requires_expected_authority_state(
+        self,
+    ):
+        case = self.case()
+
+        del case[
+            "expectations"
+        ][
+            "authority_state"
+        ]
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "requires an expected authority state",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_expected_authority_state_must_be_supported(
+        self,
+    ):
+        case = self.case(
+            authority_state=(
+                "magically_confirmed"
+            )
+        )
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "authority state is unsupported",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_expected_authority_state_must_match_snapshot(
+        self,
+    ):
+        case = self.case(
+            authority_state=(
+                "stakeholder_confirmed"
+            )
+        )
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "does not match",
+        ):
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+
+    def test_stakeholder_confirmation_can_coexist_with_no_corroboration_boost(
+        self,
+    ):
+        case = self.case(
+            signal=(
+                "no_verified_corroboration_boost"
+            ),
+            authority_state=(
+                "stakeholder_confirmed"
+            ),
+        )
+
+        case[
+            "evidence_snapshot"
+        ][
+            "observations"
+        ][0].update(
+            {
+                "actor_id": "team-a",
+                "source_role": (
+                    "primary_stakeholder"
+                ),
+                "authority_class": (
+                    "direct"
+                ),
+                "reliability_class": (
+                    "not_applicable"
+                ),
+                "provenance_class": (
+                    "direct_statement"
+                ),
+                "independence_status": (
+                    "not_applicable"
+                ),
+            }
+        )
+
+        dataset = self.dataset(
+            [case]
+        )
+
+        result = (
+            validate_merit_corroboration_golden_dataset(
+                dataset
+            )
+        )
+
+        validated = result[
+            "approved_real_world_cases"
+        ][0]
+
+        self.assertEqual(
+            validated[
+                "expectations"
+            ][
+                "signal"
+            ],
+            "no_verified_corroboration_boost",
+        )
+
+        self.assertEqual(
+            validated[
+                "expectations"
+            ][
+                "authority_state"
+            ],
+            "stakeholder_confirmed",
+        )
+
+        self.assertEqual(
+            validated[
+                "evidence_snapshot"
+            ][
+                "authority_assessment"
+            ][
+                "confirmation_state"
+            ],
+            "stakeholder_confirmed",
         )
 
     def test_approved_real_world_case_requires_evidence_snapshot(
