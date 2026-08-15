@@ -14,6 +14,11 @@ from app.models.api import (
     VideoAnalyzeRequest,
 )
 
+from app.services.article_intelligence_public import (
+    ARTICLE_INTELLIGENCE_PUBLIC_VERSION,
+    build_article_intelligence_public_summary,
+)
+
 
 def analyze_video_impl(
     req: VideoAnalyzeRequest,
@@ -322,6 +327,8 @@ def analyze_article_impl(
             f"max_bullets:{req.max_bullets}"
             "|intelligence_shadow:"
             f"{int(INTELLIGENCE_SHADOW_ENABLED)}"
+            "|public_intelligence:"
+            f"{ARTICLE_INTELLIGENCE_PUBLIC_VERSION}"
         ),
         context_hash=(
             article_evidence_context_hash
@@ -844,6 +851,12 @@ def analyze_article_impl(
         response.debug[
             "intelligence_shadow"
         ] = intelligence_shadow
+
+        response.intelligence = (
+            build_article_intelligence_public_summary(
+                intelligence_shadow
+            )
+        )
 
         snapshot_result = (
             persist_analysis_snapshot(

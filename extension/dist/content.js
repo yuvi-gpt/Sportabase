@@ -2386,6 +2386,95 @@
     }
   });
 
+  // src/content/article-intelligence.mjs
+  function clean(value) {
+    return String(
+      value ?? ""
+    ).trim().replace(/\s+/g, " ");
+  }
+  function count(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 0;
+    }
+    return Math.max(
+      0,
+      Math.trunc(numeric)
+    );
+  }
+  function humanize(value) {
+    const normalized = clean(
+      value
+    ).replaceAll("_", " ").replaceAll("-", " ");
+    if (!normalized) {
+      return "Unknown";
+    }
+    return normalized.replace(
+      /\b\w/g,
+      (character) => character.toUpperCase()
+    );
+  }
+  function normalizeArticleIntelligence(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const version = clean(
+      value.version
+    );
+    if (version !== ARTICLE_INTELLIGENCE_PUBLIC_VERSION) {
+      return null;
+    }
+    const status = clean(
+      value.status
+    ).toLowerCase();
+    if (status !== "available" && status !== "unavailable") {
+      return null;
+    }
+    const independenceStatus = clean(
+      value.independence_status
+    ).toLowerCase() || "unknown";
+    const corroborationStatus = clean(
+      value.corroboration_status
+    ).toLowerCase() || "unknown";
+    return {
+      status,
+      label: clean(
+        value.label
+      ) || (status === "available" ? "Evidence intelligence" : "Evidence check unavailable"),
+      detail: clean(
+        value.detail
+      ),
+      signal: clean(
+        value.signal
+      ).toLowerCase(),
+      candidateCount: count(
+        value.candidate_count
+      ),
+      verificationPairs: count(
+        value.verification_pairs
+      ),
+      independenceStatus,
+      independenceLabel: humanize(
+        independenceStatus
+      ),
+      corroborationStatus,
+      corroborationLabel: humanize(
+        corroborationStatus
+      ),
+      contested: Boolean(
+        value.contested
+      ),
+      provisional: value.provisional !== false,
+      affectsMeritScore: value.affects_merit_score === true
+    };
+  }
+  var ARTICLE_INTELLIGENCE_PUBLIC_VERSION;
+  var init_article_intelligence = __esm({
+    "src/content/article-intelligence.mjs"() {
+      ARTICLE_INTELLIGENCE_PUBLIC_VERSION = "article-intelligence-public-v1";
+    }
+  });
+
   // src/ui/accent-theme.js
   function getScorePalette(score) {
     const normalizedScore = Math.max(
@@ -3046,6 +3135,100 @@
       const summaryItems = getSummaryItems(data);
       const tags = getTags(data);
       const reasonItems = getReasonItems(data);
+      const intelligence = normalizeArticleIntelligence(
+        data.intelligence
+      );
+      const intelligenceMarkup = intelligence ? `
+          <section
+            class="sb-article-intelligence-card ${intelligence.status === "available" ? "is-available" : "is-unavailable"}"
+          >
+            <div class="sb-article-intelligence-head">
+              <div>
+                <div class="sb-article-section-label">
+                  EVIDENCE INTELLIGENCE
+                </div>
+
+                <h3>
+                  ${escapeHtml2(
+        intelligence.label
+      )}
+                </h3>
+              </div>
+
+              <div
+                class="sb-article-intelligence-status"
+              >
+                ${intelligence.status === "available" ? "ASSESSED" : "LIMITED"}
+              </div>
+            </div>
+
+            ${intelligence.detail ? `
+                  <p
+                    class="sb-article-intelligence-detail"
+                  >
+                    ${escapeHtml2(
+        intelligence.detail
+      )}
+                  </p>
+                ` : ""}
+
+            ${intelligence.status === "available" ? `
+                  <div
+                    class="sb-article-intelligence-grid"
+                  >
+                    <div>
+                      <span>
+                        CORROBORATION
+                      </span>
+
+                      <strong>
+                        ${escapeHtml2(
+        intelligence.corroborationLabel
+      )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        INDEPENDENCE
+                      </span>
+
+                      <strong>
+                        ${escapeHtml2(
+        intelligence.independenceLabel
+      )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        SOURCES FOUND
+                      </span>
+
+                      <strong>
+                        ${intelligence.candidateCount}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        PAIRS CHECKED
+                      </span>
+
+                      <strong>
+                        ${intelligence.verificationPairs}
+                      </strong>
+                    </div>
+                  </div>
+                ` : ""}
+
+            <div
+              class="sb-article-intelligence-note"
+            >
+              ${intelligence.affectsMeritScore ? "Included in the displayed Merit Score." : "Evidence signal is informational while Sportabase validation remains active; it does not alter the displayed Merit Score."}
+            </div>
+          </section>
+        ` : "";
       const summaryMarkup = summaryItems.map(
         (item) => `
             <li>
@@ -3141,6 +3324,8 @@
             ${reasonMarkup}
           </ul>
         </section>
+
+        ${intelligenceMarkup}
 
         ${tagsMarkup}
 
@@ -3336,6 +3521,7 @@
       init_api();
       init_loader2();
       init_request_lifecycle();
+      init_article_intelligence();
       init_accent_theme();
       ANALYSIS_STEPS = [
         {

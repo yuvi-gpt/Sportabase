@@ -18,6 +18,9 @@ if str(BACKEND_DIR) not in sys.path:
 
 
 from app import main
+from app.services.article_intelligence_public import (
+    ARTICLE_INTELLIGENCE_PUBLIC_VERSION,
+)
 
 
 class ArticleHistoryCacheHitTests(
@@ -95,6 +98,8 @@ class ArticleHistoryCacheHitTests(
                     f"max_bullets:{req.max_bullets}"
                     "|intelligence_shadow:"
                     f"{int(main.INTELLIGENCE_SHADOW_ENABLED)}"
+                    "|public_intelligence:"
+                    f"{ARTICLE_INTELLIGENCE_PUBLIC_VERSION}"
                 ),
                 context_hash=(
                     "media-context-hash"

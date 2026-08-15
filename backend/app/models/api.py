@@ -74,6 +74,13 @@ class AnalyzeResponse(BaseModel):
     localized_reasons: List[str] = Field(default_factory=list)
     ui_labels: Dict[str, str] = Field(default_factory=dict)
 
+    intelligence: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
     debug: Dict[str, Any] = Field(default_factory=dict)
 
 class VideoAnalyzeRequest(BaseModel):

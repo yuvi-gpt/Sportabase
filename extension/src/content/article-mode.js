@@ -16,6 +16,10 @@ import {
 } from "./request-lifecycle.js";
 
 import {
+  normalizeArticleIntelligence,
+} from "./article-intelligence.mjs";
+
+import {
   createAccentTheme,
   getScorePalette,
 } from "../ui/accent-theme.js";
@@ -848,6 +852,137 @@ export function openArticleMode({
     const reasonItems =
       getReasonItems(data);
 
+    const intelligence =
+      normalizeArticleIntelligence(
+        data.intelligence
+      );
+
+    const intelligenceMarkup =
+      intelligence
+        ? `
+          <section
+            class="sb-article-intelligence-card ${
+              intelligence.status ===
+              "available"
+                ? "is-available"
+                : "is-unavailable"
+            }"
+          >
+            <div class="sb-article-intelligence-head">
+              <div>
+                <div class="sb-article-section-label">
+                  EVIDENCE INTELLIGENCE
+                </div>
+
+                <h3>
+                  ${escapeHtml(
+                    intelligence.label
+                  )}
+                </h3>
+              </div>
+
+              <div
+                class="sb-article-intelligence-status"
+              >
+                ${
+                  intelligence.status ===
+                  "available"
+                    ? "ASSESSED"
+                    : "LIMITED"
+                }
+              </div>
+            </div>
+
+            ${
+              intelligence.detail
+                ? `
+                  <p
+                    class="sb-article-intelligence-detail"
+                  >
+                    ${escapeHtml(
+                      intelligence.detail
+                    )}
+                  </p>
+                `
+                : ""
+            }
+
+            ${
+              intelligence.status ===
+              "available"
+                ? `
+                  <div
+                    class="sb-article-intelligence-grid"
+                  >
+                    <div>
+                      <span>
+                        CORROBORATION
+                      </span>
+
+                      <strong>
+                        ${escapeHtml(
+                          intelligence
+                            .corroborationLabel
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        INDEPENDENCE
+                      </span>
+
+                      <strong>
+                        ${escapeHtml(
+                          intelligence
+                            .independenceLabel
+                        )}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        SOURCES FOUND
+                      </span>
+
+                      <strong>
+                        ${
+                          intelligence
+                            .candidateCount
+                        }
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        PAIRS CHECKED
+                      </span>
+
+                      <strong>
+                        ${
+                          intelligence
+                            .verificationPairs
+                        }
+                      </strong>
+                    </div>
+                  </div>
+                `
+                : ""
+            }
+
+            <div
+              class="sb-article-intelligence-note"
+            >
+              ${
+                intelligence.affectsMeritScore
+                  ? "Included in the displayed Merit Score."
+                  : "Evidence signal is informational while Sportabase validation remains active; it does not alter the displayed Merit Score."
+              }
+            </div>
+          </section>
+        `
+        : "";
+
     const summaryMarkup =
       summaryItems
         .map(
@@ -959,6 +1094,8 @@ export function openArticleMode({
             ${reasonMarkup}
           </ul>
         </section>
+
+        ${intelligenceMarkup}
 
         ${tagsMarkup}
 
