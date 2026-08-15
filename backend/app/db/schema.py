@@ -652,6 +652,59 @@ CREATE INDEX IF NOT EXISTS idx_corpus_record_links_claim
 ON corpus_record_links(claim_id);
 
 
+CREATE TABLE IF NOT EXISTS review_queue_items (
+  id TEXT PRIMARY KEY,
+  review_key TEXT NOT NULL UNIQUE,
+  claim_id TEXT NOT NULL,
+  evidence_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  queue_reason TEXT NOT NULL,
+  priority INTEGER NOT NULL DEFAULT 0,
+  automatic_tier TEXT NOT NULL,
+  automatic_value TEXT NOT NULL DEFAULT '',
+  adjudication_version TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  reviewed_by TEXT NOT NULL DEFAULT '',
+  reviewed_at TEXT,
+  resolution_value TEXT NOT NULL DEFAULT '',
+  resolution_reason TEXT NOT NULL DEFAULT '',
+  resolution_scope TEXT NOT NULL DEFAULT '',
+  CHECK (
+    status IN (
+      'pending',
+      'resolved',
+      'dismissed'
+    )
+  ),
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_queue_status_priority
+ON review_queue_items(
+  status,
+  priority DESC,
+  created_at
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_queue_claim
+ON review_queue_items(claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_review_queue_evidence
+ON review_queue_items(evidence_id);
+
+CREATE INDEX IF NOT EXISTS idx_review_queue_field
+ON review_queue_items(field);
+
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
