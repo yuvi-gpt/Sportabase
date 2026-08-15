@@ -91,6 +91,30 @@ class MeritLiveReleaseGateTests(
                     "observed_at": (
                         "2026-08-14T05:15:00Z"
                     ),
+                    "capture": {
+                        "method": (
+                            "direct_http"
+                        ),
+                        "status": (
+                            "captured"
+                        ),
+                        "captured_at": (
+                            "2026-08-15T00:00:00Z"
+                        ),
+                        "content_sha256": (
+                            format(
+                                (
+                                    index * 100
+                                    + position
+                                ),
+                                "064x",
+                            )
+                        ),
+                        "note": (
+                            "Deterministic release "
+                            "fixture capture."
+                        ),
+                    },
                 }
             )
 

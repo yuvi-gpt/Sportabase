@@ -139,6 +139,27 @@ class MeritCorroborationGoldenDatasetTests(
                     "observed_at": (
                         "2026-08-14T04:00:00Z"
                     ),
+                    "capture": {
+                        "method": (
+                            "direct_http"
+                        ),
+                        "status": (
+                            "captured"
+                        ),
+                        "captured_at": (
+                            "2026-08-15T00:00:00Z"
+                        ),
+                        "content_sha256": (
+                            format(
+                                index + 1,
+                                "064x",
+                            )
+                        ),
+                        "note": (
+                            "Deterministic golden "
+                            "fixture capture."
+                        ),
+                    },
                 }
             )
 

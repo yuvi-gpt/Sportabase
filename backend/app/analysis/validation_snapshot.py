@@ -35,6 +35,23 @@ SNAPSHOT_INDEPENDENCE_STATUSES = (
     "not_applicable",
 )
 
+SNAPSHOT_CAPTURE_METHODS = (
+    "direct_http",
+    "official_search_index_snapshot",
+    "archive_snapshot",
+    "manual_snapshot",
+    "provider_snapshot",
+    "unknown",
+)
+
+SNAPSHOT_CAPTURE_STATUSES = (
+    "captured",
+    "partial",
+    "metadata_only",
+    "unavailable",
+    "unknown",
+)
+
 
 def _clean(
     value: Any,
@@ -151,6 +168,33 @@ def _source_url(
         raise ValueError(
             "Validation observation source_url "
             "must be an absolute HTTP(S) URL."
+        )
+
+    return text
+
+
+def _sha256(
+    value: Any,
+) -> str:
+    text = _clean(
+        value
+    ).lower()
+
+    if not text:
+        return ""
+
+    if (
+        len(text) != 64
+        or any(
+            character
+            not in "0123456789abcdef"
+            for character in text
+        )
+    ):
+        raise ValueError(
+            "Validation observation "
+            "content_sha256 must be a "
+            "64-character hexadecimal SHA-256."
         )
 
     return text
@@ -289,6 +333,74 @@ def build_claim_evidence_snapshot(
             required=False,
         )
 
+        raw_capture = raw.get(
+            "capture",
+            {},
+        )
+
+        if raw_capture is None:
+            raw_capture = {}
+
+        if not isinstance(
+            raw_capture,
+            dict,
+        ):
+            raise ValueError(
+                "Validation observation capture "
+                "must be a dictionary."
+            )
+
+        capture_method = _choice(
+            raw_capture.get(
+                "method",
+                "unknown",
+            ),
+            label=(
+                "Validation observation "
+                "capture method"
+            ),
+            allowed=(
+                SNAPSHOT_CAPTURE_METHODS
+            ),
+        )
+
+        capture_status = _choice(
+            raw_capture.get(
+                "status",
+                "unknown",
+            ),
+            label=(
+                "Validation observation "
+                "capture status"
+            ),
+            allowed=(
+                SNAPSHOT_CAPTURE_STATUSES
+            ),
+        )
+
+        captured_at = _timestamp(
+            raw_capture.get(
+                "captured_at"
+            ),
+            label=(
+                "Validation observation "
+                "captured_at"
+            ),
+            required=False,
+        )
+
+        content_sha256 = _sha256(
+            raw_capture.get(
+                "content_sha256"
+            )
+        )
+
+        capture_note = _clean(
+            raw_capture.get(
+                "note"
+            )
+        )
+
         if (
             _timestamp_value(
                 observed_at
@@ -413,6 +525,23 @@ def build_claim_evidence_snapshot(
             "depends_on_observation_ids": (
                 dependency_ids
             ),
+            "capture": {
+                "method": (
+                    capture_method
+                ),
+                "status": (
+                    capture_status
+                ),
+                "captured_at": (
+                    captured_at
+                ),
+                "content_sha256": (
+                    content_sha256
+                ),
+                "note": (
+                    capture_note
+                ),
+            },
             "published_at": (
                 published_at
             ),
@@ -575,6 +704,54 @@ def build_claim_evidence_snapshot(
                 "snapshot requires a rationale."
             )
 
+        for observation in observations:
+            capture = observation[
+                "capture"
+            ]
+
+            if (
+                capture["method"]
+                == "unknown"
+            ):
+                raise ValueError(
+                    "Approved claim evidence "
+                    "snapshot requires a known "
+                    "capture method for every "
+                    "observation."
+                )
+
+            if (
+                capture["status"]
+                not in {
+                    "captured",
+                    "partial",
+                }
+            ):
+                raise ValueError(
+                    "Approved claim evidence "
+                    "snapshot requires captured "
+                    "or partial evidence for every "
+                    "observation."
+                )
+
+            if not capture[
+                "captured_at"
+            ]:
+                raise ValueError(
+                    "Approved claim evidence "
+                    "snapshot requires captured_at "
+                    "for every observation."
+                )
+
+            if not capture[
+                "content_sha256"
+            ]:
+                raise ValueError(
+                    "Approved claim evidence "
+                    "snapshot requires content_sha256 "
+                    "for every observation."
+                )
+
     outcome = case.get(
         "outcome",
         {},
@@ -632,6 +809,10 @@ def build_claim_evidence_snapshot(
             "independence_does_not_create_authority": True,
             "recorded_dependencies_prevent_independence_established": True,
             "approved_snapshots_require_human_review": True,
+            "approved_snapshots_require_auditable_capture": True,
+            "capture_time_is_separate_from_evidence_as_of_time": True,
+            "retrospective_capture_may_postdate_snapshot_as_of": True,
+            "capture_hash_does_not_establish_truth": True,
             "snapshot_does_not_change_live_merit": True,
         },
     }

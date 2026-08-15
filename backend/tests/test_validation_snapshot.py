@@ -17,6 +17,8 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.analysis.validation_snapshot import (
     CLAIM_EVIDENCE_SNAPSHOT_VERSION,
+    SNAPSHOT_CAPTURE_METHODS,
+    SNAPSHOT_CAPTURE_STATUSES,
     SNAPSHOT_INDEPENDENCE_STATUSES,
     build_claim_evidence_snapshot,
 )
@@ -43,6 +45,16 @@ class ClaimEvidenceSnapshotTests(
         observed_at=(
             "2026-08-14T10:00:00+00:00"
         ),
+        capture_method="direct_http",
+        capture_status="captured",
+        captured_at=(
+            "2026-08-15T00:00:00+00:00"
+        ),
+        content_sha256=(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ),
+        capture_note="Deterministic test capture.",
     ):
         if depends_on is None:
             depends_on = []
@@ -77,6 +89,23 @@ class ClaimEvidenceSnapshotTests(
             "observed_at": (
                 observed_at
             ),
+            "capture": {
+                "method": (
+                    capture_method
+                ),
+                "status": (
+                    capture_status
+                ),
+                "captured_at": (
+                    captured_at
+                ),
+                "content_sha256": (
+                    content_sha256
+                ),
+                "note": (
+                    capture_note
+                ),
+            },
         }
 
     def case(
@@ -146,6 +175,26 @@ class ClaimEvidenceSnapshotTests(
                 "unknown",
                 "not_applicable",
             },
+        )
+
+        self.assertIn(
+            "official_search_index_snapshot",
+            SNAPSHOT_CAPTURE_METHODS,
+        )
+
+        self.assertIn(
+            "archive_snapshot",
+            SNAPSHOT_CAPTURE_METHODS,
+        )
+
+        self.assertIn(
+            "partial",
+            SNAPSHOT_CAPTURE_STATUSES,
+        )
+
+        self.assertIn(
+            "unavailable",
+            SNAPSHOT_CAPTURE_STATUSES,
         )
 
     def test_primary_stakeholder_statement_confirms_snapshot(
@@ -451,6 +500,159 @@ class ClaimEvidenceSnapshotTests(
                     second,
                 ]
             )
+
+    def test_capture_metadata_is_preserved(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation(
+                    capture_method=(
+                        "official_search_index_snapshot"
+                    ),
+                    capture_status="partial",
+                    capture_note=(
+                        "Direct HTTP unavailable; "
+                        "official indexed text captured."
+                    ),
+                )
+            ]
+        )
+
+        capture = result[
+            "observations"
+        ][0][
+            "capture"
+        ]
+
+        self.assertEqual(
+            capture["method"],
+            "official_search_index_snapshot",
+        )
+
+        self.assertEqual(
+            capture["status"],
+            "partial",
+        )
+
+        self.assertEqual(
+            capture["content_sha256"],
+            (
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ),
+        )
+
+        self.assertIn(
+            "Direct HTTP unavailable",
+            capture["note"],
+        )
+
+    def test_retrospective_capture_may_postdate_as_of(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation(
+                    captured_at=(
+                        "2026-08-15T00:00:00Z"
+                    ),
+                )
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "observations"
+            ][0][
+                "capture"
+            ][
+                "captured_at"
+            ],
+            "2026-08-15T00:00:00Z",
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "retrospective_capture_may_postdate_snapshot_as_of"
+            ]
+        )
+
+    def test_invalid_capture_sha256_is_rejected(
+        self,
+    ):
+        with self.assertRaisesRegex(
+            ValueError,
+            "64-character hexadecimal SHA-256",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        content_sha256="not-a-hash",
+                    )
+                ]
+            )
+
+    def test_approved_snapshot_requires_auditable_capture(
+        self,
+    ):
+        cases = [
+            (
+                {
+                    "capture_method": "unknown",
+                },
+                "known capture method",
+            ),
+            (
+                {
+                    "capture_status": "unavailable",
+                },
+                "captured or partial evidence",
+            ),
+            (
+                {
+                    "captured_at": "",
+                },
+                "requires captured_at",
+            ),
+            (
+                {
+                    "content_sha256": "",
+                },
+                "requires content_sha256",
+            ),
+        ]
+
+        review = {
+            "status": "approved",
+            "reviewer": "Human Reviewer",
+            "reviewed_at": (
+                "2026-08-15T01:00:00Z"
+            ),
+            "rationale": (
+                "Reviewed authority, provenance, "
+                "timing, and capture metadata."
+            ),
+        }
+
+        for overrides, message in cases:
+            with self.subTest(
+                overrides=overrides
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    message,
+                ):
+                    self.build(
+                        [
+                            self.observation(
+                                **overrides
+                            )
+                        ],
+                        review=review,
+                    )
 
     def test_approved_snapshot_requires_human_review_metadata(
         self,
