@@ -461,6 +461,40 @@ class LocalConfidenceCalibrationTests(
             ]
         )
 
+        self.assertEqual(
+            profile[
+                "smoothing_prior_mean"
+            ],
+            0.95,
+        )
+
+        self.assertEqual(
+            profile[
+                "smoothing_prior_strength"
+            ],
+            2.0,
+        )
+
+        self.assertEqual(
+            profile[
+                "shadow_target_confidence"
+            ],
+            0.985714,
+        )
+
+        self.assertEqual(
+            profile[
+                "shadow_target_brier_score"
+            ],
+            0.000204,
+        )
+
+        self.assertTrue(
+            profile[
+                "shadow_target_improves_calibration_brier"
+            ]
+        )
+
     def test_same_claim_does_not_satisfy_distinct_claim_threshold(
         self,
     ):

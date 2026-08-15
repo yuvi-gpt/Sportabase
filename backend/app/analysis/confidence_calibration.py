@@ -14,7 +14,7 @@ from app.analysis.multi_evaluator_adjudication import (
 
 
 LOCAL_CONFIDENCE_CALIBRATION_VERSION = (
-    "local-confidence-calibration-v1"
+    "local-confidence-calibration-v2"
 )
 
 LOCAL_CONFIDENCE_CASE_VERSION = (
@@ -22,10 +22,15 @@ LOCAL_CONFIDENCE_CASE_VERSION = (
 )
 
 LOCAL_CONFIDENCE_PROFILE_VERSION = (
-    "local-confidence-profile-v1"
+    "local-confidence-profile-v2"
 )
 
 LOCAL_CALIBRATION_MIN_DISTINCT_CLAIMS = 5
+
+# Preserve v1's two pseudo-observation regularization
+# strength, but center the shrinkage prior on the
+# evaluator's own reported confidence instead of 0.50.
+LOCAL_CALIBRATION_PRIOR_STRENGTH = 2.0
 
 
 def _clean(value: Any) -> str:
@@ -843,9 +848,22 @@ def build_local_confidence_calibration(
             / sample_count
         )
 
+        # v2 uses reported-confidence-centered
+        # shrinkage. Verified outcomes move the target
+        # away from the model's own mean confidence only
+        # in the direction justified by calibration data.
         smoothed_accuracy = (
-            (confirmed + 1)
-            / (sample_count + 2)
+            (
+                confirmed
+                + (
+                    LOCAL_CALIBRATION_PRIOR_STRENGTH
+                    * mean_confidence
+                )
+            )
+            / (
+                sample_count
+                + LOCAL_CALIBRATION_PRIOR_STRENGTH
+            )
         )
 
         brier_score = (
@@ -869,15 +887,45 @@ def build_local_confidence_calibration(
             / sample_count
         )
 
+        shadow_target_brier_score = (
+            sum(
+                (
+                    smoothed_accuracy
+                    - (
+                        1.0
+                        if (
+                            row["outcome"]
+                            == "confirmed"
+                        )
+                        else 0.0
+                    )
+                )
+                ** 2
+                for row in rows
+            )
+            / sample_count
+        )
+
         distinct_claim_count = len(
             claim_ids
         )
 
-        shadow_ready = (
+        enough_claims = (
             distinct_claim_count
             >= (
                 LOCAL_CALIBRATION_MIN_DISTINCT_CLAIMS
             )
+        )
+
+        calibration_gain = (
+            shadow_target_brier_score
+            < brier_score
+            - 1e-12
+        )
+
+        shadow_ready = bool(
+            enough_claims
+            and calibration_gain
         )
 
         scope_payload = {
@@ -917,6 +965,13 @@ def build_local_confidence_calibration(
                 observed_accuracy,
                 6,
             ),
+            "smoothing_prior_mean": round(
+                mean_confidence,
+                6,
+            ),
+            "smoothing_prior_strength": (
+                LOCAL_CALIBRATION_PRIOR_STRENGTH
+            ),
             "smoothed_accuracy": round(
                 smoothed_accuracy,
                 6,
@@ -932,6 +987,13 @@ def build_local_confidence_calibration(
                 brier_score,
                 6,
             ),
+            "shadow_target_brier_score": round(
+                shadow_target_brier_score,
+                6,
+            ),
+            "shadow_target_improves_calibration_brier": (
+                calibration_gain
+            ),
             "supporting_claim_ids": (
                 claim_ids
             ),
@@ -942,7 +1004,11 @@ def build_local_confidence_calibration(
             "status": (
                 "shadow_ready"
                 if shadow_ready
-                else "insufficient_data"
+                else (
+                    "no_calibration_gain"
+                    if enough_claims
+                    else "insufficient_data"
+                )
             ),
             "eligible_for_shadow_adjustment": (
                 shadow_ready
@@ -1001,6 +1067,11 @@ def build_local_confidence_calibration(
             ),
             "small_samples_do_not_adjust": True,
             "shadow_target_is_smoothed": True,
+            "shadow_target_shrinks_verified_accuracy_toward_reported_confidence": True,
+            "shadow_target_prior_strength": (
+                LOCAL_CALIBRATION_PRIOR_STRENGTH
+            ),
+            "shadow_adjustment_requires_calibration_brier_gain": True,
             "eligible_for_live_use": False,
             "does_not_change_adjudication": True,
             "does_not_establish_truth": True,

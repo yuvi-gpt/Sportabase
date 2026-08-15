@@ -179,6 +179,7 @@ class MeritLiveReleaseGateTests(
             by_claim
         ):
             comparisons = []
+            adjustments = []
 
             for case in by_claim[
                 claim_id
@@ -195,31 +196,49 @@ class MeritLiveReleaseGateTests(
                             ]
                         ),
                         "baseline": {
-                            "tier": (
-                                "auto_silver"
-                            ),
+                            "tier": "auto_silver",
                             "value": value,
                             "confidence": 0.60,
                             "conflicting_values": [],
-                            "training_reference_allowed": (
-                                False
-                            ),
+                            "training_reference_allowed": False,
                             "supporting_judgment_ids": [],
                             "supporting_evaluator_families": [],
                         },
                         "shadow": {
-                            "tier": (
-                                "auto_silver"
-                            ),
+                            "tier": "auto_silver",
                             "value": value,
                             "confidence": 0.80,
                             "conflicting_values": [],
-                            "training_reference_allowed": (
-                                False
-                            ),
+                            "training_reference_allowed": False,
                             "supporting_judgment_ids": [],
                             "supporting_evaluator_families": [],
                         },
+                    }
+                )
+
+                adjustments.append(
+                    {
+                        "judgment_id": (
+                            "adjustment-"
+                            + case[
+                                "id"
+                            ]
+                        ),
+                        "field": (
+                            case[
+                                "field"
+                            ]
+                        ),
+                        "evaluator_id": "test-model-v1",
+                        "evaluator_family": "test_model",
+                        "profile_id": "profile-1",
+                        "scope_id": "scope-profile-1",
+                        "confidence_bucket": "0.60-0.79",
+                        "baseline_value": value,
+                        "shadow_value": value,
+                        "baseline_confidence": 0.60,
+                        "shadow_confidence": 0.80,
+                        "delta": 0.20,
                     }
                 )
 
@@ -229,17 +248,8 @@ class MeritLiveReleaseGateTests(
                         SHADOW_CALIBRATION_VERSION
                     ),
                     "claim_id": claim_id,
-                    "comparisons": (
-                        comparisons
-                    ),
-                    "adjustments": [
-                        {
-                            "id": (
-                                "adjustment-"
-                                + claim_id
-                            )
-                        }
-                    ],
+                    "comparisons": comparisons,
+                    "adjustments": adjustments,
                     "policy": {
                         "shadow_only": True,
                         "baseline_is_preserved": True,
@@ -249,6 +259,7 @@ class MeritLiveReleaseGateTests(
             )
 
         return results
+
 
     def corpus(
         self,
@@ -350,7 +361,7 @@ class MeritLiveReleaseGateTests(
             (
                 MERIT_LIVE_RELEASE_GATE_VERSION
             ),
-            "merit-live-release-gate-v3",
+            "merit-live-release-gate-v4",
         )
 
         self.assertTrue(
@@ -793,18 +804,18 @@ class MeritLiveReleaseGateTests(
         for result in inputs[
             "shadow_results"
         ]:
-            for comparison in result[
-                "comparisons"
+            for adjustment in result[
+                "adjustments"
             ]:
-                comparison[
-                    "shadow"
-                ][
-                    "confidence"
-                ] = comparison[
-                    "baseline"
-                ][
-                    "confidence"
+                adjustment[
+                    "shadow_confidence"
+                ] = adjustment[
+                    "baseline_confidence"
                 ]
+
+                adjustment[
+                    "delta"
+                ] = 0.0
 
         result = (
             build_merit_live_release_gate(
@@ -818,6 +829,105 @@ class MeritLiveReleaseGateTests(
             result[
                 "blockers"
             ],
+        )
+
+
+    def test_unresolved_adjudication_does_not_fake_calibration_failure(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        for result in inputs[
+            "shadow_results"
+        ]:
+            for comparison in result[
+                "comparisons"
+            ]:
+                comparison[
+                    "baseline"
+                ][
+                    "tier"
+                ] = "unresolved"
+
+                comparison[
+                    "baseline"
+                ][
+                    "value"
+                ] = ""
+
+                comparison[
+                    "baseline"
+                ][
+                    "confidence"
+                ] = 0.0
+
+                comparison[
+                    "shadow"
+                ][
+                    "tier"
+                ] = "unresolved"
+
+                comparison[
+                    "shadow"
+                ][
+                    "value"
+                ] = ""
+
+                comparison[
+                    "shadow"
+                ][
+                    "confidence"
+                ] = 0.0
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertEqual(
+            result[
+                "blockers"
+            ],
+            [],
+        )
+
+        self.assertTrue(
+            result[
+                "live_merit_authorized"
+            ]
+        )
+
+        metrics = result[
+            "shadow_metrics"
+        ]
+
+        self.assertEqual(
+            metrics[
+                "confidence_metric_scope"
+            ],
+            "adjusted_judgments",
+        )
+
+        self.assertEqual(
+            metrics[
+                "baseline_correct_count"
+            ],
+            len(
+                inputs[
+                    "holdout_cases"
+                ]
+            ),
+        )
+
+        self.assertEqual(
+            metrics[
+                "decision_regression_count"
+            ],
+            0,
         )
 
     def test_complete_automated_validation_can_authorize_gate(

@@ -316,6 +316,20 @@ class ShadowCalibrationTests(
             0.90,
         )
 
+        self.assertEqual(
+            adjustment[
+                "baseline_value"
+            ],
+            "direct",
+        )
+
+        self.assertEqual(
+            adjustment[
+                "shadow_value"
+            ],
+            "direct",
+        )
+
     def test_insufficient_profile_is_ignored(
         self,
     ):

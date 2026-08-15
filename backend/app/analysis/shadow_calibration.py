@@ -22,7 +22,7 @@ from app.analysis.multi_evaluator_adjudication import (
 
 
 SHADOW_CALIBRATION_VERSION = (
-    "shadow-calibration-v1"
+    "shadow-calibration-v2"
 )
 
 CONFIDENCE_BUCKETS = {
@@ -719,6 +719,16 @@ def build_shadow_calibrated_adjudication(
                     "confidence_bucket": (
                         confidence_bucket
                     ),
+                    "baseline_value": (
+                        judgment[
+                            "value"
+                        ]
+                    ),
+                    "shadow_value": (
+                        judgment[
+                            "value"
+                        ]
+                    ),
                     "baseline_confidence": (
                         original_confidence
                     ),
@@ -837,6 +847,7 @@ def build_shadow_calibrated_adjudication(
             "trusted_reference_runs_are_not_adjusted": True,
             "only_shadow_ready_profiles_apply": True,
             "calibration_is_field_family_and_bucket_local": True,
+            "shadow_adjustments_preserve_judgment_value": True,
             "shadow_output_cannot_establish_truth": True,
             "shadow_output_cannot_train_model": True,
             "shadow_output_is_not_live_adjudication": True,

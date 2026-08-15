@@ -26,7 +26,7 @@ from app.analysis.trusted_validation import (
 
 
 MERIT_LIVE_RELEASE_GATE_VERSION = (
-    "merit-live-release-gate-v3"
+    "merit-live-release-gate-v4"
 )
 
 MERIT_LIVE_MIN_HOLDOUT_CLAIMS = 5
@@ -848,9 +848,26 @@ def _shadow_context(
             {},
         )
 
-    by_claim = {}
+    holdout_by_key = {
+        (
+            row["claim_id"],
+            row["field"],
+        ): row
+        for row in holdout_outcomes
+    }
 
+    by_claim = {}
     total_adjustments = 0
+    evaluated_adjustments = 0
+    baseline_correct = 0
+    shadow_correct = 0
+    decision_regressions = 0
+    decision_improvements = 0
+    reference_promotions = 0
+    untrusted_gold = 0
+    baseline_losses = []
+    shadow_losses = []
+    seen_adjustment_ids = set()
 
     for result in shadow_results:
         if not isinstance(
@@ -860,7 +877,6 @@ def _shadow_context(
             blockers.append(
                 "shadow_result_invalid"
             )
-
             continue
 
         if (
@@ -869,14 +885,11 @@ def _shadow_context(
                     "version"
                 )
             )
-            != (
-                SHADOW_CALIBRATION_VERSION
-            )
+            != SHADOW_CALIBRATION_VERSION
         ):
             blockers.append(
                 "shadow_result_version_invalid"
             )
-
             continue
 
         claim_id = _clean(
@@ -889,14 +902,12 @@ def _shadow_context(
             blockers.append(
                 "shadow_result_identity_invalid"
             )
-
             continue
 
         if claim_id in by_claim:
             blockers.append(
                 "duplicate_shadow_claim"
             )
-
             continue
 
         policy = result.get(
@@ -910,7 +921,6 @@ def _shadow_context(
             blockers.append(
                 "shadow_policy_invalid"
             )
-
             continue
 
         if (
@@ -942,7 +952,6 @@ def _shadow_context(
             blockers.append(
                 "shadow_comparisons_invalid"
             )
-
             comparisons = []
 
         comparison_map = {}
@@ -955,7 +964,6 @@ def _shadow_context(
                 blockers.append(
                     "shadow_comparison_invalid"
                 )
-
                 continue
 
             field = _key(
@@ -966,21 +974,17 @@ def _shadow_context(
 
             if (
                 field
-                not in (
-                    MULTI_EVALUATOR_FIELDS
-                )
+                not in MULTI_EVALUATOR_FIELDS
             ):
                 blockers.append(
                     "shadow_comparison_field_invalid"
                 )
-
                 continue
 
             if field in comparison_map:
                 blockers.append(
                     "duplicate_shadow_field"
                 )
-
                 continue
 
             comparison_map[
@@ -999,29 +1003,182 @@ def _shadow_context(
             blockers.append(
                 "shadow_adjustments_invalid"
             )
-
             adjustments = []
 
         total_adjustments += len(
             adjustments
         )
 
+        for adjustment in adjustments:
+            if not isinstance(
+                adjustment,
+                dict,
+            ):
+                blockers.append(
+                    "shadow_adjustment_invalid"
+                )
+                continue
+
+            judgment_id = _clean(
+                adjustment.get(
+                    "judgment_id"
+                )
+            )
+
+            field = _key(
+                adjustment.get(
+                    "field"
+                )
+            )
+
+            if not judgment_id:
+                blockers.append(
+                    "shadow_adjustment_identity_invalid"
+                )
+                continue
+
+            if judgment_id in seen_adjustment_ids:
+                blockers.append(
+                    "duplicate_shadow_adjustment"
+                )
+                continue
+
+            seen_adjustment_ids.add(
+                judgment_id
+            )
+
+            if (
+                field
+                not in MULTI_EVALUATOR_FIELDS
+            ):
+                blockers.append(
+                    "shadow_adjustment_field_invalid"
+                )
+                continue
+
+            outcome = holdout_by_key.get(
+                (
+                    claim_id,
+                    field,
+                )
+            )
+
+            if outcome is None:
+                blockers.append(
+                    "shadow_adjustment_without_holdout_reference"
+                )
+                continue
+
+            baseline_value = _clean(
+                adjustment.get(
+                    "baseline_value"
+                )
+            )
+
+            shadow_value = _clean(
+                adjustment.get(
+                    "shadow_value"
+                )
+            )
+
+            if (
+                not baseline_value
+                or not shadow_value
+            ):
+                blockers.append(
+                    "shadow_adjustment_value_invalid"
+                )
+                continue
+
+            if (
+                baseline_value
+                != shadow_value
+            ):
+                blockers.append(
+                    "shadow_adjustment_value_changed"
+                )
+                continue
+
+            try:
+                baseline_confidence = (
+                    _confidence(
+                        adjustment.get(
+                            "baseline_confidence"
+                        )
+                    )
+                )
+
+                shadow_confidence = (
+                    _confidence(
+                        adjustment.get(
+                            "shadow_confidence"
+                        )
+                    )
+                )
+
+            except ValueError:
+                blockers.append(
+                    "shadow_confidence_invalid"
+                )
+                continue
+
+            verified_value = outcome[
+                "verified_value"
+            ]
+
+            baseline_is_correct = (
+                baseline_value
+                == verified_value
+            )
+
+            shadow_is_correct = (
+                shadow_value
+                == verified_value
+            )
+
+            baseline_correct += int(
+                baseline_is_correct
+            )
+
+            shadow_correct += int(
+                shadow_is_correct
+            )
+
+            baseline_losses.append(
+                _confidence_loss(
+                    predicted_value=(
+                        baseline_value
+                    ),
+                    confidence=(
+                        baseline_confidence
+                    ),
+                    verified_value=(
+                        verified_value
+                    ),
+                )
+            )
+
+            shadow_losses.append(
+                _confidence_loss(
+                    predicted_value=(
+                        shadow_value
+                    ),
+                    confidence=(
+                        shadow_confidence
+                    ),
+                    verified_value=(
+                        verified_value
+                    ),
+                )
+            )
+
+            evaluated_adjustments += 1
+
         by_claim[
             claim_id
         ] = comparison_map
 
-    baseline_correct = 0
-    shadow_correct = 0
-    regressions = 0
-    improvements = 0
-    reference_promotions = 0
-    untrusted_gold = 0
-
-    baseline_losses = []
-    shadow_losses = []
-
-    evaluated = 0
-
+    # Separate adjudication safety from confidence quality.
     for outcome in holdout_outcomes:
         claim_id = outcome[
             "claim_id"
@@ -1035,30 +1192,24 @@ def _shadow_context(
             "verified_value"
         ]
 
-        comparison_map = (
-            by_claim.get(
-                claim_id
-            )
+        comparison_map = by_claim.get(
+            claim_id
         )
 
         if comparison_map is None:
             blockers.append(
                 "holdout_shadow_result_missing"
             )
-
             continue
 
-        comparison = (
-            comparison_map.get(
-                field
-            )
+        comparison = comparison_map.get(
+            field
         )
 
         if comparison is None:
             blockers.append(
                 "holdout_shadow_field_missing"
             )
-
             continue
 
         baseline = comparison.get(
@@ -1082,33 +1233,6 @@ def _shadow_context(
             blockers.append(
                 "shadow_decision_packet_invalid"
             )
-
-            continue
-
-        try:
-            baseline_confidence = (
-                _confidence(
-                    baseline.get(
-                        "confidence",
-                        0.0,
-                    )
-                )
-            )
-
-            shadow_confidence = (
-                _confidence(
-                    shadow.get(
-                        "confidence",
-                        0.0,
-                    )
-                )
-            )
-
-        except ValueError:
-            blockers.append(
-                "shadow_confidence_invalid"
-            )
-
             continue
 
         baseline_value = _clean(
@@ -1154,72 +1278,40 @@ def _shadow_context(
         ):
             untrusted_gold += 1
 
-        baseline_is_correct = (
-            baseline_value
+        baseline_decision_correct = (
+            bool(
+                baseline_value
+            )
+            and baseline_value
             == verified_value
         )
 
-        shadow_is_correct = (
-            shadow_value
+        shadow_decision_correct = (
+            bool(
+                shadow_value
+            )
+            and shadow_value
             == verified_value
         )
 
-        baseline_correct += int(
-            baseline_is_correct
-        )
-
-        shadow_correct += int(
-            shadow_is_correct
-        )
+        if (
+            baseline_decision_correct
+            and not shadow_decision_correct
+        ):
+            decision_regressions += 1
 
         if (
-            baseline_is_correct
-            and not shadow_is_correct
+            not baseline_decision_correct
+            and shadow_decision_correct
         ):
-            regressions += 1
-
-        if (
-            not baseline_is_correct
-            and shadow_is_correct
-        ):
-            improvements += 1
-
-        baseline_losses.append(
-            _confidence_loss(
-                predicted_value=(
-                    baseline_value
-                ),
-                confidence=(
-                    baseline_confidence
-                ),
-                verified_value=(
-                    verified_value
-                ),
-            )
-        )
-
-        shadow_losses.append(
-            _confidence_loss(
-                predicted_value=(
-                    shadow_value
-                ),
-                confidence=(
-                    shadow_confidence
-                ),
-                verified_value=(
-                    verified_value
-                ),
-            )
-        )
-
-        evaluated += 1
+            decision_improvements += 1
 
     if total_adjustments == 0:
         blockers.append(
             "no_shadow_adjustments_observed"
         )
 
-    if regressions:
+    if decision_regressions:
         blockers.append(
             "shadow_decision_regression"
         )
@@ -1234,14 +1326,20 @@ def _shadow_context(
             "shadow_untrusted_auto_gold"
         )
 
-    if evaluated:
-        baseline_loss = sum(
-            baseline_losses
-        ) / evaluated
+    if evaluated_adjustments:
+        baseline_loss = (
+            sum(
+                baseline_losses
+            )
+            / evaluated_adjustments
+        )
 
-        shadow_loss = sum(
-            shadow_losses
-        ) / evaluated
+        shadow_loss = (
+            sum(
+                shadow_losses
+            )
+            / evaluated_adjustments
+        )
 
         if (
             shadow_loss
@@ -1252,13 +1350,10 @@ def _shadow_context(
                 "shadow_confidence_degraded"
             )
 
-        if (
-            improvements == 0
-            and not (
-                shadow_loss
-                < baseline_loss
-                - 1e-12
-            )
+        if not (
+            shadow_loss
+            < baseline_loss
+            - 1e-12
         ):
             blockers.append(
                 "no_measurable_shadow_improvement"
@@ -1280,7 +1375,7 @@ def _shadow_context(
         ),
         {
             "evaluated_case_count": (
-                evaluated
+                evaluated_adjustments
             ),
             "baseline_correct_count": (
                 baseline_correct
@@ -1289,10 +1384,10 @@ def _shadow_context(
                 shadow_correct
             ),
             "decision_improvement_count": (
-                improvements
+                decision_improvements
             ),
             "decision_regression_count": (
-                regressions
+                decision_regressions
             ),
             "reference_gate_promotion_count": (
                 reference_promotions
@@ -1302,6 +1397,12 @@ def _shadow_context(
             ),
             "adjusted_judgment_count": (
                 total_adjustments
+            ),
+            "holdout_decision_case_count": len(
+                holdout_outcomes
+            ),
+            "confidence_metric_scope": (
+                "adjusted_judgments"
             ),
             "baseline_confidence_loss": (
                 round(
@@ -1553,6 +1654,9 @@ def build_merit_live_release_gate(
             "calibration_and_holdout_must_not_overlap": True,
             "holdout_requires_later_trusted_outcomes": True,
             "all_adjudication_fields_require_holdout_coverage": True,
+            "shadow_confidence_quality_is_measured_on_adjusted_judgments": True,
+            "adjudication_decision_safety_is_checked_separately": True,
+            "unresolved_adjudication_is_not_scored_as_a_wrong_model_judgment": True,
             "shadow_decision_regressions_block_release": True,
             "shadow_reference_gate_promotions_block_release": True,
             "untrusted_shadow_auto_gold_blocks_release": True,

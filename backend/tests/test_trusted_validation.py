@@ -763,10 +763,12 @@ class TrustedValidationTests(
 
         # Holdout is assigned before outcomes are
         # examined. It covers all six fields.
-        # Authority remains deliberately wrong in
-        # the baseline so lower calibrated
-        # confidence improves confidence loss
-        # without changing the decision.
+        # Under calibration v2, perfect calibration
+        # evidence moves a 0.95 authority confidence
+        # upward. The synthetic holdout therefore
+        # keeps the authority value correct so the
+        # higher confidence must improve holdout
+        # calibration without changing the decision.
         for claim_id in holdout_claims:
             evidence_id = (
                 claim_id
@@ -780,10 +782,6 @@ class TrustedValidationTests(
             baseline_values = dict(
                 VERIFIED_VALUES
             )
-
-            baseline_values[
-                "authority_class"
-            ] = "indirect"
 
             previous, current = (
                 self.pair(
@@ -933,7 +931,7 @@ class TrustedValidationTests(
             gate[
                 "version"
             ],
-            "merit-live-release-gate-v3",
+            "merit-live-release-gate-v4",
         )
 
         self.assertEqual(
