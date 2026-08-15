@@ -1,4 +1,5 @@
 from datetime import (
+    date,
     datetime,
     timezone,
 )
@@ -49,6 +50,22 @@ SNAPSHOT_CAPTURE_STATUSES = (
     "partial",
     "metadata_only",
     "unavailable",
+    "unknown",
+)
+
+SNAPSHOT_AVAILABILITY_PRECISIONS = (
+    "timestamp",
+    "date",
+    "unknown",
+)
+
+SNAPSHOT_AVAILABILITY_BASES = (
+    "published_timestamp",
+    "published_date",
+    "official_release_date",
+    "source_metadata",
+    "archive_record",
+    "legacy_observed_at",
     "unknown",
 )
 
@@ -144,6 +161,36 @@ def _timestamp_value(
             "+00:00",
         )
     )
+
+
+def _calendar_date(
+    value: Any,
+    *,
+    label: str,
+    required: bool = True,
+) -> str:
+    text = _clean(
+        value
+    )
+
+    if not text:
+        if required:
+            raise ValueError(
+                f"{label} is required."
+            )
+
+        return ""
+
+    try:
+        parsed = date.fromisoformat(
+            text
+        )
+    except ValueError as exc:
+        raise ValueError(
+            f"{label} must be YYYY-MM-DD."
+        ) from exc
+
+    return parsed.isoformat()
 
 
 def _source_url(
@@ -320,6 +367,7 @@ def build_claim_evidence_snapshot(
                 "Validation observation "
                 "observed_at"
             ),
+            required=False,
         )
 
         published_at = _timestamp(
@@ -332,6 +380,136 @@ def build_claim_evidence_snapshot(
             ),
             required=False,
         )
+
+        raw_availability = raw.get(
+            "availability"
+        )
+
+        if raw_availability is None:
+            if observed_at:
+                availability_precision = (
+                    "timestamp"
+                )
+
+                availability_value = (
+                    observed_at
+                )
+
+                availability_basis = (
+                    "legacy_observed_at"
+                )
+
+            elif published_at:
+                availability_precision = (
+                    "timestamp"
+                )
+
+                availability_value = (
+                    published_at
+                )
+
+                availability_basis = (
+                    "published_timestamp"
+                )
+
+            else:
+                availability_precision = (
+                    "unknown"
+                )
+
+                availability_value = ""
+
+                availability_basis = (
+                    "unknown"
+                )
+
+        else:
+            if not isinstance(
+                raw_availability,
+                dict,
+            ):
+                raise ValueError(
+                    "Validation observation "
+                    "availability must be a "
+                    "dictionary."
+                )
+
+            availability_precision = (
+                _choice(
+                    raw_availability.get(
+                        "precision",
+                        "unknown",
+                    ),
+                    label=(
+                        "Validation observation "
+                        "availability precision"
+                    ),
+                    allowed=(
+                        SNAPSHOT_AVAILABILITY_PRECISIONS
+                    ),
+                )
+            )
+
+            availability_basis = _choice(
+                raw_availability.get(
+                    "basis",
+                    "unknown",
+                ),
+                label=(
+                    "Validation observation "
+                    "availability basis"
+                ),
+                allowed=(
+                    SNAPSHOT_AVAILABILITY_BASES
+                ),
+            )
+
+            raw_availability_value = (
+                raw_availability.get(
+                    "value"
+                )
+            )
+
+            if (
+                availability_precision
+                == "timestamp"
+            ):
+                availability_value = (
+                    _timestamp(
+                        raw_availability_value,
+                        label=(
+                            "Validation observation "
+                            "availability value"
+                        ),
+                    )
+                )
+
+            elif (
+                availability_precision
+                == "date"
+            ):
+                availability_value = (
+                    _calendar_date(
+                        raw_availability_value,
+                        label=(
+                            "Validation observation "
+                            "availability value"
+                        ),
+                    )
+                )
+
+            else:
+                availability_value = (
+                    _clean(
+                        raw_availability_value
+                    )
+                )
+
+                if availability_value:
+                    raise ValueError(
+                        "Unknown evidence availability "
+                        "cannot contain a value."
+                    )
 
         raw_capture = raw.get(
             "capture",
@@ -402,7 +580,8 @@ def build_claim_evidence_snapshot(
         )
 
         if (
-            _timestamp_value(
+            observed_at
+            and _timestamp_value(
                 observed_at
             )
             > as_of_value
@@ -422,6 +601,34 @@ def build_claim_evidence_snapshot(
             raise ValueError(
                 "Validation observation publication "
                 "occurs after the snapshot as_of time."
+            )
+
+        if (
+            availability_precision
+            == "timestamp"
+            and _timestamp_value(
+                availability_value
+            )
+            > as_of_value
+        ):
+            raise ValueError(
+                "Validation observation evidence "
+                "availability occurs after the "
+                "snapshot as_of time."
+            )
+
+        if (
+            availability_precision
+            == "date"
+            and date.fromisoformat(
+                availability_value
+            )
+            > as_of_value.date()
+        ):
+            raise ValueError(
+                "Validation observation evidence "
+                "availability date occurs after "
+                "the snapshot as_of date."
             )
 
         independence_status = _choice(
@@ -525,6 +732,17 @@ def build_claim_evidence_snapshot(
             "depends_on_observation_ids": (
                 dependency_ids
             ),
+            "availability": {
+                "precision": (
+                    availability_precision
+                ),
+                "value": (
+                    availability_value
+                ),
+                "basis": (
+                    availability_basis
+                ),
+            },
             "capture": {
                 "method": (
                     capture_method
@@ -591,7 +809,19 @@ def build_claim_evidence_snapshot(
     observations = sorted(
         normalized.values(),
         key=lambda row: (
-            row["observed_at"],
+            (
+                row[
+                    "availability"
+                ][
+                    "value"
+                ]
+                or "9999-12-31"
+            ),
+            row[
+                "availability"
+            ][
+                "precision"
+            ],
             row["id"],
         ),
     )
@@ -618,9 +848,16 @@ def build_claim_evidence_snapshot(
             "stance": row[
                 "stance"
             ],
-            "observed_at": row[
-                "observed_at"
-            ],
+            "observed_at": (
+                row[
+                    "observed_at"
+                ]
+                or row[
+                    "availability"
+                ][
+                    "value"
+                ]
+            ),
         }
         for row in observations
     ]
@@ -705,6 +942,39 @@ def build_claim_evidence_snapshot(
             )
 
         for observation in observations:
+            availability = observation[
+                "availability"
+            ]
+
+            if (
+                availability[
+                    "precision"
+                ]
+                == "unknown"
+                or not availability[
+                    "value"
+                ]
+            ):
+                raise ValueError(
+                    "Approved claim evidence "
+                    "snapshot requires known "
+                    "evidence availability for "
+                    "every observation."
+                )
+
+            if (
+                availability[
+                    "basis"
+                ]
+                == "unknown"
+            ):
+                raise ValueError(
+                    "Approved claim evidence "
+                    "snapshot requires a known "
+                    "evidence availability basis "
+                    "for every observation."
+                )
+
             capture = observation[
                 "capture"
             ]
@@ -813,6 +1083,10 @@ def build_claim_evidence_snapshot(
             "capture_time_is_separate_from_evidence_as_of_time": True,
             "retrospective_capture_may_postdate_snapshot_as_of": True,
             "capture_hash_does_not_establish_truth": True,
+            "evidence_availability_preserves_time_precision": True,
+            "date_precision_does_not_invent_clock_time": True,
+            "approved_snapshots_require_known_evidence_availability": True,
+            "availability_time_is_separate_from_capture_time": True,
             "snapshot_does_not_change_live_merit": True,
         },
     }

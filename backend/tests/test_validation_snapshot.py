@@ -17,6 +17,8 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.analysis.validation_snapshot import (
     CLAIM_EVIDENCE_SNAPSHOT_VERSION,
+    SNAPSHOT_AVAILABILITY_BASES,
+    SNAPSHOT_AVAILABILITY_PRECISIONS,
     SNAPSHOT_CAPTURE_METHODS,
     SNAPSHOT_CAPTURE_STATUSES,
     SNAPSHOT_INDEPENDENCE_STATUSES,
@@ -45,6 +47,7 @@ class ClaimEvidenceSnapshotTests(
         observed_at=(
             "2026-08-14T10:00:00+00:00"
         ),
+        availability=None,
         capture_method="direct_http",
         capture_status="captured",
         captured_at=(
@@ -89,6 +92,9 @@ class ClaimEvidenceSnapshotTests(
             "observed_at": (
                 observed_at
             ),
+            "availability": (
+                availability
+            ),
             "capture": {
                 "method": (
                     capture_method
@@ -114,6 +120,9 @@ class ClaimEvidenceSnapshotTests(
         *,
         review=None,
         outcome=None,
+        as_of=(
+            "2026-08-14T11:00:00+00:00"
+        ),
     ):
         if review is None:
             review = {
@@ -136,7 +145,7 @@ class ClaimEvidenceSnapshotTests(
                 "Driver will join Team A."
             ),
             "as_of": (
-                "2026-08-14T11:00:00+00:00"
+                as_of
             ),
             "observations": observations,
             "review": review,
@@ -195,6 +204,27 @@ class ClaimEvidenceSnapshotTests(
         self.assertIn(
             "unavailable",
             SNAPSHOT_CAPTURE_STATUSES,
+        )
+
+        self.assertEqual(
+            set(
+                SNAPSHOT_AVAILABILITY_PRECISIONS
+            ),
+            {
+                "timestamp",
+                "date",
+                "unknown",
+            },
+        )
+
+        self.assertIn(
+            "official_release_date",
+            SNAPSHOT_AVAILABILITY_BASES,
+        )
+
+        self.assertIn(
+            "legacy_observed_at",
+            SNAPSHOT_AVAILABILITY_BASES,
         )
 
     def test_primary_stakeholder_statement_confirms_snapshot(
@@ -499,6 +529,226 @@ class ClaimEvidenceSnapshotTests(
                     first,
                     second,
                 ]
+            )
+
+    def test_legacy_observed_at_derives_timestamp_availability(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation()
+            ]
+        )
+
+        availability = result[
+            "observations"
+        ][0][
+            "availability"
+        ]
+
+        self.assertEqual(
+            availability[
+                "precision"
+            ],
+            "timestamp",
+        )
+
+        self.assertEqual(
+            availability[
+                "basis"
+            ],
+            "legacy_observed_at",
+        )
+
+        self.assertEqual(
+            availability[
+                "value"
+            ],
+            "2026-08-14T10:00:00Z",
+        )
+
+    def test_date_only_availability_preserves_date_precision(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation(
+                    observed_at="",
+                    published_at="",
+                    availability={
+                        "precision": "date",
+                        "value": "2024-02-01",
+                        "basis": (
+                            "official_release_date"
+                        ),
+                    },
+                )
+            ],
+            as_of=(
+                "2024-02-01T23:59:59Z"
+            ),
+        )
+
+        observation = result[
+            "observations"
+        ][0]
+
+        self.assertEqual(
+            observation[
+                "observed_at"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            observation[
+                "published_at"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            observation[
+                "availability"
+            ],
+            {
+                "precision": "date",
+                "value": "2024-02-01",
+                "basis": (
+                    "official_release_date"
+                ),
+            },
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "date_precision_does_not_invent_clock_time"
+            ]
+        )
+
+    def test_date_availability_after_snapshot_date_is_rejected(
+        self,
+    ):
+        with self.assertRaisesRegex(
+            ValueError,
+            "availability date occurs after",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        observed_at="",
+                        published_at="",
+                        availability={
+                            "precision": "date",
+                            "value": "2024-02-01",
+                            "basis": (
+                                "official_release_date"
+                            ),
+                        },
+                    )
+                ],
+                as_of=(
+                    "2024-01-31T23:59:59Z"
+                ),
+            )
+
+    def test_timestamp_availability_is_normalized(
+        self,
+    ):
+        result = self.build(
+            [
+                self.observation(
+                    observed_at="",
+                    published_at="",
+                    availability={
+                        "precision": (
+                            "timestamp"
+                        ),
+                        "value": (
+                            "2024-02-01T12:00:00+05:30"
+                        ),
+                        "basis": (
+                            "published_timestamp"
+                        ),
+                    },
+                )
+            ],
+            as_of=(
+                "2024-02-01T23:59:59Z"
+            ),
+        )
+
+        self.assertEqual(
+            result[
+                "observations"
+            ][0][
+                "availability"
+            ][
+                "value"
+            ],
+            "2024-02-01T06:30:00Z",
+        )
+
+    def test_invalid_date_availability_is_rejected(
+        self,
+    ):
+        with self.assertRaisesRegex(
+            ValueError,
+            "must be YYYY-MM-DD",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        observed_at="",
+                        published_at="",
+                        availability={
+                            "precision": "date",
+                            "value": "2024-02-99",
+                            "basis": (
+                                "official_release_date"
+                            ),
+                        },
+                    )
+                ]
+            )
+
+    def test_approved_snapshot_requires_known_availability(
+        self,
+    ):
+        review = {
+            "status": "approved",
+            "reviewer": "Human Reviewer",
+            "reviewed_at": (
+                "2026-08-15T01:00:00Z"
+            ),
+            "rationale": (
+                "Reviewed source authority, "
+                "temporal availability, "
+                "provenance, and capture."
+            ),
+        }
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "known evidence availability",
+        ):
+            self.build(
+                [
+                    self.observation(
+                        observed_at="",
+                        published_at="",
+                        availability={
+                            "precision": (
+                                "unknown"
+                            ),
+                            "value": "",
+                            "basis": "unknown",
+                        },
+                    )
+                ],
+                review=review,
             )
 
     def test_capture_metadata_is_preserved(
