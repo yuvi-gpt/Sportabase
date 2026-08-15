@@ -149,6 +149,194 @@ ON intelligence_claims(subject_key);
 CREATE INDEX IF NOT EXISTS idx_intelligence_claims_type
 ON intelligence_claims(claim_type);
 
+
+CREATE TABLE IF NOT EXISTS canonical_entities (
+  id TEXT PRIMARY KEY,
+  entity_key TEXT NOT NULL UNIQUE,
+  entity_type TEXT NOT NULL,
+  sport_key TEXT NOT NULL DEFAULT '',
+  canonical_name TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    entity_type IN (
+      'player',
+      'club',
+      'team',
+      'league',
+      'competition',
+      'country',
+      'governing_body',
+      'reporter',
+      'channel',
+      'organization',
+      'person'
+    )
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_type
+ON canonical_entities(entity_type);
+
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_sport
+ON canonical_entities(
+  sport_key,
+  entity_type
+);
+
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_name
+ON canonical_entities(canonical_name);
+
+
+CREATE TABLE IF NOT EXISTS entity_aliases (
+  id TEXT PRIMARY KEY,
+  entity_id TEXT NOT NULL,
+  alias_text TEXT NOT NULL,
+  normalized_alias TEXT NOT NULL,
+  alias_type TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  UNIQUE (
+    entity_id,
+    alias_type,
+    normalized_alias
+  ),
+  CHECK (
+    alias_type IN (
+      'canonical_name',
+      'common_name',
+      'short_name',
+      'abbreviation',
+      'former_name',
+      'handle',
+      'external_name'
+    )
+  ),
+  FOREIGN KEY(entity_id)
+    REFERENCES canonical_entities(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_entity
+ON entity_aliases(entity_id);
+
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_normalized
+ON entity_aliases(normalized_alias);
+
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_lookup
+ON entity_aliases(
+  normalized_alias,
+  alias_type
+);
+
+
+CREATE TABLE IF NOT EXISTS verified_source_entity_bindings (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  binding_type TEXT NOT NULL,
+  evidence_id TEXT NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'verified',
+  confidence REAL NOT NULL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    binding_type IN (
+      'official_site',
+      'official_publication',
+      'official_channel',
+      'official_account',
+      'controlled_domain'
+    )
+  ),
+  CHECK (
+    verification_status = 'verified'
+  ),
+  CHECK (
+    confidence >= 0.95
+    AND confidence <= 1.0
+  ),
+  FOREIGN KEY(source_id)
+    REFERENCES intelligence_sources(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(entity_id)
+    REFERENCES canonical_entities(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id)
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_verified_source_entity_source
+ON verified_source_entity_bindings(source_id);
+
+CREATE INDEX IF NOT EXISTS
+idx_verified_source_entity_entity
+ON verified_source_entity_bindings(entity_id);
+
+CREATE INDEX IF NOT EXISTS
+idx_verified_source_entity_evidence
+ON verified_source_entity_bindings(evidence_id);
+
+
+CREATE TABLE IF NOT EXISTS verified_claim_entity_participants (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  participant_role TEXT NOT NULL,
+  evidence_id TEXT NOT NULL,
+  verification_status TEXT NOT NULL DEFAULT 'verified',
+  confidence REAL NOT NULL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    participant_role IN (
+      'subject',
+      'actor',
+      'counterparty',
+      'origin',
+      'destination',
+      'affected_party',
+      'governing_body',
+      'competition',
+      'other_party'
+    )
+  ),
+  CHECK (
+    verification_status = 'verified'
+  ),
+  CHECK (
+    confidence >= 0.95
+    AND confidence <= 1.0
+  ),
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(entity_id)
+    REFERENCES canonical_entities(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(evidence_id)
+    REFERENCES evidence_records(id
+  )
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_verified_claim_entity_claim
+ON verified_claim_entity_participants(claim_id);
+
+CREATE INDEX IF NOT EXISTS
+idx_verified_claim_entity_entity
+ON verified_claim_entity_participants(entity_id);
+
+CREATE INDEX IF NOT EXISTS
+idx_verified_claim_entity_evidence
+ON verified_claim_entity_participants(evidence_id);
+
+
 CREATE TABLE IF NOT EXISTS story_media_links (
   story_id TEXT NOT NULL,
   media_item_id TEXT NOT NULL,
