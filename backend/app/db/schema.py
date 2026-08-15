@@ -735,6 +735,92 @@ ON adjudication_state_transitions(
 );
 
 
+
+CREATE TABLE IF NOT EXISTS automatic_correction_events (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  signature TEXT NOT NULL,
+  previous_revision_id TEXT NOT NULL,
+  current_revision_id TEXT NOT NULL,
+  event_version TEXT NOT NULL,
+  event_json TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+
+  UNIQUE(current_revision_id, field),
+
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE,
+
+  FOREIGN KEY(previous_revision_id)
+    REFERENCES adjudication_state_revisions(id)
+    ON DELETE RESTRICT,
+
+  FOREIGN KEY(current_revision_id)
+    REFERENCES adjudication_state_revisions(id)
+    ON DELETE RESTRICT
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_automatic_correction_events_signature
+ON automatic_correction_events(
+  signature,
+  claim_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_automatic_correction_events_claim
+ON automatic_correction_events(
+  claim_id
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_automatic_correction_events_current_revision
+ON automatic_correction_events(
+  current_revision_id
+);
+
+
+CREATE TABLE IF NOT EXISTS automatic_memory_candidates (
+  id TEXT PRIMARY KEY,
+  signature TEXT NOT NULL UNIQUE,
+  field TEXT NOT NULL,
+  candidate_version TEXT NOT NULL,
+  status TEXT NOT NULL,
+  support_count INTEGER NOT NULL,
+  supporting_claim_ids_json TEXT NOT NULL DEFAULT '[]',
+  supporting_correction_ids_json TEXT NOT NULL DEFAULT '[]',
+  candidate_json TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+
+  CHECK (
+    status IN (
+      'case_memory',
+      'pattern_candidate'
+    )
+  ),
+
+  CHECK (
+    support_count >= 1
+  )
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_automatic_memory_candidates_status
+ON automatic_memory_candidates(
+  status,
+  support_count
+);
+
+CREATE INDEX IF NOT EXISTS
+idx_automatic_memory_candidates_field
+ON automatic_memory_candidates(
+  field
+);
+
+
 CREATE TABLE IF NOT EXISTS analysis_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   media_item_id TEXT NOT NULL,
