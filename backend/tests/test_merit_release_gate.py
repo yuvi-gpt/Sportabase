@@ -1,3 +1,4 @@
+import copy
 import sys
 import unittest
 
@@ -8,486 +9,48 @@ BACKEND_DIR = Path(
     __file__
 ).resolve().parents[1]
 
-if str(BACKEND_DIR) not in sys.path:
+if str(
+    BACKEND_DIR
+) not in sys.path:
     sys.path.insert(
         0,
-        str(BACKEND_DIR),
+        str(
+            BACKEND_DIR
+        ),
     )
 
 
-from app.analysis.merit_evaluation import (
-    MERIT_CORROBORATION_EVALUATION_VERSION,
-    MERIT_CORROBORATION_GOLDEN_CASE_VERSION,
+from app.analysis.confidence_calibration import (
+    LOCAL_CONFIDENCE_CALIBRATION_VERSION,
+    LOCAL_CONFIDENCE_CASE_VERSION,
+    LOCAL_CONFIDENCE_PROFILE_VERSION,
 )
-from app.analysis.merit_goldens import (
-    MERIT_CORROBORATION_CURATION_VERSION,
-    MERIT_CORROBORATION_GOLDEN_DATASET_VERSION,
+
+from app.analysis.corpus_expansion import (
+    build_validation_corpus_expansion,
 )
-from app.analysis.validation_snapshot import (
-    CLAIM_EVIDENCE_SNAPSHOT_VERSION,
-)
+
 from app.analysis.merit_release import (
     MERIT_LIVE_RELEASE_GATE_VERSION,
-    MERIT_LIVE_REQUIRED_SIGNAL_COVERAGE,
+    MERIT_LIVE_REQUIRED_FIELD_COVERAGE,
     build_merit_live_release_gate,
+)
+
+from app.analysis.shadow_calibration import (
+    SHADOW_CALIBRATION_VERSION,
 )
 
 
 class MeritLiveReleaseGateTests(
     unittest.TestCase
 ):
-    def evidence_snapshot(
+    def calibration(
         self,
-        *,
-        index,
-        urls,
     ):
-        observations = []
-
-        for position, url in enumerate(
-            urls,
-            start=1,
-        ):
-            observations.append(
-                {
-                    "id": (
-                        "snapshot-observation-"
-                        + str(index)
-                        + "-"
-                        + str(position)
-                    ),
-                    "actor_id": (
-                        "fixture-source-"
-                        + str(index)
-                        + "-"
-                        + str(position)
-                    ),
-                    "source_url": url,
-                    "source_role": (
-                        "publisher"
-                    ),
-                    "authority_class": (
-                        "none"
-                    ),
-                    "reliability_class": (
-                        "established"
-                    ),
-                    "provenance_class": (
-                        "firsthand_reporting"
-                    ),
-                    "stance": (
-                        "supports"
-                    ),
-                    "independence_status": (
-                        "unknown"
-                    ),
-                    (
-                        "depends_on_"
-                        "observation_ids"
-                    ): [],
-                    "published_at": (
-                        "2026-08-14T05:00:00Z"
-                    ),
-                    "observed_at": (
-                        "2026-08-14T05:15:00Z"
-                    ),
-                    "capture": {
-                        "method": (
-                            "direct_http"
-                        ),
-                        "status": (
-                            "captured"
-                        ),
-                        "captured_at": (
-                            "2026-08-15T00:00:00Z"
-                        ),
-                        "content_sha256": (
-                            format(
-                                (
-                                    index * 100
-                                    + position
-                                ),
-                                "064x",
-                            )
-                        ),
-                        "note": (
-                            "Deterministic release "
-                            "fixture capture."
-                        ),
-                    },
-                }
-            )
-
-        return {
-            "version": (
-                CLAIM_EVIDENCE_SNAPSHOT_VERSION
-            ),
-            "id": (
-                "release-snapshot-"
-                + str(index)
-            ),
-            "claim_id": (
-                "claim-"
-                + str(index)
-            ),
-            "claim_text": (
-                "Release-gate validation "
-                "fixture claim "
-                + str(index)
-                + "."
-            ),
-            "as_of": (
-                "2026-08-14T05:30:00Z"
-            ),
-            "observations": (
-                observations
-            ),
-            "review": {
-                "status": (
-                    "approved"
-                ),
-                "reviewer": (
-                    "reviewer"
-                ),
-                "reviewed_at": (
-                    "2026-08-14T12:00:00+05:30"
-                ),
-                "rationale": (
-                    "Release-gate fixture "
-                    "with human-review metadata "
-                    "and a time-bounded "
-                    "evidence snapshot."
-                ),
-            },
-            "outcome": {},
-        }
-
-    def case(
-        self,
-        *,
-        index,
-        signal,
-        status="approved",
-        origin="real_world",
-    ):
-        urls = [
+        training_claims = [
             (
-                "https://source"
+                "training-"
                 + str(index)
-                + "a.example/story"
-            )
-        ]
-
-        if signal in {
-            "verified_corroboration",
-            (
-                "verified_corroboration_"
-                "contested"
-            ),
-        }:
-            urls.append(
-                (
-                    "https://source"
-                    + str(index)
-                    + "b.example/story"
-                )
-            )
-
-        evidence_snapshot = None
-
-        if (
-            status == "approved"
-            and origin == "real_world"
-        ):
-            evidence_snapshot = (
-                self.evidence_snapshot(
-                    index=index,
-                    urls=urls,
-                )
-            )
-
-        result = {
-            "version": (
-                MERIT_CORROBORATION_GOLDEN_CASE_VERSION
-            ),
-            "id": (
-                "case-"
-                + str(index)
-            ),
-            "claim_id": (
-                "claim-"
-                + str(index)
-            ),
-            "legacy_score": {},
-            "corroboration_state": {},
-            "expectations": {
-                "signal": signal,
-                "authority_state": (
-                    "reported_unconfirmed"
-                ),
-            },
-            "curation": {
-                "version": (
-                    MERIT_CORROBORATION_CURATION_VERSION
-                ),
-                "origin": origin,
-                "review_status": status,
-                "reviewer": (
-                    "reviewer"
-                    if status == "approved"
-                    and origin == "real_world"
-                    else ""
-                ),
-                "reviewed_at": (
-                    "2026-08-14T12:00:00+05:30"
-                    if status == "approved"
-                    and origin == "real_world"
-                    else ""
-                ),
-                "source_urls": (
-                    urls
-                    if origin == "real_world"
-                    else []
-                ),
-                "label_basis": (
-                    "Human reviewed source "
-                    "provenance and expected "
-                    "corroboration state."
-                    if origin == "real_world"
-                    else ""
-                ),
-            },
-        }
-
-        if evidence_snapshot is not None:
-            result[
-                "evidence_snapshot"
-            ] = evidence_snapshot
-
-        return result
-
-    def dataset(
-        self,
-        cases,
-    ):
-        return {
-            "version": (
-                MERIT_CORROBORATION_GOLDEN_DATASET_VERSION
-            ),
-            "cases": cases,
-        }
-
-    def approved_coverage_cases(
-        self,
-    ):
-        return [
-            self.case(
-                index=index,
-                signal=signal,
-            )
-            for index, signal in enumerate(
-                MERIT_LIVE_REQUIRED_SIGNAL_COVERAGE,
-                start=1,
-            )
-        ]
-
-    def passing_evaluation(
-        self,
-        *,
-        cases,
-    ):
-        return {
-            "version": (
-                MERIT_CORROBORATION_EVALUATION_VERSION
-            ),
-            "status": "passed",
-            "metrics": {
-                "cases": len(
-                    cases
-                ),
-                "expectations_passed": (
-                    len(
-                        cases
-                    )
-                ),
-                "expectations_failed": 0,
-                "safety_violations": 0,
-                "live_score_changes": 0,
-                "positive_adjustments": 1,
-                "negative_adjustments": 0,
-                (
-                    "unverified_positive_"
-                    "adjustments"
-                ): 0,
-                (
-                    "contested_positive_"
-                    "adjustments"
-                ): 0,
-                "invariance_groups_checked": 0,
-                "invariance_failures": 0,
-            },
-            "cases": [],
-            "invariance_groups": [],
-            "enablement": {
-                "live_enablement_authorized": (
-                    False
-                ),
-            },
-        }
-
-    def test_version_constant(
-        self,
-    ):
-        self.assertEqual(
-            MERIT_LIVE_RELEASE_GATE_VERSION,
-            "merit-live-release-gate-v1",
-        )
-
-    def test_draft_dataset_is_safe_when_live_not_requested(
-        self,
-    ):
-        dataset = self.dataset(
-            [
-                self.case(
-                    index=1,
-                    signal=(
-                        "verified_corroboration"
-                    ),
-                    status="draft",
-                )
-            ]
-        )
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=dataset,
-                request_live=False,
-            )
-        )
-
-        self.assertTrue(
-            result[
-                "release_authorized"
-            ]
-        )
-
-        self.assertFalse(
-            result[
-                "live_merit_authorized"
-            ]
-        )
-
-        self.assertEqual(
-            result["status"],
-            "shadow_safe",
-        )
-
-    def test_draft_dataset_blocks_live_request(
-        self,
-    ):
-        dataset = self.dataset(
-            [
-                self.case(
-                    index=1,
-                    signal=(
-                        "verified_corroboration"
-                    ),
-                    status="draft",
-                )
-            ]
-        )
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=dataset,
-                request_live=True,
-            )
-        )
-
-        self.assertFalse(
-            result[
-                "release_authorized"
-            ]
-        )
-
-        self.assertIn(
-            (
-                "insufficient_approved_"
-                "real_world_cases"
-            ),
-            result[
-                "blockers"
-            ],
-        )
-
-    def test_required_signal_coverage_is_explicit(
-        self,
-    ):
-        self.assertEqual(
-            set(
-                MERIT_LIVE_REQUIRED_SIGNAL_COVERAGE
-            ),
-            {
-                "verified_corroboration",
-                (
-                    "verified_corroboration_"
-                    "contested"
-                ),
-                (
-                    "support_dependency_"
-                    "present"
-                ),
-                (
-                    "support_independence_"
-                    "unknown"
-                ),
-                (
-                    "no_verified_"
-                    "corroboration_boost"
-                ),
-            },
-        )
-
-    def test_too_few_approved_cases_blocks_live(
-        self,
-    ):
-        cases = (
-            self.approved_coverage_cases()[
-                :4
-            ]
-        )
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        cases
-                    )
-                ),
-                request_live=True,
-                minimum_approved_cases=5,
-            )
-        )
-
-        self.assertIn(
-            (
-                "insufficient_approved_"
-                "real_world_cases"
-            ),
-            result[
-                "blockers"
-            ],
-        )
-
-    def test_missing_signal_coverage_blocks_live(
-        self,
-    ):
-        cases = [
-            self.case(
-                index=index,
-                signal=(
-                    "support_independence_unknown"
-                ),
             )
             for index in range(
                 1,
@@ -495,308 +58,857 @@ class MeritLiveReleaseGateTests(
             )
         ]
 
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        cases
-                    )
-                ),
-                request_live=True,
-            )
-        )
-
-        self.assertIn(
-            (
-                "required_signal_"
-                "coverage_missing"
-            ),
-            result[
-                "blockers"
-            ],
-        )
-
-        self.assertIn(
-            "verified_corroboration",
-            result[
-                "missing_signal_coverage"
-            ],
-        )
-
-    def test_complete_real_world_coverage_can_authorize_live(
-        self,
-    ):
-        cases = (
-            self.approved_coverage_cases()
-        )
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        cases
-                    )
-                ),
-                request_live=True,
-                evaluator=(
-                    self.passing_evaluation
-                ),
-            )
-        )
-
-        self.assertTrue(
-            result[
-                "release_authorized"
-            ]
-        )
-
-        self.assertTrue(
-            result[
-                "live_merit_authorized"
-            ]
-        )
-
-        self.assertEqual(
-            result["status"],
-            "live_authorized",
-        )
-
-    def test_eligible_dataset_does_not_go_live_without_request(
-        self,
-    ):
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        self.approved_coverage_cases()
-                    )
-                ),
-                request_live=False,
-                evaluator=(
-                    self.passing_evaluation
-                ),
-            )
-        )
-
-        self.assertTrue(
-            result[
-                "release_authorized"
-            ]
-        )
-
-        self.assertFalse(
-            result[
-                "live_merit_authorized"
-            ]
-        )
-
-    def test_failed_evaluation_blocks_live(
-        self,
-    ):
-        def evaluator(
-            *,
-            cases,
-        ):
-            result = (
-                self.passing_evaluation(
-                    cases=cases
-                )
-            )
-
-            result[
-                "status"
-            ] = "failed"
-
-            result[
-                "metrics"
-            ][
-                "expectations_failed"
-            ] = 1
-
-            return result
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        self.approved_coverage_cases()
-                    )
-                ),
-                request_live=True,
-                evaluator=evaluator,
-            )
-        )
-
-        self.assertFalse(
-            result[
-                "release_authorized"
-            ]
-        )
-
-        self.assertIn(
-            "evaluation_not_passed",
-            result[
-                "blockers"
-            ],
-        )
-
-    def test_safety_violation_blocks_live(
-        self,
-    ):
-        def evaluator(
-            *,
-            cases,
-        ):
-            result = (
-                self.passing_evaluation(
-                    cases=cases
-                )
-            )
-
-            result[
-                "metrics"
-            ][
-                "safety_violations"
-            ] = 1
-
-            return result
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        self.approved_coverage_cases()
-                    )
-                ),
-                request_live=True,
-                evaluator=evaluator,
-            )
-        )
-
-        self.assertIn(
-            (
-                "evaluation_safety_"
-                "violations"
-            ),
-            result[
-                "blockers"
-            ],
-        )
-
-    def test_wrong_evaluation_version_blocks_live(
-        self,
-    ):
-        def evaluator(
-            *,
-            cases,
-        ):
-            result = (
-                self.passing_evaluation(
-                    cases=cases
-                )
-            )
-
-            result[
-                "version"
-            ] = "wrong"
-
-            return result
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        self.approved_coverage_cases()
-                    )
-                ),
-                request_live=True,
-                evaluator=evaluator,
-            )
-        )
-
-        self.assertIn(
-            (
-                "evaluation_version_"
-                "invalid"
-            ),
-            result[
-                "blockers"
-            ],
-        )
-
-    def test_evaluator_exception_fails_closed(
-        self,
-    ):
-        def evaluator(
-            *,
-            cases,
-        ):
-            raise RuntimeError(
-                "evaluation unavailable"
-            )
-
-        result = (
-            build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        self.approved_coverage_cases()
-                    )
-                ),
-                request_live=True,
-                evaluator=evaluator,
-            )
-        )
-
-        self.assertFalse(
-            result[
-                "release_authorized"
-            ]
-        )
-
-        self.assertIn(
-            "evaluation_error:RuntimeError",
-            result[
-                "blockers"
-            ],
-        )
-
-    def test_synthetic_cases_never_satisfy_real_world_gate(
-        self,
-    ):
         cases = [
-            self.case(
-                index=index,
-                signal=signal,
-                origin="synthetic_policy",
-                status="draft",
-            )
-            for index, signal in enumerate(
-                MERIT_LIVE_REQUIRED_SIGNAL_COVERAGE,
+            {
+                "version": (
+                    LOCAL_CONFIDENCE_CASE_VERSION
+                ),
+                "id": (
+                    "training-case-"
+                    + str(index)
+                ),
+                "claim_id": claim_id,
+            }
+            for index, claim_id
+            in enumerate(
+                training_claims,
                 start=1,
             )
         ]
 
+        return {
+            "version": (
+                LOCAL_CONFIDENCE_CALIBRATION_VERSION
+            ),
+            "cases": cases,
+            "profiles": [
+                {
+                    "version": (
+                        LOCAL_CONFIDENCE_PROFILE_VERSION
+                    ),
+                    "id": "profile-1",
+                    "status": (
+                        "shadow_ready"
+                    ),
+                    "eligible_for_shadow_adjustment": (
+                        True
+                    ),
+                    "eligible_for_live_use": (
+                        False
+                    ),
+                    "distinct_claim_count": 5,
+                    "supporting_claim_ids": (
+                        training_claims
+                    ),
+                }
+            ],
+        }
+
+    def holdout_cases(
+        self,
+    ):
+        fields = list(
+            MERIT_LIVE_REQUIRED_FIELD_COVERAGE
+        )
+
+        rows = []
+
+        for index, field in enumerate(
+            fields,
+            start=1,
+        ):
+            claim_number = min(
+                index,
+                5,
+            )
+
+            rows.append(
+                {
+                    "version": (
+                        LOCAL_CONFIDENCE_CASE_VERSION
+                    ),
+                    "id": (
+                        "holdout-case-"
+                        + str(index)
+                    ),
+                    "claim_id": (
+                        "holdout-"
+                        + str(
+                            claim_number
+                        )
+                    ),
+                    "field": field,
+                    "verified_value": (
+                        "verified-"
+                        + field
+                    ),
+                }
+            )
+
+        return rows
+
+    def shadow_results(
+        self,
+        *,
+        holdout_cases=None,
+    ):
+        cases = (
+            holdout_cases
+            or self.holdout_cases()
+        )
+
+        by_claim = {}
+
+        for case in cases:
+            by_claim.setdefault(
+                case[
+                    "claim_id"
+                ],
+                [],
+            ).append(
+                case
+            )
+
+        results = []
+
+        for claim_id in sorted(
+            by_claim
+        ):
+            comparisons = []
+
+            for case in by_claim[
+                claim_id
+            ]:
+                value = case[
+                    "verified_value"
+                ]
+
+                comparisons.append(
+                    {
+                        "field": (
+                            case[
+                                "field"
+                            ]
+                        ),
+                        "baseline": {
+                            "tier": (
+                                "auto_silver"
+                            ),
+                            "value": value,
+                            "confidence": 0.60,
+                            "conflicting_values": [],
+                            "training_reference_allowed": (
+                                False
+                            ),
+                            "supporting_judgment_ids": [],
+                            "supporting_evaluator_families": [],
+                        },
+                        "shadow": {
+                            "tier": (
+                                "auto_silver"
+                            ),
+                            "value": value,
+                            "confidence": 0.80,
+                            "conflicting_values": [],
+                            "training_reference_allowed": (
+                                False
+                            ),
+                            "supporting_judgment_ids": [],
+                            "supporting_evaluator_families": [],
+                        },
+                    }
+                )
+
+            results.append(
+                {
+                    "version": (
+                        SHADOW_CALIBRATION_VERSION
+                    ),
+                    "claim_id": claim_id,
+                    "comparisons": (
+                        comparisons
+                    ),
+                    "adjustments": [
+                        {
+                            "id": (
+                                "adjustment-"
+                                + claim_id
+                            )
+                        }
+                    ],
+                    "policy": {
+                        "shadow_only": True,
+                        "baseline_is_preserved": True,
+                        "does_not_change_live_merit": True,
+                    },
+                }
+            )
+
+        return results
+
+    def corpus(
+        self,
+    ):
+        sports = [
+            "american_football",
+            "baseball",
+            "basketball",
+            "cricket",
+            "football",
+            "ice_hockey",
+            "motorsport",
+            "tennis",
+        ]
+
+        records = [
+            {
+                "id": (
+                    "record-"
+                    + sport
+                ),
+                "origin_type": (
+                    "external_dataset"
+                ),
+                "data_family": (
+                    "structured_sports_data"
+                ),
+                "dataset_name": (
+                    sport
+                    + "-validation"
+                ),
+                "external_record_id": (
+                    "one"
+                ),
+                "sport_key": sport,
+                "payload_hash": (
+                    "hash-"
+                    + sport
+                ),
+                "ingested_at": (
+                    "2026-08-15T06:00:00+00:00"
+                ),
+            }
+            for sport in sports
+        ]
+
+        return (
+            build_validation_corpus_expansion(
+                records=records,
+                target_records_per_sport=1,
+            )
+        )
+
+    def complete_inputs(
+        self,
+    ):
+        holdout = (
+            self.holdout_cases()
+        )
+
+        return {
+            "calibration": (
+                self.calibration()
+            ),
+            "holdout_cases": (
+                holdout
+            ),
+            "shadow_results": (
+                self.shadow_results(
+                    holdout_cases=(
+                        holdout
+                    )
+                )
+            ),
+            "corpus_expansion": (
+                self.corpus()
+            ),
+        }
+
+    def test_version_and_automatic_policy(
+        self,
+    ):
         result = (
             build_merit_live_release_gate(
-                dataset=(
-                    self.dataset(
-                        cases
-                    )
-                ),
-                request_live=True,
+                request_live=False,
             )
         )
 
         self.assertEqual(
             result[
-                "approved_real_world_cases"
+                "version"
             ],
-            0,
+            (
+                MERIT_LIVE_RELEASE_GATE_VERSION
+            ),
+        )
+
+        self.assertEqual(
+            (
+                MERIT_LIVE_RELEASE_GATE_VERSION
+            ),
+            "merit-live-release-gate-v2",
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "automated_validation_only"
+            ]
         )
 
         self.assertFalse(
             result[
+                "policy"
+            ][
+                "human_review_required"
+            ]
+        )
+
+    def test_shadow_safe_without_release_inputs(
+        self,
+    ):
+        result = (
+            build_merit_live_release_gate(
+                request_live=False,
+            )
+        )
+
+        self.assertTrue(
+            result[
                 "release_authorized"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "live_merit_authorized"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "status"
+            ],
+            "shadow_safe",
+        )
+
+    def test_live_request_requires_automatic_inputs(
+        self,
+    ):
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+            )
+        )
+
+        self.assertFalse(
+            result[
+                "live_merit_authorized"
+            ]
+        )
+
+        self.assertIn(
+            "calibration_missing",
+            result[
+                "blockers"
+            ],
+        )
+
+        self.assertIn(
+            "holdout_validation_missing",
+            result[
+                "blockers"
+            ],
+        )
+
+        self.assertIn(
+            "shadow_results_missing",
+            result[
+                "blockers"
+            ],
+        )
+
+        self.assertIn(
+            "corpus_expansion_missing",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_insufficient_calibration_support_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        inputs[
+            "calibration"
+        ][
+            "profiles"
+        ][0][
+            "distinct_claim_count"
+        ] = 4
+
+        inputs[
+            "calibration"
+        ][
+            "profiles"
+        ][0][
+            "supporting_claim_ids"
+        ] = [
+            "training-1",
+            "training-2",
+            "training-3",
+            "training-4",
+        ]
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "calibration_profile_support_insufficient",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_holdout_cannot_reuse_calibration_claim(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        inputs[
+            "holdout_cases"
+        ][0][
+            "claim_id"
+        ] = "training-1"
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "holdout_claim_reused_for_calibration",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_too_few_holdout_claims_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        for case in inputs[
+            "holdout_cases"
+        ]:
+            case[
+                "claim_id"
+            ] = "holdout-1"
+
+        inputs[
+            "shadow_results"
+        ] = (
+            self.shadow_results(
+                holdout_cases=(
+                    inputs[
+                        "holdout_cases"
+                    ]
+                )
+            )
+        )
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "insufficient_holdout_claims",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_all_adjudication_fields_require_holdout_coverage(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        removed = inputs[
+            "holdout_cases"
+        ].pop()
+
+        inputs[
+            "shadow_results"
+        ] = (
+            self.shadow_results(
+                holdout_cases=(
+                    inputs[
+                        "holdout_cases"
+                    ]
+                )
+            )
+        )
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "required_field_coverage_missing",
+            result[
+                "blockers"
+            ],
+        )
+
+        self.assertIn(
+            removed[
+                "field"
+            ],
+            result[
+                "missing_field_coverage"
+            ],
+        )
+
+    def test_incomplete_corpus_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        first = inputs[
+            "corpus_expansion"
+        ][
+            "coverage"
+        ][0]
+
+        first[
+            "coverage_status"
+        ] = "under_covered"
+
+        first[
+            "deficit"
+        ] = 1
+
+        inputs[
+            "corpus_expansion"
+        ][
+            "expansion_queue"
+        ] = [
+            {
+                "sport_key": (
+                    first[
+                        "sport_key"
+                    ]
+                )
+            }
+        ]
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "corpus_coverage_incomplete",
+            result[
+                "blockers"
+            ],
+        )
+
+        self.assertIn(
+            "corpus_expansion_still_pending",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_invalid_shadow_version_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        inputs[
+            "shadow_results"
+        ][0][
+            "version"
+        ] = "wrong"
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "shadow_result_version_invalid",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_shadow_decision_regression_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        comparison = inputs[
+            "shadow_results"
+        ][0][
+            "comparisons"
+        ][0]
+
+        comparison[
+            "shadow"
+        ][
+            "value"
+        ] = "wrong-value"
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "shadow_decision_regression",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_shadow_reference_promotion_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        comparison = inputs[
+            "shadow_results"
+        ][0][
+            "comparisons"
+        ][0]
+
+        comparison[
+            "shadow"
+        ][
+            "training_reference_allowed"
+        ] = True
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "shadow_reference_gate_promotion",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_untrusted_shadow_gold_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        comparison = inputs[
+            "shadow_results"
+        ][0][
+            "comparisons"
+        ][0]
+
+        comparison[
+            "shadow"
+        ][
+            "tier"
+        ] = "auto_gold"
+
+        comparison[
+            "shadow"
+        ][
+            "training_reference_allowed"
+        ] = False
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "shadow_untrusted_auto_gold",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_no_measurable_shadow_improvement_blocks_live(
+        self,
+    ):
+        inputs = (
+            self.complete_inputs()
+        )
+
+        for result in inputs[
+            "shadow_results"
+        ]:
+            for comparison in result[
+                "comparisons"
+            ]:
+                comparison[
+                    "shadow"
+                ][
+                    "confidence"
+                ] = comparison[
+                    "baseline"
+                ][
+                    "confidence"
+                ]
+
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **inputs,
+            )
+        )
+
+        self.assertIn(
+            "no_measurable_shadow_improvement",
+            result[
+                "blockers"
+            ],
+        )
+
+    def test_complete_automated_validation_can_authorize_gate(
+        self,
+    ):
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                **self.complete_inputs(),
+            )
+        )
+
+        self.assertEqual(
+            result[
+                "blockers"
+            ],
+            [],
+        )
+
+        self.assertTrue(
+            result[
+                "release_authorized"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "live_merit_authorized"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "status"
+            ],
+            "live_authorized",
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "gate_does_not_activate_product"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "production_wiring_required_separately"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "does_not_modify_merit_score"
+            ]
+        )
+
+    def test_legacy_human_gate_inputs_cannot_authorize_live(
+        self,
+    ):
+        result = (
+            build_merit_live_release_gate(
+                request_live=True,
+                dataset={
+                    "legacy": True
+                },
+                minimum_approved_cases=5,
+                evaluator=lambda **kwargs: {
+                    "status": "passed"
+                },
+            )
+        )
+
+        self.assertTrue(
+            result[
+                "legacy_input_detected"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "live_merit_authorized"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "legacy_human_curated_gate_is_not_authoritative"
             ]
         )
 
