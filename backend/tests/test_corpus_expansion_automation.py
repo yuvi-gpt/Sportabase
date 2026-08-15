@@ -268,7 +268,7 @@ class CorpusExpansionAutomationTests(
             "blocked_missing_parameters",
         )
 
-    def test_unimplemented_registered_adapter_is_blocked(
+    def test_safe_alternative_requires_its_parameters(
         self,
     ):
         plan = (
@@ -300,10 +300,10 @@ class CorpusExpansionAutomationTests(
             american_football[
                 "status"
             ],
-            "blocked_adapter_not_implemented",
+            "blocked_missing_parameters",
         )
 
-    def test_review_gated_provider_stays_blocked(
+    def test_review_gated_provider_does_not_override_safe_alternative(
         self,
     ):
         plan = (
@@ -339,7 +339,7 @@ class CorpusExpansionAutomationTests(
             basketball[
                 "status"
             ],
-            "blocked_provider_gate",
+            "blocked_missing_parameters",
         )
 
     def test_dry_run_never_fetches(

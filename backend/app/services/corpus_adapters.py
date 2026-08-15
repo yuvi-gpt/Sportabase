@@ -1,3 +1,4 @@
+import csv
 import hashlib
 import io
 import json
@@ -446,6 +447,55 @@ def fetch_remote_request(
             )
 
         return payload
+
+    if expected_format == "csv":
+        content = bytes(
+            getattr(
+                response,
+                "content",
+                b"",
+            )
+        )
+
+        try:
+            decoded = content.decode(
+                "utf-8-sig"
+            )
+
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                "Remote CSV payload is not "
+                "valid UTF-8."
+            ) from exc
+
+        if not decoded.strip():
+            raise ValueError(
+                "Remote CSV payload is empty."
+            )
+
+        try:
+            reader = csv.DictReader(
+                io.StringIO(
+                    decoded
+                )
+            )
+
+            if not reader.fieldnames:
+                raise ValueError(
+                    "Remote CSV payload has "
+                    "no header."
+                )
+
+            return [
+                dict(row)
+                for row in reader
+            ]
+
+        except csv.Error as exc:
+            raise ValueError(
+                "Remote provider returned "
+                "invalid CSV."
+            ) from exc
 
     if expected_format == "zip":
         content = bytes(
@@ -1280,3 +1330,427 @@ def ingest_normalized_records(
             False
         ),
     }
+
+
+FIVETHIRTYEIGHT_FORECAST_DATASETS = {
+    "american_football": {
+        "dataset_key": "nfl_games",
+        "filename": "nfl_games.csv",
+        "competition_key": "nfl",
+        "record_kind": "game",
+    },
+    "baseball": {
+        "dataset_key": "mlb_games",
+        "filename": "mlb_games.csv",
+        "competition_key": "mlb",
+        "record_kind": "game",
+    },
+    "basketball": {
+        "dataset_key": "nba_games",
+        "filename": "nba_games.csv",
+        "competition_key": "nba",
+        "record_kind": "game",
+    },
+    "ice_hockey": {
+        "dataset_key": "nhl_games",
+        "filename": "nhl_games.csv",
+        "competition_key": "nhl",
+        "record_kind": "game",
+    },
+    "tennis": {
+        "dataset_key": "tennis_men",
+        "filename": "tennis_men.csv",
+        "competition_key": "",
+        "record_kind": (
+            "player_tournament_forecast"
+        ),
+    },
+}
+
+
+FIVETHIRTYEIGHT_TENNIS_DATASETS = {
+    "tennis_men": "tennis_men.csv",
+    "tennis_women": "tennis_women.csv",
+}
+
+
+def build_fivethirtyeight_forecast_request(
+    *,
+    sport_key: str,
+    dataset_key: str = "",
+) -> Dict[str, Any]:
+    sport = _clean(
+        sport_key
+    ).lower()
+
+    if (
+        sport
+        not in FIVETHIRTYEIGHT_FORECAST_DATASETS
+    ):
+        raise ValueError(
+            "Unsupported FiveThirtyEight "
+            "forecast archive sport."
+        )
+
+    configuration = dict(
+        FIVETHIRTYEIGHT_FORECAST_DATASETS[
+            sport
+        ]
+    )
+
+    requested_dataset = _clean(
+        dataset_key
+    ).lower()
+
+    if sport == "tennis":
+        resolved_dataset = (
+            requested_dataset
+            or configuration[
+                "dataset_key"
+            ]
+        )
+
+        if (
+            resolved_dataset
+            not in FIVETHIRTYEIGHT_TENNIS_DATASETS
+        ):
+            raise ValueError(
+                "Unsupported FiveThirtyEight "
+                "tennis dataset."
+            )
+
+        configuration[
+            "dataset_key"
+        ] = resolved_dataset
+
+        configuration[
+            "filename"
+        ] = (
+            FIVETHIRTYEIGHT_TENNIS_DATASETS[
+                resolved_dataset
+            ]
+        )
+
+    elif (
+        requested_dataset
+        and requested_dataset
+        != configuration[
+            "dataset_key"
+        ]
+    ):
+        raise ValueError(
+            "FiveThirtyEight dataset does "
+            "not match the requested sport."
+        )
+
+    provider = get_provider(
+        "fivethirtyeight_forecast_archive"
+    )
+
+    request = _request(
+        provider_key=(
+            "fivethirtyeight_forecast_archive"
+        ),
+        url=(
+            provider[
+                "base_url"
+            ]
+            + "/"
+            + configuration[
+                "filename"
+            ]
+        ),
+        expected_format="csv",
+    )
+
+    request[
+        "sport_key"
+    ] = sport
+
+    request[
+        "dataset_key"
+    ] = configuration[
+        "dataset_key"
+    ]
+
+    return request
+
+
+def _fivethirtyeight_game_external_id(
+    *,
+    row: Dict[str, Any],
+) -> str:
+    required = [
+        _clean(
+            row.get(
+                "season"
+            )
+        ),
+        _clean(
+            row.get(
+                "date"
+            )
+        ),
+        _clean(
+            row.get(
+                "team1"
+            )
+        ),
+        _clean(
+            row.get(
+                "team2"
+            )
+        ),
+    ]
+
+    if not all(
+        required
+    ):
+        raise ValueError(
+            "FiveThirtyEight game row "
+            "is missing identity fields."
+        )
+
+    parts = [
+        "game",
+        *required,
+    ]
+
+    if (
+        "dh" in row
+        and _clean(
+            row.get(
+                "dh"
+            )
+        )
+    ):
+        parts.append(
+            "dh="
+            + _clean(
+                row.get(
+                    "dh"
+                )
+            )
+        )
+
+    return "|".join(
+        parts
+    )
+
+
+def _fivethirtyeight_tennis_external_id(
+    *,
+    row: Dict[str, Any],
+) -> str:
+    required = [
+        _clean(
+            row.get(
+                "season"
+            )
+        ),
+        _clean(
+            row.get(
+                "forecast_date"
+            )
+        ),
+        _clean(
+            row.get(
+                "player"
+            )
+        ),
+    ]
+
+    if not all(
+        required
+    ):
+        raise ValueError(
+            "FiveThirtyEight tennis row "
+            "is missing identity fields."
+        )
+
+    return "|".join(
+        [
+            "player_tournament_forecast",
+            *required,
+        ]
+    )
+
+
+def normalize_fivethirtyeight_forecast_rows(
+    *,
+    sport_key: str,
+    rows: Iterable[
+        Dict[str, Any]
+    ],
+    dataset_key: str = "",
+) -> List[Dict[str, Any]]:
+    request = (
+        build_fivethirtyeight_forecast_request(
+            sport_key=sport_key,
+            dataset_key=dataset_key,
+        )
+    )
+
+    sport = request[
+        "sport_key"
+    ]
+
+    resolved_dataset = request[
+        "dataset_key"
+    ]
+
+    configuration = dict(
+        FIVETHIRTYEIGHT_FORECAST_DATASETS[
+            sport
+        ]
+    )
+
+    if sport == "tennis":
+        configuration[
+            "dataset_key"
+        ] = resolved_dataset
+
+        configuration[
+            "filename"
+        ] = (
+            FIVETHIRTYEIGHT_TENNIS_DATASETS[
+                resolved_dataset
+            ]
+        )
+
+    normalized = []
+
+    for row in rows:
+        if not isinstance(
+            row,
+            dict,
+        ):
+            raise ValueError(
+                "FiveThirtyEight rows "
+                "must be dictionaries."
+            )
+
+        if sport == "tennis":
+            external_id = (
+                _fivethirtyeight_tennis_external_id(
+                    row=row
+                )
+            )
+
+            occurred_at = _clean(
+                row.get(
+                    "forecast_date"
+                )
+            ) or None
+
+            event_type = (
+                "tournament_forecast_outcome"
+            )
+
+            granularity = (
+                "player_tournament_forecast"
+            )
+
+        else:
+            external_id = (
+                _fivethirtyeight_game_external_id(
+                    row=row
+                )
+            )
+
+            occurred_at = _clean(
+                row.get(
+                    "date"
+                )
+            ) or None
+
+            event_type = (
+                "game_forecast_outcome"
+            )
+
+            granularity = "game"
+
+        season = _clean(
+            row.get(
+                "season"
+            )
+        )
+
+        normalized.append(
+            {
+                "origin_type": (
+                    "external_dataset"
+                ),
+                "data_family": (
+                    "structured_sports_data"
+                ),
+                "dataset_name": (
+                    "fivethirtyeight_"
+                    + resolved_dataset
+                ),
+                "external_record_id": (
+                    external_id
+                ),
+                "adapter_version": (
+                    REMOTE_CORPUS_ADAPTER_VERSION
+                ),
+                "sport_key": sport,
+                "competition_key": (
+                    configuration.get(
+                        "competition_key",
+                        "",
+                    )
+                ),
+                "season_key": season,
+                "event_type": event_type,
+                "granularity": granularity,
+
+                # Rows combine model forecasts
+                # with later observed outcomes.
+                "measurement_kind": "mixed",
+
+                "canonical_url": (
+                    request[
+                        "url"
+                    ]
+                ),
+                "occurred_at": (
+                    occurred_at
+                ),
+                "payload": dict(
+                    row
+                ),
+                "metadata": {
+                    "provider_key": (
+                        "fivethirtyeight_forecast_archive"
+                    ),
+                    "source_repository": (
+                        "fivethirtyeight/"
+                        "checking-our-work-data"
+                    ),
+                    "dataset_key": (
+                        resolved_dataset
+                    ),
+                    "license_class": (
+                        "cc-by-4.0"
+                    ),
+                    "attribution": (
+                        "FiveThirtyEight"
+                    ),
+                    "archived": True,
+                    "contains_model_forecast": True,
+                    "contains_observed_outcome": True,
+                    "validation_role": (
+                        "historical_forecast_outcome"
+                    ),
+                    "record_volume_does_not_establish_truth": (
+                        True
+                    ),
+                    "live_merit_effect_enabled": (
+                        False
+                    ),
+                },
+            }
+        )
+
+    return normalized

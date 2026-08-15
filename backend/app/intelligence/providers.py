@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 
 
 PROVIDER_REGISTRY_VERSION = (
-    "corpus-provider-registry-v1"
+    "corpus-provider-registry-v2"
 )
 
 
@@ -106,6 +106,51 @@ _PROVIDER_ROWS = {
         "usage_note": (
             "JSON is treated as the "
             "canonical Cricsheet format."
+        ),
+    },
+
+    "fivethirtyeight_forecast_archive": {
+        "display_name": (
+            "FiveThirtyEight Forecast Archive"
+        ),
+        "sports": [
+            "american_football",
+            "baseball",
+            "basketball",
+            "ice_hockey",
+            "tennis",
+        ],
+        "competitions": [
+            "*",
+        ],
+        "data_family": (
+            "structured_sports_data"
+        ),
+        "access_mode": (
+            "remote_bulk_csv"
+        ),
+        "adapter_status": "active",
+        "capabilities": [
+            "historical_forecast",
+            "observed_outcome",
+            "game",
+            "player_tournament_forecast",
+        ],
+        "base_url": (
+            "https://raw.githubusercontent.com/"
+            "fivethirtyeight/"
+            "checking-our-work-data/"
+            "master"
+        ),
+        "license_class": (
+            "cc-by-4.0"
+        ),
+        "usage_note": (
+            "Archived FiveThirtyEight forecast "
+            "and observed-outcome data under "
+            "CC BY 4.0. Preserve attribution. "
+            "Suitable for historical validation, "
+            "not live or current sports truth."
         ),
     },
 

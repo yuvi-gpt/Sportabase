@@ -86,6 +86,7 @@ class CorpusProviderRegistryTests(
                 "openf1",
                 "statsbomb_open",
                 "cricsheet",
+                "fivethirtyeight_forecast_archive",
             },
         )
 

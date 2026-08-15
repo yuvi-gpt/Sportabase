@@ -249,7 +249,7 @@ class ValidationCorpusExpansionTests(
             queued_sports,
         )
 
-    def test_review_gated_provider_is_blocked_by_default(
+    def test_review_gated_provider_stays_blocked_while_safe_alternative_is_ready(
         self,
     ):
         result = (
@@ -290,11 +290,16 @@ class ValidationCorpusExpansionTests(
             blocked,
         )
 
+        self.assertIn(
+            "fivethirtyeight_forecast_archive",
+            ready,
+        )
+
         self.assertEqual(
             basketball[
                 "execution_status"
             ],
-            "blocked",
+            "ready",
         )
 
     def test_review_gated_provider_can_be_explicitly_opted_in(

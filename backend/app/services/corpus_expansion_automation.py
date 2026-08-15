@@ -13,11 +13,13 @@ from app.analysis.corpus_expansion import (
 
 from app.services.corpus_adapters import (
     build_cricsheet_request,
+    build_fivethirtyeight_forecast_request,
     build_openf1_request,
     build_statsbomb_open_request,
     fetch_remote_request,
     ingest_normalized_records,
     normalize_cricsheet_matches,
+    normalize_fivethirtyeight_forecast_rows,
     normalize_openf1_rows,
     normalize_statsbomb_rows,
     read_cricsheet_json_archive,
@@ -41,6 +43,7 @@ EXECUTABLE_PROVIDER_KEYS = {
     "openf1",
     "statsbomb_open",
     "cricsheet",
+    "fivethirtyeight_forecast_archive",
 }
 
 
@@ -226,11 +229,27 @@ def _provider_parameters(
 def _build_provider_request(
     *,
     provider_key: str,
+    sport_key: str,
     parameters: Dict[
         str,
         Any,
     ],
 ) -> Dict[str, Any]:
+    if (
+        provider_key
+        == "fivethirtyeight_forecast_archive"
+    ):
+        return (
+            build_fivethirtyeight_forecast_request(
+                sport_key=sport_key,
+                dataset_key=_clean(
+                    parameters.get(
+                        "dataset_key"
+                    )
+                ),
+            )
+        )
+
     if provider_key == "openf1":
         endpoint = _key(
             parameters.get(
@@ -567,6 +586,9 @@ def build_corpus_expansion_tasks(
             provider_key=(
                 selected_provider
             ),
+            sport_key=(
+                sport_key
+            ),
             parameters=(
                 selected_parameters
             ),
@@ -670,6 +692,35 @@ def _normalize_provider_payload(
     parameters = task[
         "parameters"
     ]
+
+    if (
+        provider_key
+        == "fivethirtyeight_forecast_archive"
+    ):
+        if not isinstance(
+            payload,
+            list,
+        ):
+            raise ValueError(
+                "FiveThirtyEight automation "
+                "payload must be a list."
+            )
+
+        return (
+            normalize_fivethirtyeight_forecast_rows(
+                sport_key=(
+                    task[
+                        "sport_key"
+                    ]
+                ),
+                dataset_key=_clean(
+                    parameters.get(
+                        "dataset_key"
+                    )
+                ),
+                rows=payload,
+            )
+        )
 
     if provider_key == "openf1":
         if not isinstance(
