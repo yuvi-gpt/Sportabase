@@ -370,6 +370,226 @@ class MeritCorroborationGoldenDatasetTests(
         )
 
 
+    def test_checked_in_hamilton_single_source_uses_stakeholder_snapshot(
+        self,
+    ):
+        path = (
+            BACKEND_DIR
+            / "data"
+            / "merit_corroboration_goldens.json"
+        )
+
+        result = (
+            load_merit_corroboration_golden_dataset(
+                path
+            )
+        )
+
+        case = [
+            candidate
+            for candidate in result[
+                "cases"
+            ]
+            if candidate[
+                "id"
+            ]
+            == (
+                "2024-hamilton-ferrari-"
+                "single-primary-source"
+            )
+        ][0]
+
+        self.assertEqual(
+            case[
+                "curation"
+            ][
+                "review_status"
+            ],
+            "draft",
+        )
+
+        self.assertNotIn(
+            case,
+            result[
+                "approved_real_world_cases"
+            ],
+        )
+
+        self.assertEqual(
+            case[
+                "expectations"
+            ][
+                "signal"
+            ],
+            (
+                "no_verified_"
+                "corroboration_boost"
+            ),
+        )
+
+        self.assertEqual(
+            case[
+                "expectations"
+            ][
+                "authority_state"
+            ],
+            "stakeholder_confirmed",
+        )
+
+        snapshot = case[
+            "evidence_snapshot"
+        ]
+
+        self.assertEqual(
+            snapshot[
+                "claim_id"
+            ],
+            case[
+                "claim_id"
+            ],
+        )
+
+        self.assertEqual(
+            snapshot[
+                "review"
+            ][
+                "status"
+            ],
+            "draft",
+        )
+
+        self.assertEqual(
+            snapshot[
+                "review"
+            ][
+                "reviewer"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            snapshot[
+                "authority_assessment"
+            ][
+                "confirmation_state"
+            ],
+            "stakeholder_confirmed",
+        )
+
+        observation = snapshot[
+            "observations"
+        ][0]
+
+        self.assertEqual(
+            observation[
+                "source_role"
+            ],
+            "primary_stakeholder",
+        )
+
+        self.assertEqual(
+            observation[
+                "authority_class"
+            ],
+            "direct",
+        )
+
+        self.assertEqual(
+            observation[
+                "provenance_class"
+            ],
+            "direct_statement",
+        )
+
+        self.assertEqual(
+            observation[
+                "independence_status"
+            ],
+            "not_applicable",
+        )
+
+        self.assertEqual(
+            observation[
+                "observed_at"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            observation[
+                "published_at"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            observation[
+                "availability"
+            ],
+            {
+                "precision": (
+                    "date"
+                ),
+                "value": (
+                    "2024-02-01"
+                ),
+                "basis": (
+                    "official_release_date"
+                ),
+            },
+        )
+
+        capture = observation[
+            "capture"
+        ]
+
+        self.assertEqual(
+            capture[
+                "method"
+            ],
+            (
+                "official_search_index_"
+                "snapshot"
+            ),
+        )
+
+        self.assertEqual(
+            capture[
+                "status"
+            ],
+            "partial",
+        )
+
+        self.assertEqual(
+            capture[
+                "captured_at"
+            ],
+            "",
+        )
+
+        self.assertEqual(
+            capture[
+                "content_sha256"
+            ],
+            (
+                "fe8c8d75a0c3f9a88c2e9ae6b36561a"
+                "7d29d30e2a2bf41eee74c8c5c3a60708d"
+            ),
+        )
+
+        self.assertEqual(
+            case[
+                "curation"
+            ][
+                "source_urls"
+            ],
+            [
+                observation[
+                    "source_url"
+                ]
+            ],
+        )
+
     def test_checked_in_drafts_preserve_human_approval_gate(
         self,
     ):

@@ -75,7 +75,8 @@
       "legacy_score": {},
       "corroboration_state": {},
       "expectations": {
-        "signal": "no_verified_corroboration_boost"
+        "signal": "no_verified_corroboration_boost",
+        "authority_state": "stakeholder_confirmed"
       },
       "curation": {
         "version": "merit-corroboration-curation-v1",
@@ -84,9 +85,51 @@
         "reviewer": "",
         "reviewed_at": "",
         "source_urls": [
-          "https://www.ferrari.com/en-EN/corporate/articles/scuderia-ferrari-press-release-01-feb-2024-corporate"
+          "https://www.ferrari.com/en-EN/formula1/articles/scuderia-ferrari-press-release-01-feb-2024"
         ],
-        "label_basis": "PROVISIONAL HUMAN-REVIEW CANDIDATE. This case intentionally represents a one-source evidence snapshot using Ferrari's primary announcement only. An authoritative source can support a claim without, by itself, establishing cross-source corroboration."
+        "label_basis": "DRAFT HUMAN-REVIEW CANDIDATE. This snapshot intentionally contains only Ferrari's own official announcement that Lewis Hamilton would join Scuderia Ferrari for 2025. Ferrari is a primary stakeholder in that claim, so the evidence establishes stakeholder confirmation without requiring a second publisher. Because this snapshot contains only one source, it does not by itself establish cross-source independent corroboration. The case remains draft and has not been human-approved."
+      },
+      "evidence_snapshot": {
+        "version": "claim-evidence-snapshot-v1",
+        "id": "snapshot-2024-hamilton-ferrari-single-primary-source",
+        "claim_id": "golden-hamilton-ferrari-single-source",
+        "claim_text": "Lewis Hamilton will join Scuderia Ferrari for the 2025 Formula 1 season on a multi-year contract.",
+        "as_of": "2024-02-01T23:59:59Z",
+        "observations": [
+          {
+            "id": "ferrari-team-statement-2024-02-01",
+            "actor_id": "scuderia-ferrari",
+            "source_url": "https://www.ferrari.com/en-EN/formula1/articles/scuderia-ferrari-press-release-01-feb-2024",
+            "source_role": "primary_stakeholder",
+            "authority_class": "direct",
+            "reliability_class": "not_applicable",
+            "provenance_class": "direct_statement",
+            "stance": "supports",
+            "independence_status": "not_applicable",
+            "depends_on_observation_ids": [],
+            "published_at": "",
+            "observed_at": "",
+            "availability": {
+              "precision": "date",
+              "value": "2024-02-01",
+              "basis": "official_release_date"
+            },
+            "capture": {
+              "method": "official_search_index_snapshot",
+              "status": "partial",
+              "captured_at": "",
+              "content_sha256": "fe8c8d75a0c3f9a88c2e9ae6b36561a7d29d30e2a2bf41eee74c8c5c3a60708d",
+              "note": "Direct HTTP retrieval was unavailable with HTTP 403 during the review packet. Ferrari's official indexed Formula 1 page provided the announcement title and text. The exact retrospective capture timestamp was not preserved, so it is intentionally left blank."
+            }
+          }
+        ],
+        "review": {
+          "status": "draft",
+          "reviewer": "",
+          "reviewed_at": "",
+          "rationale": "Draft snapshot only. Ferrari's role as a primary stakeholder, the official release date, evidence provenance, and capture method are recorded. The as_of timestamp is an end-of-day curation boundary, not an invented publication time. No human approval has been granted."
+        },
+        "outcome": {}
       }
     }
   ]
