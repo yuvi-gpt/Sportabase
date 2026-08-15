@@ -364,20 +364,6 @@ def _automatic_reference(
         }
     )
 
-    if len(
-        values
-    ) > 1:
-        return {
-            "tier": "contested",
-            "value": "",
-            "confidence": 0.0,
-            "supporting_judgment_ids": [],
-            "supporting_evaluator_families": [],
-            "conflicting_values": (
-                values
-            ),
-        }
-
     gold_basis = (
         AUTO_GOLD_BASIS_BY_FIELD.get(
             field,
@@ -412,6 +398,9 @@ def _automatic_reference(
         }
     )
 
+    # Conflicting hard references remain contested.
+    # A single hard-reference value, however, outranks
+    # disagreement from lower-authority judgments.
     if len(
         hard_values
     ) > 1:
@@ -433,6 +422,43 @@ def _automatic_reference(
         == 1
     ):
         value = hard_values[0]
+
+        # A hard reference may overrule lower-authority
+        # predictions such as model inference or heuristic
+        # guesses. It must NOT erase a conflicting
+        # provenance, structured, deterministic, canonical,
+        # or other hard-evidence signal.
+        overridable_conflict_basis = {
+            "model_inference",
+            "heuristic",
+        }
+
+        blocking_conflicts = [
+            row
+            for row in high_confidence
+            if (
+                row[
+                    "value"
+                ]
+                != value
+                and row[
+                    "basis_class"
+                ]
+                not in overridable_conflict_basis
+            )
+        ]
+
+        if blocking_conflicts:
+            return {
+                "tier": "contested",
+                "value": "",
+                "confidence": 0.0,
+                "supporting_judgment_ids": [],
+                "supporting_evaluator_families": [],
+                "conflicting_values": (
+                    values
+                ),
+            }
 
         supporting = [
             row
@@ -475,6 +501,22 @@ def _automatic_reference(
                 )
             ),
             "conflicting_values": [],
+        }
+
+    # Without a hard reference, ordinary high-confidence
+    # disagreement remains contested exactly as before.
+    if len(
+        values
+    ) > 1:
+        return {
+            "tier": "contested",
+            "value": "",
+            "confidence": 0.0,
+            "supporting_judgment_ids": [],
+            "supporting_evaluator_families": [],
+            "conflicting_values": (
+                values
+            ),
         }
 
     if len(

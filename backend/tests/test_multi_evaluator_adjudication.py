@@ -572,6 +572,161 @@ class MultiEvaluatorAdjudicationTests(
             ],
         )
 
+    def test_machine_verified_hard_reference_outranks_conflicting_model_baseline(
+        self,
+    ):
+        model = self.evaluator_run(
+            run_id="model-baseline",
+            evaluator_id="semantic-v1",
+            evaluator_family=(
+                "semantic_model"
+            ),
+            derivation_mode=(
+                "model_assisted"
+            ),
+            judgments=[
+                self.judgment(
+                    row_id=(
+                        "model-authority"
+                    ),
+                    field=(
+                        "authority_class"
+                    ),
+                    value="none",
+                    confidence=0.90,
+                    evaluator_id=(
+                        "semantic-v1"
+                    ),
+                    evaluator_family=(
+                        "semantic_model"
+                    ),
+                    basis_class=(
+                        "model_inference"
+                    ),
+                    training_eligible=False,
+                )
+            ],
+        )
+
+        verified = self.evaluator_run(
+            run_id="verified-authority",
+            evaluator_id=(
+                "authority-record-v1"
+            ),
+            evaluator_family=(
+                "authority_record"
+            ),
+            derivation_mode=(
+                "machine_verified"
+            ),
+            judgments=[
+                self.judgment(
+                    row_id=(
+                        "verified-authority"
+                    ),
+                    field=(
+                        "authority_class"
+                    ),
+                    value="direct",
+                    confidence=0.99,
+                    evaluator_id=(
+                        "authority-record-v1"
+                    ),
+                    evaluator_family=(
+                        "authority_record"
+                    ),
+                    basis_class=(
+                        "direct_authority_record"
+                    ),
+                    training_eligible=True,
+                )
+            ],
+        )
+
+        result = self.build(
+            [
+                model,
+                verified,
+            ]
+        )
+
+        authority = result[
+            "fields"
+        ][
+            "authority_class"
+        ]
+
+        self.assertEqual(
+            authority[
+                "automatic"
+            ][
+                "tier"
+            ],
+            "auto_gold",
+        )
+
+        self.assertEqual(
+            authority[
+                "automatic"
+            ][
+                "value"
+            ],
+            "direct",
+        )
+
+        self.assertTrue(
+            authority[
+                "reference_gate"
+            ][
+                "training_reference_allowed"
+            ]
+        )
+
+        self.assertEqual(
+            authority[
+                "reference_gate"
+            ][
+                "trusted_hard_reference_judgment_ids"
+            ],
+            [
+                "verified-authority",
+            ],
+        )
+
+        # The incorrect model judgment remains present
+        # in evaluator history for calibration. It simply
+        # cannot veto the stronger hard reference.
+        model_values = [
+            judgment[
+                "value"
+            ]
+            for run in result[
+                "evaluators"
+            ]
+            if (
+                run[
+                    "evaluator_family"
+                ]
+                == "semantic_model"
+            )
+            for judgment in run[
+                "judgments"
+            ]
+            if (
+                judgment[
+                    "field"
+                ]
+                == "authority_class"
+            )
+        ]
+
+        self.assertEqual(
+            model_values,
+            [
+                "none",
+            ],
+        )
+
     def test_untrusted_run_cannot_mark_training_eligible(
         self,
     ):
