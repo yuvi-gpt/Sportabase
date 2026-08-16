@@ -10,3 +10,4 @@ beautifulsoup4
 lxml
 pandas
 lingua-language-detector==2.1.1
+faster-whisper==1.2.1

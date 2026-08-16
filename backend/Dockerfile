@@ -3,9 +3,15 @@ FROM python:3.12-slim
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        libgomp1 \
+        tesseract-ocr \
+        tesseract-ocr-eng \
     && ffmpeg -version >/dev/null \
     && ffprobe -version >/dev/null \
+    && tesseract --version >/dev/null \
+    && tesseract --list-langs >/dev/null \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
