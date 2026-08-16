@@ -89,6 +89,17 @@ class ArticleHistoryCacheHitTests(
             )
         )
 
+        expected_live_merit_cache_token = (
+            main.live_merit_release_cache_token(
+                enabled=(
+                    main.LIVE_MERIT_ENABLED
+                ),
+                certificate_path=(
+                    main.MERIT_SCORE_RELEASE_CERTIFICATE_PATH
+                ),
+            )
+        )
+
         expected_cache_key = (
             main.make_analysis_cache_key(
                 mode="article",
@@ -100,6 +111,8 @@ class ArticleHistoryCacheHitTests(
                     f"{int(main.INTELLIGENCE_SHADOW_ENABLED)}"
                     "|public_intelligence:"
                     f"{ARTICLE_INTELLIGENCE_PUBLIC_VERSION}"
+                    "|live_merit:"
+                    f"{expected_live_merit_cache_token}"
                 ),
                 context_hash=(
                     "media-context-hash"

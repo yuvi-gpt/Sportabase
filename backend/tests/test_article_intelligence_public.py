@@ -46,6 +46,11 @@ class ArticleIntelligencePublicTests(
             ),
         )
 
+        self.assertEqual(
+            ARTICLE_INTELLIGENCE_PUBLIC_VERSION,
+            "article-intelligence-public-v2",
+        )
+
     def test_verified_corroboration(
         self,
     ):
@@ -86,6 +91,97 @@ class ArticleIntelligencePublicTests(
         self.assertFalse(
             result[
                 "affects_merit_score"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "provisional"
+            ]
+        )
+
+    def test_live_certified_effect_is_publicly_explicit(
+        self,
+    ):
+        result = (
+            build_article_intelligence_public_summary(
+                {
+                    "status": "skipped",
+                    "reason": (
+                        "shadow_disabled"
+                    ),
+                },
+                live_merit_release={
+                    "status": "applied",
+                    "score_effect_applied": True,
+                    "signal": (
+                        "verified_corroboration"
+                    ),
+                    "adjustment": 6.0,
+                },
+            )
+        )
+
+        self.assertEqual(
+            result[
+                "status"
+            ],
+            "available",
+        )
+        self.assertTrue(
+            result[
+                "affects_merit_score"
+            ]
+        )
+        self.assertFalse(
+            result[
+                "provisional"
+            ]
+        )
+        self.assertEqual(
+            result[
+                "signal"
+            ],
+            "verified_corroboration",
+        )
+        self.assertIn(
+            "+6",
+            result[
+                "detail"
+            ],
+        )
+
+    def test_non_applied_live_runtime_never_claims_score_effect(
+        self,
+    ):
+        result = (
+            build_article_intelligence_public_summary(
+                {
+                    "status": "completed",
+                    "signal": (
+                        "verified_corroboration"
+                    ),
+                },
+                live_merit_release={
+                    "status": (
+                        "legacy_fallback"
+                    ),
+                    "score_effect_applied": False,
+                    "signal": (
+                        "verified_corroboration"
+                    ),
+                },
+            )
+        )
+
+        self.assertFalse(
+            result[
+                "affects_merit_score"
+            ]
+        )
+        self.assertTrue(
+            result[
+                "provisional"
             ]
         )
 
@@ -205,7 +301,16 @@ class ArticleIntelligencePublicTests(
                     "policy": {
                         "internal": True
                     },
-                }
+                },
+                live_merit_release={
+                    "status": (
+                        "legacy_fallback"
+                    ),
+                    "score_effect_applied": False,
+                    "strict_independence": {
+                        "evidence_id": "private",
+                    },
+                },
             )
         )
 
@@ -226,6 +331,11 @@ class ArticleIntelligencePublicTests(
 
         self.assertNotIn(
             "policy",
+            result,
+        )
+
+        self.assertNotIn(
+            "strict_independence",
             result,
         )
 

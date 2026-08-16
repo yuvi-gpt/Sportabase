@@ -5,7 +5,7 @@ from typing import (
 
 
 ARTICLE_INTELLIGENCE_PUBLIC_VERSION = (
-    "article-intelligence-public-v1"
+    "article-intelligence-public-v2"
 )
 
 
@@ -149,9 +149,129 @@ def _base() -> Dict[str, Any]:
     }
 
 
+def _live_score_effect(
+    live_merit_release: Any,
+    shadow: Any,
+) -> Dict[str, Any] | None:
+    if not isinstance(
+        live_merit_release,
+        dict,
+    ):
+        return None
+
+    if (
+        live_merit_release.get(
+            "score_effect_applied"
+        )
+        is not True
+        or _key(
+            live_merit_release.get(
+                "status"
+            )
+        )
+        != "applied"
+    ):
+        return None
+
+    signal = _key(
+        live_merit_release.get(
+            "signal"
+        )
+    )
+
+    if (
+        signal
+        != "verified_corroboration"
+    ):
+        return None
+
+    shadow_state = (
+        shadow
+        if isinstance(
+            shadow,
+            dict,
+        )
+        else {}
+    )
+
+    adjustment = (
+        live_merit_release.get(
+            "adjustment",
+            0,
+        )
+    )
+
+    try:
+        adjustment_text = (
+            str(
+                int(
+                    round(
+                        float(
+                            adjustment
+                        )
+                    )
+                )
+            )
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        adjustment_text = "6"
+
+    return {
+        "version": (
+            ARTICLE_INTELLIGENCE_PUBLIC_VERSION
+        ),
+        "status": "available",
+        "label": (
+            "Verified independent support"
+        ),
+        "detail": (
+            "Machine-verified independent "
+            "direct-stakeholder support contributed "
+            "+"
+            + adjustment_text
+            + " to this Merit Score."
+        ),
+        "signal": (
+            "verified_corroboration"
+        ),
+        "candidate_count": _count(
+            shadow_state.get(
+                "candidate_count"
+            )
+        ),
+        "verification_pairs": _count(
+            shadow_state.get(
+                "verification_pairs"
+            )
+        ),
+        "corroboration_status": (
+            "established"
+        ),
+        "independence_status": (
+            "established"
+        ),
+        "contested": False,
+        "provisional": False,
+        "affects_merit_score": True,
+    }
+
+
 def build_article_intelligence_public_summary(
     shadow: Any,
+    *,
+    live_merit_release: Any = None,
 ) -> Dict[str, Any]:
+    live = _live_score_effect(
+        live_merit_release,
+        shadow,
+    )
+
+    if live is not None:
+        return live
+
     result = _base()
 
     if not isinstance(

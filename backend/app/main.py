@@ -136,6 +136,10 @@ from app.services.article_intelligence_shadow import (
     ARTICLE_INTELLIGENCE_SHADOW_VERSION,
     run_article_intelligence_shadow,
 )
+from app.services.live_merit_release import (
+    apply_certified_live_merit,
+    live_merit_release_cache_token,
+)
 from app.models.api import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -370,7 +374,7 @@ ANALYSIS_VERSION = os.getenv(
 ).strip()
 SCORING_VERSION = os.getenv(
     "SPORTABASE_SCORING_VERSION",
-    "merit-v1-legacy",
+    "merit-v2-certified-corroboration",
 ).strip()
 
 ANALYSIS_CACHE_TTL_SECONDS = int(
@@ -429,6 +433,26 @@ INTELLIGENCE_SHADOW_ENABLED = (
         "yes",
         "on",
     }
+)
+
+LIVE_MERIT_ENABLED = (
+    os.getenv(
+        "SPORTABASE_LIVE_MERIT_ENABLED",
+        "1",
+    )
+    .strip()
+    .lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+)
+
+MERIT_SCORE_RELEASE_CERTIFICATE_PATH = (
+    DATA_DIR
+    / "merit_score_release_certificate.json"
 )
 
 BRAVE_NEWS_API_KEY = os.getenv(
@@ -2040,9 +2064,13 @@ def analyze(
         AnalyzeResponse=AnalyzeResponse,
         BRAVE_NEWS_API_KEY=BRAVE_NEWS_API_KEY,
         INTELLIGENCE_SHADOW_ENABLED=INTELLIGENCE_SHADOW_ENABLED,
+        LIVE_MERIT_ENABLED=LIVE_MERIT_ENABLED,
         MAX_ANALYZE_CHARS=MAX_ANALYZE_CHARS,
+        MERIT_SCORE_RELEASE_CERTIFICATE_PATH=MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
         analysis_content_hash=analysis_content_hash,
+        apply_certified_live_merit=apply_certified_live_merit,
         app=app,
+        badge=badge,
         clean_html=clean_html,
         db_conn=db_conn,
         detect_article_type=detect_article_type,
@@ -2056,6 +2084,7 @@ def analyze(
         generate_gemini_content=generate_gemini_content,
         get_cached_analysis=get_cached_analysis,
         load_evidence_analysis_state_for_media_item=load_evidence_analysis_state_for_media_item,
+        live_merit_release_cache_token=live_merit_release_cache_token,
         make_analysis_cache_key=make_analysis_cache_key,
         media_item_id_for_url=media_item_id_for_url,
         merit_score=merit_score,

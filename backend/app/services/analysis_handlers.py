@@ -211,9 +211,13 @@ def analyze_article_impl(
     AnalyzeResponse,
     BRAVE_NEWS_API_KEY,
     INTELLIGENCE_SHADOW_ENABLED,
+    LIVE_MERIT_ENABLED,
     MAX_ANALYZE_CHARS,
+    MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
     analysis_content_hash,
+    apply_certified_live_merit,
     app,
+    badge,
     clean_html,
     db_conn,
     detect_article_type,
@@ -227,6 +231,7 @@ def analyze_article_impl(
     generate_gemini_content,
     get_cached_analysis,
     load_evidence_analysis_state_for_media_item,
+    live_merit_release_cache_token,
     make_analysis_cache_key,
     media_item_id_for_url,
     merit_score,
@@ -274,6 +279,8 @@ def analyze_article_impl(
         Dict[str, Any]
     ] = None
 
+    evidence_media_item_id = ""
+
     article_evidence_context_hash = ""
 
     try:
@@ -319,6 +326,17 @@ def analyze_article_impl(
             str(error),
         )
 
+    live_merit_cache_token = (
+        live_merit_release_cache_token(
+            enabled=(
+                LIVE_MERIT_ENABLED
+            ),
+            certificate_path=(
+                MERIT_SCORE_RELEASE_CERTIFICATE_PATH
+            ),
+        )
+    )
+
     cache_key = make_analysis_cache_key(
         mode="article",
         url=req.url,
@@ -329,6 +347,8 @@ def analyze_article_impl(
             f"{int(INTELLIGENCE_SHADOW_ENABLED)}"
             "|public_intelligence:"
             f"{ARTICLE_INTELLIGENCE_PUBLIC_VERSION}"
+            "|live_merit:"
+            f"{live_merit_cache_token}"
         ),
         context_hash=(
             article_evidence_context_hash
@@ -518,6 +538,64 @@ def analyze_article_impl(
         final_type_info,
     )
     mark("merit_score_ms")
+
+    legacy_score = {
+        **score,
+        "reasons": list(
+            score.get("reasons", [])
+        ),
+        "components": dict(
+            score.get("components", {})
+        ),
+        "calculation": dict(
+            score.get("calculation", {})
+        ),
+    }
+
+    try:
+        live_merit_release = (
+            apply_certified_live_merit(
+                enabled=LIVE_MERIT_ENABLED,
+                legacy_score=legacy_score,
+                evidence_bundle=article_evidence_bundle,
+                media_item_id=evidence_media_item_id,
+                certificate_path=(
+                    MERIT_SCORE_RELEASE_CERTIFICATE_PATH
+                ),
+                connection_factory=db_conn,
+                badge_resolver=badge,
+            )
+        )
+
+        runtime_score = live_merit_release.get("score")
+
+        if not isinstance(runtime_score, dict):
+            raise ValueError(
+                "Live Merit runtime score must be a dictionary."
+            )
+
+        score = runtime_score
+
+    except Exception as error:
+        score = legacy_score
+        live_merit_release = {
+            "version": "live-merit-release-runtime-v1",
+            "status": "legacy_fallback",
+            "enabled": bool(LIVE_MERIT_ENABLED),
+            "score_effect_applied": False,
+            "reason": (
+                "runtime_exception:"
+                + type(error).__name__
+            ),
+            "claim_id": "",
+            "signal": "",
+            "adjustment": 0.0,
+            "legacy_total": legacy_score.get("total"),
+            "live_total": legacy_score.get("total"),
+            "score": legacy_score,
+        }
+
+    mark("live_merit_release_ms")
 
     if isinstance(
         single_pass_result,
@@ -755,6 +833,15 @@ def analyze_article_impl(
         },
     )
 
+    response.debug[
+        "live_merit_release"
+    ] = {
+        key: value
+        for key, value
+        in live_merit_release.items()
+        if key != "score"
+    }
+
     try:
         media_item = upsert_media_item(
             url=req.url,
@@ -795,11 +882,12 @@ def analyze_article_impl(
                         response.type_confidence
                     ),
                     legacy_score={
-                        "total": (
-                            response.merit_score
-                        ),
+                        "total": legacy_score["total"],
                         "components": dict(
-                            response.score_components
+                            legacy_score.get(
+                                "components",
+                                {},
+                            )
                         ),
                     },
                     news_api_key=(
@@ -854,7 +942,8 @@ def analyze_article_impl(
 
         response.intelligence = (
             build_article_intelligence_public_summary(
-                intelligence_shadow
+                intelligence_shadow,
+                live_merit_release=live_merit_release,
             )
         )
 

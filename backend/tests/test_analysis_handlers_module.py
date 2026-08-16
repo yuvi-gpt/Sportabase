@@ -108,6 +108,27 @@ class AnalysisHandlersModuleTests(
             main.persist_analysis_snapshot,
         )
 
+        self.assertIs(
+            kwargs[
+                "apply_certified_live_merit"
+            ],
+            main.apply_certified_live_merit,
+        )
+
+        self.assertIs(
+            kwargs[
+                "live_merit_release_cache_token"
+            ],
+            main.live_merit_release_cache_token,
+        )
+
+        self.assertEqual(
+            kwargs[
+                "MERIT_SCORE_RELEASE_CERTIFICATE_PATH"
+            ],
+            main.MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+        )
+
     def test_video_wrapper_delegates(
         self,
     ):
@@ -173,6 +194,11 @@ class AnalysisHandlersModuleTests(
             "clean_html",
             "make_analysis_cache_key",
             "AnalyzeResponse",
+            "apply_certified_live_merit",
+            "live_merit_release_cache_token",
+            "LIVE_MERIT_ENABLED",
+            "MERIT_SCORE_RELEASE_CERTIFICATE_PATH",
+            "badge",
         ):
             self.assertIn(
                 name,
