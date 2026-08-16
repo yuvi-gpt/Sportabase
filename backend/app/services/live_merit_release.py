@@ -12,6 +12,7 @@ from app.analysis.corroboration import (
 )
 from app.analysis.merit import (
     MERIT_CORROBORATION_OVERLAY_VERSION,
+    MERIT_CORROBORATION_SHADOW_MAX_BOOST,
     build_merit_corroboration_overlay,
 )
 from app.analysis.merit_score_release import (
@@ -32,8 +33,10 @@ from app.services.direct_stakeholder_independence_verifier import (
 
 
 LIVE_MERIT_RELEASE_RUNTIME_VERSION = (
-    "live-merit-release-runtime-v1"
+    "live-merit-release-runtime-v2"
 )
+
+LIVE_MERIT_RELEASE_CERTIFIED_ADJUSTMENT = 6.0
 
 LIVE_MERIT_RELEASE_REQUIRED_CERTIFICATE_SHA256 = (
     "1d279803e73cae6aedccc47e8e23f649c4e6b60b8d4d886e591eb7484e63ac53"
@@ -83,12 +86,25 @@ def _metadata(value: Any) -> Dict[str, Any]:
 
 def _read_certificate(
     certificate_path: Path,
+    *,
+    raw: bytes | None = None,
 ) -> Dict[str, Any]:
     path = Path(
         certificate_path
     )
 
-    raw = path.read_bytes()
+    if raw is None:
+        raw = path.read_bytes()
+
+    if not isinstance(
+        raw,
+        (bytes, bytearray),
+    ):
+        raise ValueError(
+            "Live Merit certificate bytes must be bytes."
+        )
+
+    raw = bytes(raw)
 
     raw_sha256 = hashlib.sha256(
         raw
@@ -221,7 +237,8 @@ def live_merit_release_cache_token(
         if raw is not None:
             try:
                 _read_certificate(
-                    path
+                    path,
+                    raw=raw,
                 )
                 state = "authorized"
             except Exception:
@@ -1006,24 +1023,121 @@ def apply_certified_live_merit(
         )
     )
 
-    adjustment = float(
-        overlay.get(
-            "proposed",
-            {},
-        ).get(
-            "adjustment",
-            0.0,
-        )
-        or 0.0
+    proposed = overlay.get(
+        "proposed",
+        {},
     )
+
+    if not isinstance(
+        proposed,
+        dict,
+    ):
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason="overlay_adjustment_invalid",
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
+
+    try:
+        adjustment = float(
+            proposed.get(
+                "adjustment",
+                0.0,
+            )
+            or 0.0
+        )
+
+        max_adjustment = float(
+            proposed.get(
+                "max_adjustment",
+                0.0,
+            )
+            or 0.0
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason="overlay_adjustment_invalid",
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
 
     if adjustment <= 0.0:
         return _legacy_result(
             legacy_score=legacy_score,
             enabled=True,
-            reason=(
-                "overlay_no_positive_effect"
-            ),
+            reason="overlay_no_positive_effect",
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
+
+    if signal != "verified_corroboration":
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason="certified_signal_mismatch",
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
+
+    if (
+        abs(
+            adjustment
+            - LIVE_MERIT_RELEASE_CERTIFIED_ADJUSTMENT
+        )
+        > 1e-9
+        or abs(
+            max_adjustment
+            - LIVE_MERIT_RELEASE_CERTIFIED_ADJUSTMENT
+        )
+        > 1e-9
+        or abs(
+            float(
+                MERIT_CORROBORATION_SHADOW_MAX_BOOST
+            )
+            - LIVE_MERIT_RELEASE_CERTIFIED_ADJUSTMENT
+        )
+        > 1e-9
+    ):
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason="certified_adjustment_mismatch",
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
+
+    overlay_live = overlay.get(
+        "live",
+        {},
+    )
+
+    if (
+        not isinstance(
+            overlay_live,
+            dict,
+        )
+        or overlay_live.get(
+            "score_effect_enabled"
+        )
+        is not False
+    ):
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason="overlay_not_shadow_only",
             certificate=certificate,
             claim_id=claim_id,
             signal=signal,
@@ -1044,15 +1158,27 @@ def apply_certified_live_merit(
             signal=signal,
         )
 
-    strict_lineage = (
-        _strict_direct_stakeholder_lineage(
-            claim_id=claim_id,
-            support_row=support_row,
-            connection_factory=(
-                connection_factory
-            ),
+    try:
+        strict_lineage = (
+            _strict_direct_stakeholder_lineage(
+                claim_id=claim_id,
+                support_row=support_row,
+                connection_factory=connection_factory,
+            )
         )
-    )
+
+    except Exception as error:
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason=(
+                "strict_lineage_revalidation_failed:"
+                + type(error).__name__
+            ),
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
 
     if strict_lineage is None:
         return _legacy_result(
@@ -1120,11 +1246,27 @@ def apply_certified_live_merit(
         "total"
     ] = live_total
 
+    try:
+        live_badge = badge_resolver(
+            live_total
+        )
+
+    except Exception as error:
+        return _legacy_result(
+            legacy_score=legacy_score,
+            enabled=True,
+            reason=(
+                "score_application_failed:"
+                + type(error).__name__
+            ),
+            certificate=certificate,
+            claim_id=claim_id,
+            signal=signal,
+        )
+
     score[
         "badge"
-    ] = badge_resolver(
-        live_total
-    )
+    ] = live_badge
 
     components = score.get(
         "components"

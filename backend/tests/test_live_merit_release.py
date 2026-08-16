@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from pathlib import Path
+from unittest.mock import patch
 
 
 BACKEND_DIR = Path(
@@ -48,6 +49,9 @@ from app.intelligence.sources import (
     source_domain_for_url,
     upsert_intelligence_source,
 )
+from app.analysis.merit import (
+    build_merit_corroboration_overlay as baseline_merit_overlay,
+)
 from app.analysis.merit_score_release import (
     build_merit_score_release_certificate,
 )
@@ -58,6 +62,7 @@ from app.services.direct_stakeholder_independence_verifier import (
     persist_direct_stakeholder_independence_verification,
 )
 from app.services.live_merit_release import (
+    LIVE_MERIT_RELEASE_CERTIFIED_ADJUSTMENT,
     LIVE_MERIT_RELEASE_REQUIRED_CERTIFICATE_SHA256,
     LIVE_MERIT_RELEASE_RUNTIME_VERSION,
     apply_certified_live_merit,
@@ -883,7 +888,7 @@ class LiveMeritReleaseTests(
     ):
         self.assertEqual(
             LIVE_MERIT_RELEASE_RUNTIME_VERSION,
-            "live-merit-release-runtime-v1",
+            "live-merit-release-runtime-v2",
         )
 
         payload = json.loads(
@@ -1559,6 +1564,367 @@ class LiveMeritReleaseTests(
             copied,
             changed,
         )
+
+
+    def test_hardening_runtime_and_cache_boundaries(
+        self,
+    ):
+        self.assertEqual(
+            LIVE_MERIT_RELEASE_RUNTIME_VERSION,
+            "live-merit-release-runtime-v2",
+        )
+
+        self.assertEqual(
+            LIVE_MERIT_RELEASE_CERTIFIED_ADJUSTMENT,
+            6.0,
+        )
+
+        missing = (
+            Path(
+                self.temp.name
+            )
+            / "missing-certificate.json"
+        )
+
+        authorized = (
+            live_merit_release_cache_token(
+                enabled=True,
+                certificate_path=CERTIFICATE_PATH,
+            )
+        )
+
+        disabled = (
+            live_merit_release_cache_token(
+                enabled=False,
+                certificate_path=CERTIFICATE_PATH,
+            )
+        )
+
+        invalid = (
+            live_merit_release_cache_token(
+                enabled=True,
+                certificate_path=missing,
+            )
+        )
+
+        self.assertEqual(
+            len(
+                {
+                    authorized,
+                    disabled,
+                    invalid,
+                }
+            ),
+            3,
+        )
+
+        with patch(
+            (
+                "app.services.live_merit_release."
+                "Path.read_bytes"
+            ),
+            side_effect=AssertionError(
+                "disabled runtime read certificate"
+            ),
+        ) as mocked_read:
+
+            disabled_again = (
+                live_merit_release_cache_token(
+                    enabled=False,
+                    certificate_path=CERTIFICATE_PATH,
+                )
+            )
+
+        mocked_read.assert_not_called()
+
+        self.assertEqual(
+            disabled,
+            disabled_again,
+        )
+
+        raw = (
+            CERTIFICATE_PATH.read_bytes()
+        )
+
+        with patch(
+            (
+                "app.services.live_merit_release."
+                "Path.read_bytes"
+            ),
+            side_effect=[
+                raw,
+                AssertionError(
+                    "certificate read twice"
+                ),
+            ],
+        ) as mocked_read:
+
+            single_capture = (
+                live_merit_release_cache_token(
+                    enabled=True,
+                    certificate_path=CERTIFICATE_PATH,
+                )
+            )
+
+        self.assertEqual(
+            mocked_read.call_count,
+            1,
+        )
+
+        self.assertEqual(
+            single_capture,
+            authorized,
+        )
+
+        with patch(
+            (
+                "app.services.live_merit_release."
+                "LIVE_MERIT_RELEASE_RUNTIME_VERSION"
+            ),
+            "live-merit-release-runtime-v-next",
+        ):
+
+            version_changed = (
+                live_merit_release_cache_token(
+                    enabled=True,
+                    certificate_path=CERTIFICATE_PATH,
+                )
+            )
+
+        self.assertNotEqual(
+            authorized,
+            version_changed,
+        )
+
+    def test_hardening_rejects_uncertified_overlay_contracts(
+        self,
+    ):
+        seeded = (
+            self.seed_direct_positive(
+                media_item_id=(
+                    "media-hardening-overlay"
+                )
+            )
+        )
+
+        legacy = (
+            self.legacy_score()
+        )
+
+        def wrong_adjustment(
+            **kwargs,
+        ):
+            value = copy.deepcopy(
+                baseline_merit_overlay(
+                    **kwargs
+                )
+            )
+
+            value[
+                "proposed"
+            ][
+                "adjustment"
+            ] = 5.0
+
+            return value
+
+        with patch(
+            (
+                "app.services.live_merit_release."
+                "build_merit_corroboration_overlay"
+            ),
+            side_effect=wrong_adjustment,
+        ):
+
+            result = self.apply(
+                bundle=seeded[
+                    "bundle"
+                ],
+                media_item_id=seeded[
+                    "media_item_id"
+                ],
+                legacy_score=legacy,
+            )
+
+        self.assertFalse(
+            result[
+                "score_effect_applied"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "reason"
+            ],
+            "certified_adjustment_mismatch",
+        )
+
+        self.assertEqual(
+            result[
+                "score"
+            ],
+            legacy,
+        )
+
+        def unsafe_live_overlay(
+            **kwargs,
+        ):
+            value = copy.deepcopy(
+                baseline_merit_overlay(
+                    **kwargs
+                )
+            )
+
+            value[
+                "live"
+            ][
+                "score_effect_enabled"
+            ] = True
+
+            return value
+
+        with patch(
+            (
+                "app.services.live_merit_release."
+                "build_merit_corroboration_overlay"
+            ),
+            side_effect=unsafe_live_overlay,
+        ):
+
+            result = self.apply(
+                bundle=seeded[
+                    "bundle"
+                ],
+                media_item_id=seeded[
+                    "media_item_id"
+                ],
+                legacy_score=legacy,
+            )
+
+        self.assertFalse(
+            result[
+                "score_effect_applied"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "reason"
+            ],
+            "overlay_not_shadow_only",
+        )
+
+        self.assertEqual(
+            result[
+                "score"
+            ],
+            legacy,
+        )
+
+    def test_hardening_service_failures_preserve_legacy(
+        self,
+    ):
+        seeded = (
+            self.seed_direct_positive(
+                media_item_id=(
+                    "media-hardening-fallback"
+                )
+            )
+        )
+
+        legacy = (
+            self.legacy_score()
+        )
+
+        with patch.object(
+            self,
+            "connection_factory",
+            side_effect=RuntimeError(
+                "storage unavailable"
+            ),
+        ):
+
+            result = self.apply(
+                bundle=seeded[
+                    "bundle"
+                ],
+                media_item_id=seeded[
+                    "media_item_id"
+                ],
+                legacy_score=legacy,
+            )
+
+        self.assertFalse(
+            result[
+                "score_effect_applied"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "reason"
+            ],
+            (
+                "strict_lineage_revalidation_failed:"
+                "RuntimeError"
+            ),
+        )
+
+        self.assertEqual(
+            result[
+                "score"
+            ],
+            legacy,
+        )
+
+        def failing_badge(
+            _value,
+        ):
+            raise RuntimeError(
+                "badge unavailable"
+            )
+
+        result = (
+            apply_certified_live_merit(
+                enabled=True,
+                legacy_score=legacy,
+                evidence_bundle=seeded[
+                    "bundle"
+                ],
+                media_item_id=seeded[
+                    "media_item_id"
+                ],
+                certificate_path=CERTIFICATE_PATH,
+                connection_factory=(
+                    self.connection_factory
+                ),
+                badge_resolver=failing_badge,
+            )
+        )
+
+        self.assertFalse(
+            result[
+                "score_effect_applied"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "reason"
+            ],
+            (
+                "score_application_failed:"
+                "RuntimeError"
+            ),
+        )
+
+        self.assertEqual(
+            result[
+                "score"
+            ],
+            legacy,
+        )
+
 
 
 if __name__ == "__main__":

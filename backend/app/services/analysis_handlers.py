@@ -18,6 +18,9 @@ from app.services.article_intelligence_public import (
     ARTICLE_INTELLIGENCE_PUBLIC_VERSION,
     build_article_intelligence_public_summary,
 )
+from app.services.live_merit_release import (
+    LIVE_MERIT_RELEASE_RUNTIME_VERSION,
+)
 
 
 def analyze_video_impl(
@@ -579,7 +582,7 @@ def analyze_article_impl(
     except Exception as error:
         score = legacy_score
         live_merit_release = {
-            "version": "live-merit-release-runtime-v1",
+            "version": LIVE_MERIT_RELEASE_RUNTIME_VERSION,
             "status": "legacy_fallback",
             "enabled": bool(LIVE_MERIT_ENABLED),
             "score_effect_applied": False,
