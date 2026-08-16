@@ -7,8 +7,12 @@ from typing import (
     Mapping,
 )
 
+from app.models import (
+    artifacts as artifact_models,
+)
 from app.models import content
 from app.services import (
+    artifact_extraction,
     multimodal_extraction,
 )
 
@@ -42,6 +46,11 @@ class BrowserIngestionResult:
     processing_plan: (
         multimodal_extraction
         .ModalityProcessingPlan
+    )
+
+    artifact_manifest: (
+        artifact_models
+        .ItemArtifactManifest
     )
 
 
@@ -275,12 +284,28 @@ def ingest_browser_capture(
         )
     )
 
+    artifact_manifest = (
+        artifact_extraction
+        .materialize_item_artifacts(
+            item,
+            plan=plan,
+
+            short_video_threshold_seconds=(
+                short_video_threshold_seconds
+            ),
+        )
+    )
+
     return (
         BrowserIngestionResult(
             item=item,
 
             processing_plan=(
                 plan
+            ),
+
+            artifact_manifest=(
+                artifact_manifest
             ),
         )
     )
@@ -342,6 +367,12 @@ def preview_browser_capture(
         "processing_plan": (
             asdict(
                 result.processing_plan
+            )
+        ),
+
+        "artifact_manifest": (
+            _model_payload(
+                result.artifact_manifest
             )
         ),
     }

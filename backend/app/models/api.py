@@ -195,3 +195,10 @@ class BrowserCaptureResponse(
     ] = Field(
         default_factory=dict
     )
+
+    artifact_manifest: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
