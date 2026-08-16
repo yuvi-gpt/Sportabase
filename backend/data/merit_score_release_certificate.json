@@ -1,0 +1,451 @@
+{
+  "blockers": [],
+  "case_count": 3,
+  "cases": [
+    {
+      "claim_id": "c15dce533bbb497289e531b53c7b85f1855ddd57b196c3e5050f61b26c045c86",
+      "corroboration_state": {
+        "claims": [
+          {
+            "canonical_key": "score-release|transfer|kepa|chelsea|arsenal|2025",
+            "claim_id": "c15dce533bbb497289e531b53c7b85f1855ddd57b196c3e5050f61b26c045c86",
+            "contested": false,
+            "contradiction_present": false,
+            "corroboration_established": true,
+            "counts": {
+              "contradictions": 0,
+              "distinct_supporting_sources": 2,
+              "recorded_support_dependencies": 0,
+              "supporting_evidence": 0,
+              "supporting_observations": 2
+            },
+            "independent_support_established": true,
+            "recorded_support_dependency_ids": [],
+            "stance_status": "explicit_support",
+            "status": "corroboration_established",
+            "subject_key": "transfer|kepa|chelsea|arsenal",
+            "support_status": "verified_independent_support",
+            "supporting_source_ids": [
+              "0d38a61a4fdb6e51948f86a1668d9aabe6acbbc681e691ab77208df3de5f7487",
+              "b1c9931c788d9b112c5dde83b15620395877a1eb6a9cbd4e65142d4aa56fb9ef"
+            ]
+          }
+        ],
+        "policy": {
+          "absence_of_dependency_does_not_establish_corroboration": true,
+          "contradiction_does_not_erase_recorded_support": true,
+          "corroboration_does_not_establish_truth": true,
+          "corroboration_requires_established_independent_support": true,
+          "corroboration_requires_explicit_support": true,
+          "evidence_only_support_does_not_establish_corroboration": true,
+          "source_diversity_alone_does_not_establish_corroboration": true
+        },
+        "status_vocabulary": [
+          "no_explicit_support",
+          "evidence_only_support",
+          "single_support_observation",
+          "recorded_support_dependency_present",
+          "support_source_diversity_not_established",
+          "support_independence_unknown",
+          "corroboration_established",
+          "support_provenance_unknown"
+        ],
+        "version": "claim-corroboration-v1"
+      },
+      "expectations": {
+        "adjustment": 6.0,
+        "live_total": 60.0,
+        "shadow_total": 66.0,
+        "signal": "verified_corroboration"
+      },
+      "id": "2025-kepa-chelsea-arsenal-verified-independent",
+      "legacy_score": {
+        "components": {
+          "corroboration": 4
+        },
+        "total": 60
+      },
+      "lineage": {
+        "authority_lineage": [
+          {
+            "claim_participant_ids": [
+              "9cfd883e986d85a8d171467fd370b73ab3edf85c916a9260475b659413c5573f"
+            ],
+            "entity": {
+              "canonical_name": "Chelsea",
+              "entity_key": "football|club|chelsea",
+              "entity_type": "club",
+              "id": "7a1fd0952c01b766c4fe7b059e447c58d57f264802f250855a715ea05a221aea",
+              "sport_key": "football"
+            },
+            "participant_evidence_ids": [
+              "3fddd2964e9dfaf376f983ed1409f182a95719e274d741724f0b4b47c4432dac"
+            ],
+            "source_binding_ids": [
+              "7af1fb469b49a32a21cb69cc6cd535b95277a769cc409255541488ee6d8e5f08"
+            ],
+            "source_evidence_ids": [
+              "098a3dc0a599c4a467b3798477805463b51e6c7b1bca57ec3f047880bb8d0700"
+            ]
+          },
+          {
+            "claim_participant_ids": [
+              "5e0eb8c577a8eaec2e2e1ee1d3b529f1f14e494925fdc355c0a6a2f8167d72ac"
+            ],
+            "entity": {
+              "canonical_name": "Arsenal",
+              "entity_key": "football|club|arsenal",
+              "entity_type": "club",
+              "id": "ba3dced31dcd24e3064f567db1d9d86957d643a7c6cadeabb12f6128205c187f",
+              "sport_key": "football"
+            },
+            "participant_evidence_ids": [
+              "ffd3b5d226c89d867df6b4ab463a743d2d787cfefada3c91afa5a118bfc27667"
+            ],
+            "source_binding_ids": [
+              "2b1575b62f7f9150286c3d52f881ea93a26c7a5721bd94bc55050684d1b9b884"
+            ],
+            "source_evidence_ids": [
+              "a4aed908c48bfa590eeac3c66d220f80dc3aba8cf0cbe1a90254a31d5febfb4e"
+            ]
+          }
+        ],
+        "corroboration_policy_version": "claim-corroboration-v1",
+        "independence_assertion_id": "ad1c4f84c10bd62628698a672f1c2a36ab3819e34512fe4166f1e9732cf835c8",
+        "independence_evidence_id": "3d76c89f7c4359a0d18937101eea1ee8be46f47137632694a214665c5dc805a3",
+        "independence_verifier_version": "direct-stakeholder-independence-verifier-v1",
+        "official_domain_reference_sha256": "e3fa2591f45407162bacab792b506e1f4bf3f970138da5c3224c65353cb5cbfe",
+        "official_domain_reference_url": "https://www.premierleague.com/en/withdrawing-consent-from-clubs",
+        "overlay_version": "merit-corroboration-overlay-v2",
+        "stage_database_sha256": "9eb93c928f94e2af1af9f9ccc4ff1be81210ba1f0f0171e9583db7dcbce6a23d",
+        "support_policy_version": "claim-support-provenance-v2"
+      },
+      "machine_verified": true,
+      "origin": "real_world",
+      "scenario": "verified_independent_corroboration",
+      "source_captures": [
+        {
+          "content_sha256": "d4b0e9540943ed78a0c319d401114df27d7e0277217b2003c5f03419bf1f6098",
+          "source_id": "0d38a61a4fdb6e51948f86a1668d9aabe6acbbc681e691ab77208df3de5f7487",
+          "url": "https://www.chelseafc.com/en/news/article/kepa-departs-for-arsenal"
+        },
+        {
+          "content_sha256": "9fb1f8d06862759e49057209a33facb6404a5e27abe7217def5d35e9e011f10c",
+          "source_id": "b1c9931c788d9b112c5dde83b15620395877a1eb6a9cbd4e65142d4aa56fb9ef",
+          "url": "https://www.arsenal.com/feature/keeping-up-with-kepa-13-facts-about-our-no.-13-aNJuV9a3rC9X"
+        }
+      ],
+      "version": "merit-score-release-case-v1"
+    },
+    {
+      "claim_id": "8d8c5df9faf0ac8c75b3e0e42f6dcbef93e88002e4e4699c3cf8692fcc55c810",
+      "corroboration_state": {
+        "claims": [
+          {
+            "canonical_key": "score-release|manager-departure|klopp|liverpool|dependency|2024",
+            "claim_id": "8d8c5df9faf0ac8c75b3e0e42f6dcbef93e88002e4e4699c3cf8692fcc55c810",
+            "contested": false,
+            "contradiction_present": false,
+            "corroboration_established": false,
+            "counts": {
+              "contradictions": 0,
+              "distinct_supporting_sources": 2,
+              "recorded_support_dependencies": 1,
+              "supporting_evidence": 0,
+              "supporting_observations": 2
+            },
+            "independent_support_established": false,
+            "recorded_support_dependency_ids": [
+              "66af4e344f43c1f8e7a7d5cd8d513a417b41eb705157bfd3510e8595eea0be2b"
+            ],
+            "stance_status": "explicit_support",
+            "status": "recorded_support_dependency_present",
+            "subject_key": "manager-departure|klopp|liverpool|2024",
+            "support_status": "recorded_support_dependency_present",
+            "supporting_source_ids": [
+              "439694b79bae26d33a8072a17f0a41a3d51962745d07ad5542d19ee318ec3ce0",
+              "d50ab70189a6706998c97329bc20db4397c8ca584bc9fe2b20249a06d79259f2"
+            ]
+          }
+        ],
+        "policy": {
+          "absence_of_dependency_does_not_establish_corroboration": true,
+          "contradiction_does_not_erase_recorded_support": true,
+          "corroboration_does_not_establish_truth": true,
+          "corroboration_requires_established_independent_support": true,
+          "corroboration_requires_explicit_support": true,
+          "evidence_only_support_does_not_establish_corroboration": true,
+          "source_diversity_alone_does_not_establish_corroboration": true
+        },
+        "status_vocabulary": [
+          "no_explicit_support",
+          "evidence_only_support",
+          "single_support_observation",
+          "recorded_support_dependency_present",
+          "support_source_diversity_not_established",
+          "support_independence_unknown",
+          "corroboration_established",
+          "support_provenance_unknown"
+        ],
+        "version": "claim-corroboration-v1"
+      },
+      "expectations": {
+        "adjustment": 0.0,
+        "live_total": 70.0,
+        "shadow_total": 70.0,
+        "signal": "support_dependency_present"
+      },
+      "id": "2024-klopp-liverpool-sky-recorded-dependency",
+      "legacy_score": {
+        "components": {
+          "corroboration": 5
+        },
+        "total": 70
+      },
+      "lineage": {
+        "corroboration_policy_version": "claim-corroboration-v1",
+        "dependency_basis": "sky_explicit_lfctv_attribution",
+        "dependency_evidence_id": "036d3983bfe67c2b650fac1606d3b6168b85e8feb26974431b46533f2e6094cd",
+        "dependency_id": "66af4e344f43c1f8e7a7d5cd8d513a417b41eb705157bfd3510e8595eea0be2b",
+        "dependency_relationship_type": "derived_from",
+        "overlay_version": "merit-corroboration-overlay-v2",
+        "stage_database_sha256": "9eb93c928f94e2af1af9f9ccc4ff1be81210ba1f0f0171e9583db7dcbce6a23d",
+        "support_policy_version": "claim-support-provenance-v2"
+      },
+      "machine_verified": true,
+      "origin": "real_world",
+      "scenario": "recorded_dependency_no_boost",
+      "source_captures": [
+        {
+          "content_sha256": "9b980ea011d49452c7686bc4367c9952359e7ee0e587ae3e89157be0ce0305fe",
+          "source_id": "d50ab70189a6706998c97329bc20db4397c8ca584bc9fe2b20249a06d79259f2",
+          "url": "https://www.liverpoolfc.com/news/jurgen-klopp-announces-decision-step-down-liverpool-manager-end-season?embed=true"
+        },
+        {
+          "content_sha256": "77b7e6a70189218ddb4de4f661a493611dcba28c858a4490b5a7ccc8f5d85559",
+          "source_id": "439694b79bae26d33a8072a17f0a41a3d51962745d07ad5542d19ee318ec3ce0",
+          "url": "https://www.skysports.com/football/news/11095/13056662/klopp-to-leave-liverpool-at-end-of-season"
+        }
+      ],
+      "version": "merit-score-release-case-v1"
+    },
+    {
+      "claim_id": "d5a75828e817c4fb1b2ac12151f390d27f341da224addb390849e5e004f70043",
+      "corroboration_state": {
+        "claims": [
+          {
+            "canonical_key": "score-release|manager-departure|klopp|liverpool|same-publisher|2024",
+            "claim_id": "d5a75828e817c4fb1b2ac12151f390d27f341da224addb390849e5e004f70043",
+            "contested": false,
+            "contradiction_present": false,
+            "corroboration_established": false,
+            "counts": {
+              "contradictions": 0,
+              "distinct_supporting_sources": 1,
+              "recorded_support_dependencies": 0,
+              "supporting_evidence": 0,
+              "supporting_observations": 2
+            },
+            "independent_support_established": false,
+            "recorded_support_dependency_ids": [],
+            "stance_status": "explicit_support",
+            "status": "support_source_diversity_not_established",
+            "subject_key": "manager-departure|klopp|liverpool|2024|same-publisher-control",
+            "support_status": "support_source_diversity_not_established",
+            "supporting_source_ids": [
+              "d50ab70189a6706998c97329bc20db4397c8ca584bc9fe2b20249a06d79259f2"
+            ]
+          }
+        ],
+        "policy": {
+          "absence_of_dependency_does_not_establish_corroboration": true,
+          "contradiction_does_not_erase_recorded_support": true,
+          "corroboration_does_not_establish_truth": true,
+          "corroboration_requires_established_independent_support": true,
+          "corroboration_requires_explicit_support": true,
+          "evidence_only_support_does_not_establish_corroboration": true,
+          "source_diversity_alone_does_not_establish_corroboration": true
+        },
+        "status_vocabulary": [
+          "no_explicit_support",
+          "evidence_only_support",
+          "single_support_observation",
+          "recorded_support_dependency_present",
+          "support_source_diversity_not_established",
+          "support_independence_unknown",
+          "corroboration_established",
+          "support_provenance_unknown"
+        ],
+        "version": "claim-corroboration-v1"
+      },
+      "expectations": {
+        "adjustment": 0.0,
+        "live_total": 80.0,
+        "shadow_total": 80.0,
+        "signal": "no_verified_corroboration_boost"
+      },
+      "id": "2024-klopp-liverpool-two-pages-one-publisher",
+      "legacy_score": {
+        "components": {
+          "corroboration": 6
+        },
+        "total": 80
+      },
+      "lineage": {
+        "canonical_domain": "liverpoolfc.com",
+        "corroboration_policy_version": "claim-corroboration-v1",
+        "distinct_page_count": 2,
+        "distinct_source_count": 1,
+        "overlay_version": "merit-corroboration-overlay-v2",
+        "source_identity_basis": "publisher|canonical_domain",
+        "stage_database_sha256": "9eb93c928f94e2af1af9f9ccc4ff1be81210ba1f0f0171e9583db7dcbce6a23d",
+        "support_policy_version": "claim-support-provenance-v2"
+      },
+      "machine_verified": true,
+      "origin": "real_world",
+      "scenario": "same_publisher_no_diversity",
+      "source_captures": [
+        {
+          "content_sha256": "9b980ea011d49452c7686bc4367c9952359e7ee0e587ae3e89157be0ce0305fe",
+          "source_id": "d50ab70189a6706998c97329bc20db4397c8ca584bc9fe2b20249a06d79259f2",
+          "url": "https://www.liverpoolfc.com/news/jurgen-klopp-announces-decision-step-down-liverpool-manager-end-season?embed=true"
+        },
+        {
+          "content_sha256": "85989859f6fc75ae265f5c365b231a2b964b49b0b6fd6b36708067c64eeef1fb",
+          "source_id": "d50ab70189a6706998c97329bc20db4397c8ca584bc9fe2b20249a06d79259f2",
+          "url": "https://www.liverpoolfc.com/news/jurgen-klopp-extended-interview-why-ive-made-decision-leave-liverpool?amp=1"
+        }
+      ],
+      "version": "merit-score-release-case-v1"
+    }
+  ],
+  "certificate_sha256": "1d279803e73cae6aedccc47e8e23f649c4e6b60b8d4d886e591eb7484e63ac53",
+  "evaluation": {
+    "cases": [
+      {
+        "case_id": "2025-kepa-chelsea-arsenal-verified-independent",
+        "checks": {
+          "adjustment": true,
+          "live_total": true,
+          "shadow_total": true,
+          "signal": true
+        },
+        "claim_id": "c15dce533bbb497289e531b53c7b85f1855ddd57b196c3e5050f61b26c045c86",
+        "expectations_passed": true,
+        "expected": {
+          "adjustment": 6.0,
+          "live_total": 60.0,
+          "shadow_total": 66.0,
+          "signal": "verified_corroboration"
+        },
+        "invariance_group": "",
+        "observed": {
+          "adjustment": 6.0,
+          "live_total": 60.0,
+          "shadow_total": 66.0,
+          "signal": "verified_corroboration"
+        },
+        "safety_violations": []
+      },
+      {
+        "case_id": "2024-klopp-liverpool-sky-recorded-dependency",
+        "checks": {
+          "adjustment": true,
+          "live_total": true,
+          "shadow_total": true,
+          "signal": true
+        },
+        "claim_id": "8d8c5df9faf0ac8c75b3e0e42f6dcbef93e88002e4e4699c3cf8692fcc55c810",
+        "expectations_passed": true,
+        "expected": {
+          "adjustment": 0.0,
+          "live_total": 70.0,
+          "shadow_total": 70.0,
+          "signal": "support_dependency_present"
+        },
+        "invariance_group": "",
+        "observed": {
+          "adjustment": 0.0,
+          "live_total": 70.0,
+          "shadow_total": 70.0,
+          "signal": "support_dependency_present"
+        },
+        "safety_violations": []
+      },
+      {
+        "case_id": "2024-klopp-liverpool-two-pages-one-publisher",
+        "checks": {
+          "adjustment": true,
+          "live_total": true,
+          "shadow_total": true,
+          "signal": true
+        },
+        "claim_id": "d5a75828e817c4fb1b2ac12151f390d27f341da224addb390849e5e004f70043",
+        "expectations_passed": true,
+        "expected": {
+          "adjustment": 0.0,
+          "live_total": 80.0,
+          "shadow_total": 80.0,
+          "signal": "no_verified_corroboration_boost"
+        },
+        "invariance_group": "",
+        "observed": {
+          "adjustment": 0.0,
+          "live_total": 80.0,
+          "shadow_total": 80.0,
+          "signal": "no_verified_corroboration_boost"
+        },
+        "safety_violations": []
+      }
+    ],
+    "enablement": {
+      "live_enablement_authorized": false,
+      "reason": "Passing deterministic policy fixtures alone does not authorize live scoring. A machine-verifiable real-world score-release certificate is required.",
+      "recommendation": "machine_score_release_certificate_required"
+    },
+    "invariance_groups": [],
+    "metrics": {
+      "cases": 3,
+      "contested_positive_adjustments": 0,
+      "expectations_failed": 0,
+      "expectations_passed": 3,
+      "invariance_failures": 0,
+      "invariance_groups_checked": 0,
+      "live_score_changes": 0,
+      "negative_adjustments": 0,
+      "positive_adjustments": 1,
+      "safety_violations": 0,
+      "unverified_positive_adjustments": 0
+    },
+    "policy": {
+      "contested_positive_effects_are_safety_violations": true,
+      "evaluation_does_not_enable_live_scoring": true,
+      "invariance_groups_can_guard_against_source_count_scaling": true,
+      "live_score_changes_are_safety_violations": true,
+      "machine_verified_real_world_score_certificate_is_required_before_enablement": true,
+      "negative_corroboration_adjustments_are_not_allowed": true,
+      "synthetic_policy_cases_are_not_real_world_validation": true,
+      "unverified_positive_effects_are_safety_violations": true
+    },
+    "status": "passed",
+    "version": "merit-corroboration-evaluation-v2"
+  },
+  "live_enablement_authorized": true,
+  "policy": {
+    "certificate_does_not_itself_activate_live_merit": true,
+    "dependency_control_must_not_boost": true,
+    "human_review_not_part_of_release_path": true,
+    "machine_verification_required": true,
+    "model_output_is_not_release_truth": true,
+    "positive_effect_requires_verified_independence": true,
+    "real_world_cases_required": true,
+    "same_publisher_control_must_not_boost": true
+  },
+  "scenario_counts": {
+    "recorded_dependency_no_boost": 1,
+    "same_publisher_no_diversity": 1,
+    "verified_independent_corroboration": 1
+  },
+  "status": "authorized",
+  "version": "merit-score-release-certificate-v1"
+}
