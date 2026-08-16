@@ -389,6 +389,9 @@ class MultimodalAdjudicationIntakeTests(
     def build(
         self,
         result=None,
+        *,
+        aligned_evidence_ids=None,
+        source_observation_ids=None,
     ):
         return (
             intake
@@ -398,6 +401,12 @@ class MultimodalAdjudicationIntakeTests(
                 semantic_result=(
                     result
                     or semantic()
+                ),
+                aligned_evidence_ids=(
+                    aligned_evidence_ids
+                ),
+                source_observation_ids=(
+                    source_observation_ids
                 ),
                 connection_factory=(
                     self.factory
@@ -1048,6 +1057,189 @@ class MultimodalAdjudicationIntakeTests(
                 "adjudication_not_performed"
             ]
         )
+
+    def _seed_second_claim_media_observation(
+        self,
+    ):
+        second_url = (
+            "https://other.example/post"
+        )
+
+        self.execute(
+            '''
+            INSERT INTO media_items
+            VALUES (?)
+            ''',
+            (
+                "media-2",
+            ),
+        )
+
+        self.execute(
+            '''
+            INSERT INTO evidence_records
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                "evidence-2",
+                "evidence-key-2",
+                "multimodal_claim_candidate",
+                SUBJECT,
+                "Arsenal completed the signing.",
+                second_url,
+                "candidate:2",
+                "unverified",
+                None,
+                NOW,
+                NOW,
+                "{}",
+            ),
+        )
+
+        self.execute(
+            '''
+            INSERT INTO source_observations
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                "observation-2",
+                "source-2",
+                "media-2",
+                None,
+                SUBJECT,
+                "multimodal_claim_candidate",
+                "unresolved",
+                "",
+                second_url,
+                None,
+                NOW,
+                NOW,
+                "{}",
+            ),
+        )
+
+        self.execute(
+            '''
+            INSERT INTO claim_links
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                "link-evidence-2",
+                CLAIM_ID,
+                None,
+                None,
+                "evidence-2",
+                "aligned_to",
+                None,
+                NOW,
+                NOW,
+                "{}",
+            ),
+        )
+
+        self.execute(
+            '''
+            INSERT INTO claim_links
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                "link-observation-2",
+                CLAIM_ID,
+                "observation-2",
+                None,
+                None,
+                "observed_in",
+                None,
+                NOW,
+                NOW,
+                "{}",
+            ),
+        )
+
+    def test_explicit_candidate_scope_allows_same_claim_on_multiple_media(
+        self,
+    ):
+        self._seed_second_claim_media_observation()
+
+        result = self.build(
+            aligned_evidence_ids=[
+                EVIDENCE_ID
+            ],
+            source_observation_ids=[
+                OBSERVATION_ID
+            ],
+        )
+
+        self.assertEqual(
+            result[
+                "aligned_evidence_ids"
+            ],
+            [
+                EVIDENCE_ID
+            ],
+        )
+
+        self.assertEqual(
+            result[
+                "source_observation_ids"
+            ],
+            [
+                OBSERVATION_ID
+            ],
+        )
+
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "explicit_persistence_scope_applied"
+            ]
+        )
+
+        claim_links = result[
+            "evidence_analysis_bundle"
+        ][
+            "claim_links"
+        ]
+
+        self.assertEqual(
+            {
+                row["id"]
+                for row in claim_links
+            },
+            {
+                "link-evidence",
+                "link-observation",
+            },
+        )
+
+    def test_explicit_candidate_scope_must_reference_claim_links(
+        self,
+    ):
+        with self.assertRaises(
+            intake
+            .IntakeBindingError
+        ):
+            self.build(
+                aligned_evidence_ids=[
+                    "not-linked-evidence"
+                ],
+                source_observation_ids=[
+                    OBSERVATION_ID
+                ],
+            )
+
+    def test_explicit_candidate_scope_arguments_must_be_supplied_together(
+        self,
+    ):
+        with self.assertRaises(
+            ValueError
+        ):
+            self.build(
+                aligned_evidence_ids=[
+                    EVIDENCE_ID
+                ],
+            )
 
     def test_intake_is_deterministic(self):
         first = self.build()

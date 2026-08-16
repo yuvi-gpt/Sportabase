@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import math
 
-from typing import Any, Dict, List, Mapping
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+)
 
 from app.analysis import evidence as evidence_analysis
 from app.analysis import observation_semantics
@@ -1007,6 +1014,95 @@ def _merge_judgments(
     return output
 
 
+def _explicit_scope_ids(
+    raw: Optional[
+        Sequence[str]
+    ],
+    *,
+    label: str,
+) -> Optional[List[str]]:
+    if raw is None:
+        return None
+
+    if isinstance(
+        raw,
+        (
+            str,
+            bytes,
+            Mapping,
+        ),
+    ):
+        raise ValueError(
+            label
+            + " must be a sequence of IDs."
+        )
+
+    try:
+        values = list(
+            raw
+        )
+    except TypeError as error:
+        raise ValueError(
+            label
+            + " must be a sequence of IDs."
+        ) from error
+
+    normalized = sorted({
+        _clean(value)
+        for value in values
+        if _clean(value)
+    })
+
+    if not normalized:
+        raise ValueError(
+            label
+            + " cannot be empty when supplied."
+        )
+
+    if len(normalized) != len(
+        values
+    ):
+        raise ValueError(
+            label
+            + " must contain unique, non-empty IDs."
+        )
+
+    return normalized
+
+
+def _scope_claim_links(
+    links: List[Dict[str, Any]],
+    *,
+    evidence_ids: List[str],
+    observation_ids: List[str],
+) -> List[Dict[str, Any]]:
+    evidence = set(
+        evidence_ids
+    )
+    observations = set(
+        observation_ids
+    )
+
+    return [
+        row
+        for row in links
+        if (
+            _clean(
+                row.get(
+                    "evidence_id"
+                )
+            )
+            in evidence
+            or _clean(
+                row.get(
+                    "source_observation_id"
+                )
+            )
+            in observations
+        )
+    ]
+
+
 def build_multimodal_adjudication_intake(
     *,
     claim_id: str,
@@ -1015,6 +1111,12 @@ def build_multimodal_adjudication_intake(
         str,
         Any,
     ],
+    aligned_evidence_ids: Optional[
+        Sequence[str]
+    ] = None,
+    source_observation_ids: Optional[
+        Sequence[str]
+    ] = None,
     connection_factory,
 ) -> Dict[str, Any]:
     normalized_claim_id = _clean(
@@ -1038,6 +1140,45 @@ def build_multimodal_adjudication_intake(
             "Adjudication intake media "
             "item ID is required."
         )
+
+    explicit_evidence_ids = (
+        _explicit_scope_ids(
+            aligned_evidence_ids,
+            label=(
+                "Aligned evidence scope"
+            ),
+        )
+    )
+
+    explicit_observation_ids = (
+        _explicit_scope_ids(
+            source_observation_ids,
+            label=(
+                "Source observation scope"
+            ),
+        )
+    )
+
+    if (
+        (
+            explicit_evidence_ids
+            is None
+        )
+        != (
+            explicit_observation_ids
+            is None
+        )
+    ):
+        raise ValueError(
+            "Explicit adjudication intake "
+            "evidence and observation scopes "
+            "must be supplied together."
+        )
+
+    explicit_scope = (
+        explicit_evidence_ids
+        is not None
+    )
 
     conn = connection_factory()
 
@@ -1077,17 +1218,80 @@ def build_multimodal_adjudication_intake(
             normalized_claim_id,
         )
 
-        evidence_ids = (
+        linked_evidence_ids = (
             _aligned_evidence_ids(
                 links
             )
         )
 
-        observation_ids = (
+        linked_observation_ids = (
             _observed_source_ids(
                 links
             )
         )
+
+        if explicit_scope:
+            missing_evidence = sorted(
+                set(
+                    explicit_evidence_ids
+                    or []
+                )
+                - set(
+                    linked_evidence_ids
+                )
+            )
+
+            missing_observations = sorted(
+                set(
+                    explicit_observation_ids
+                    or []
+                )
+                - set(
+                    linked_observation_ids
+                )
+            )
+
+            if missing_evidence:
+                raise IntakeBindingError(
+                    "Explicit aligned evidence "
+                    "scope is not linked to "
+                    "the selected claim."
+                )
+
+            if missing_observations:
+                raise IntakeBindingError(
+                    "Explicit source observation "
+                    "scope is not linked to "
+                    "the selected claim."
+                )
+
+            evidence_ids = list(
+                explicit_evidence_ids
+                or []
+            )
+
+            observation_ids = list(
+                explicit_observation_ids
+                or []
+            )
+
+            links = _scope_claim_links(
+                links,
+                evidence_ids=(
+                    evidence_ids
+                ),
+                observation_ids=(
+                    observation_ids
+                ),
+            )
+
+        else:
+            evidence_ids = (
+                linked_evidence_ids
+            )
+            observation_ids = (
+                linked_observation_ids
+            )
 
         if not evidence_ids:
             raise IntakeBindingError(
@@ -1328,6 +1532,8 @@ def build_multimodal_adjudication_intake(
                     True,
                 "adjudication_state_not_persisted":
                     True,
+                "explicit_persistence_scope_applied":
+                    explicit_scope,
                 "training_eligibility_not_changed_by_model":
                     True,
                 "establishes_truth":
