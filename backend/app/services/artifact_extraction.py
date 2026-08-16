@@ -734,6 +734,62 @@ def materialize_item_artifacts(
             ),
         )
 
+        frame_work_id = (
+            work_by_component
+            .get(
+                component_id,
+                {},
+            )
+            .get(
+                "video_frame_extract"
+            )
+        )
+
+        if not frame_work_id:
+            raise ValueError(
+                "Video visual work requires "
+                "frame extraction work."
+            )
+
+        register(
+            component_id,
+            "video_visual",
+            _work(
+                operation="video_visual",
+                source_item_ids=[
+                    item.item_id
+                ],
+                source_component_ids=[
+                    component_id
+                ],
+                strategy=(
+                    "sampled_frame_visual_"
+                    "interpretation"
+                ),
+                parameters={
+                    "media_url": (
+                        media.media_url
+                    ),
+                    "duration_seconds": (
+                        media.duration_seconds
+                    ),
+                },
+                depends_on_work_ids=[
+                    frame_work_id
+                ],
+                provenance=(
+                    _component_provenance(
+                        item=item,
+                        component=media,
+                        extraction_method=(
+                            "artifact_work:"
+                            "video_visual"
+                        ),
+                    )
+                ),
+            ),
+        )
+
     for component_id in (
         plan.transcription_component_ids
     ):
@@ -922,6 +978,84 @@ def materialize_item_artifacts(
                         extraction_method=(
                             "artifact_work:"
                             "caption_media_alignment"
+                        ),
+                    )
+                ),
+            )
+        )
+
+    if item.media_components:
+        semantic_dependency_operations = {
+            "image_visual",
+            "video_visual",
+            "ocr",
+            "transcription",
+            "caption_media_alignment",
+        }
+
+        semantic_dependencies = [
+            work.work_id
+            for work
+            in work_units
+            if work.operation
+            in semantic_dependency_operations
+        ]
+
+        work_units.append(
+            _work(
+                operation=(
+                    "multimodal_semantic_fusion"
+                ),
+                source_item_ids=[
+                    item.item_id
+                ],
+                source_component_ids=[
+                    *[
+                        component.component_id
+                        for component
+                        in item.text_components
+                    ],
+                    *[
+                        component.component_id
+                        for component
+                        in item.media_components
+                    ],
+                ],
+                strategy=(
+                    "fuse_visual_ocr_"
+                    "transcript_caption"
+                ),
+                parameters={
+                    "caption_media_pairs": [
+                        [
+                            caption_id,
+                            media_id,
+                        ]
+                        for (
+                            caption_id,
+                            media_id,
+                        )
+                        in (
+                            plan
+                            .caption_media_alignment_pairs
+                        )
+                    ],
+                    "platform": (
+                        item.platform
+                    ),
+                    "platform_surface": (
+                        item.platform_surface
+                    ),
+                },
+                depends_on_work_ids=(
+                    semantic_dependencies
+                ),
+                provenance=(
+                    _item_provenance(
+                        item,
+                        extraction_method=(
+                            "artifact_work:"
+                            "multimodal_semantic_fusion"
                         ),
                     )
                 ),

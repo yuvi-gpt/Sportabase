@@ -1037,13 +1037,45 @@ class MultimodalArtifactRuntimeTests(
             )
         )
 
-        self.assertTrue(
-            all(
-                work.status
-                == "completed"
-                for work
-                in result.work_units
-            )
+        statuses = {
+            work.operation: work.status
+            for work
+            in result.work_units
+        }
+
+        self.assertEqual(
+            statuses[
+                "video_frame_extract"
+            ],
+            "completed",
+        )
+
+        self.assertEqual(
+            statuses[
+                "ocr"
+            ],
+            "completed",
+        )
+
+        self.assertEqual(
+            statuses[
+                "caption_media_alignment"
+            ],
+            "completed",
+        )
+
+        self.assertEqual(
+            statuses[
+                "video_visual"
+            ],
+            "pending",
+        )
+
+        self.assertEqual(
+            statuses[
+                "multimodal_semantic_fusion"
+            ],
+            "pending",
         )
 
         kinds = {
