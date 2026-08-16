@@ -143,6 +143,8 @@ from app.services.live_merit_release import (
 from app.models.api import (
     AnalyzeRequest,
     AnalyzeResponse,
+    BrowserCaptureRequest,
+    BrowserCaptureResponse,
     ContentResolveRequest,
     ContentResolveResponse,
     IngestResponse,
@@ -150,6 +152,7 @@ from app.models.api import (
     VideoAnalyzeRequest,
     VideoAnalyzeResponse,
 )
+from app.services import browser_ingestion
 from app.services.content_resolution import (
     TRACKING_QUERY_PARAMETERS,
     YOUTUBE_HOSTS,
@@ -2023,6 +2026,42 @@ def resolve_content(
         detect_content_source=detect_content_source,
         resolve_article_content=resolve_article_content,
         resolve_youtube_content=resolve_youtube_content,
+    )
+
+
+
+@app.post(
+    "/content/browser-capture",
+    response_model=BrowserCaptureResponse,
+)
+def browser_capture_preview(
+    req: BrowserCaptureRequest,
+):
+    try:
+        payload = (
+            browser_ingestion
+            .preview_browser_capture(
+                req.capture,
+
+                short_video_threshold_seconds=(
+                    req
+                    .short_video_threshold_seconds
+                ),
+            )
+        )
+    except (
+        TypeError,
+        ValueError,
+    ) as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(
+                error
+            ),
+        ) from error
+
+    return BrowserCaptureResponse(
+        **payload
     )
 
 

@@ -155,3 +155,43 @@ class ContentResolveResponse(BaseModel):
     ] = Field(
         default_factory=dict
     )
+
+
+
+class BrowserCaptureRequest(
+    BaseModel
+):
+    capture: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
+    short_video_threshold_seconds: float = (
+        Field(
+            180.0,
+            gt=0.0,
+            le=86400.0,
+        )
+    )
+
+
+class BrowserCaptureResponse(
+    BaseModel
+):
+    version: str
+
+    item: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
+    processing_plan: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )

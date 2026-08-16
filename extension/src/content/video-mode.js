@@ -796,6 +796,33 @@ export function openVideoMode({
         "https://sportabase-api.onrender.com"
       ).replace(/\/+$/, "");
 
+      if (
+        typeof config.captureCurrentPage ===
+        "function"
+      ) {
+        void config
+          .captureCurrentPage({
+            youtubeTranscript:
+              transcriptResult,
+
+            signal:
+              analysisRequest.signal,
+          })
+          .catch(
+            (captureError) => {
+              if (
+                !captureError
+                  ?.cancelled
+              ) {
+                console.warn(
+                  "[sportabase] Browser capture shadow failed:",
+                  captureError
+                );
+              }
+            }
+          );
+      }
+
       const response = await postJson(
         `${apiBase}/analyze/video`,
         {

@@ -18,12 +18,50 @@ import {
   openVideoMode,
 } from "./video-mode.js";
 
+import {
+  createBrowserCaptureSession,
+} from "./browser-capture-session.mjs";
+
+import {
+  extractArticlePage,
+} from "./article-extractor.js";
+
+import {
+  extractYouTubeTranscript,
+} from "./youtube-transcript.js";
+
+import {
+  postJson,
+} from "./api.js";
+
 const config =
   globalThis.__SPORTABASE_BOOT_CONFIG__ || {};
+
+const captureCurrentPage =
+  createBrowserCaptureSession({
+    config,
+
+    extractArticlePageImpl:
+      extractArticlePage,
+
+    extractYouTubeTranscriptImpl:
+      extractYouTubeTranscript,
+
+    postJsonImpl:
+      postJson,
+  });
+
+const runtimeConfig = {
+  ...config,
+  captureCurrentPage,
+};
 
 const isYouTubeVideo =
   window.location.href.includes(
     "youtube.com/watch"
+  ) ||
+  window.location.href.includes(
+    "youtube.com/shorts/"
   ) ||
   document.querySelector(
     "ytd-watch-flexy"
@@ -35,18 +73,20 @@ const shell = openSportabaseShell({
     : "article",
 
   preferences:
-    config.preferences || {},
+    runtimeConfig.preferences || {},
 });
 
 if (isYouTubeVideo) {
   openVideoMode({
     shell,
-    config,
+    config:
+      runtimeConfig,
   });
 } else {
   openArticleMode({
     shell,
-    config,
+    config:
+      runtimeConfig,
   });
 }
 

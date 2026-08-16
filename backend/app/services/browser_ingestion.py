@@ -1,6 +1,6 @@
 ﻿from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import (
     Any,
     Dict,
@@ -284,3 +284,64 @@ def ingest_browser_capture(
             ),
         )
     )
+
+
+
+def _model_payload(
+    value: Any,
+) -> Dict[
+    str,
+    Any,
+]:
+    if hasattr(
+        value,
+        "model_dump",
+    ):
+        return value.model_dump(
+            mode="json"
+        )
+
+    return value.dict()
+
+
+def preview_browser_capture(
+    raw_capture: Mapping[
+        str,
+        Any,
+    ],
+    *,
+    short_video_threshold_seconds: float = (
+        multimodal_extraction
+        .DEFAULT_SHORT_VIDEO_THRESHOLD_SECONDS
+    ),
+) -> Dict[
+    str,
+    Any,
+]:
+    result = (
+        ingest_browser_capture(
+            raw_capture,
+
+            short_video_threshold_seconds=(
+                short_video_threshold_seconds
+            ),
+        )
+    )
+
+    return {
+        "version": (
+            BROWSER_INGESTION_VERSION
+        ),
+
+        "item": (
+            _model_payload(
+                result.item
+            )
+        ),
+
+        "processing_plan": (
+            asdict(
+                result.processing_plan
+            )
+        ),
+    }
