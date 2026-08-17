@@ -12,6 +12,10 @@ MULTIMODAL_INBOX_AUTO_SHADOW_VERSION = (
     "multimodal-inbox-auto-shadow-v1"
 )
 
+MULTIMODAL_INBOX_AUTO_SELECTION_VERSION = (
+    "multimodal-inbox-auto-selection-v1"
+)
+
 
 class MultimodalInboxAutoShadowError(RuntimeError):
     pass
@@ -402,6 +406,144 @@ def _automatic_selection(
         "rejected": rejected,
     }
 
+
+
+def select_automatic_inbox_candidate(
+    *,
+    anchor_capture_record_id: str,
+    scan_limit: int = 100,
+    max_candidates: int = 12,
+    connection_factory,
+    discovery_runner=(
+        inbox_candidate_discovery
+        .discover_multimodal_inbox_candidates
+    ),
+) -> Dict[str, Any]:
+    anchor_id = _clean(
+        anchor_capture_record_id
+    )
+
+    if not anchor_id:
+        raise MultimodalInboxAutoShadowInputError(
+            "Anchor capture record ID is required."
+        )
+
+    if len(anchor_id) > 256:
+        raise MultimodalInboxAutoShadowInputError(
+            "Anchor capture record ID is too long."
+        )
+
+    scan_limit = _bounded_int(
+        scan_limit,
+        label="Inbox scan limit",
+        minimum=1,
+        maximum=500,
+    )
+
+    max_candidates = _bounded_int(
+        max_candidates,
+        label="Candidate limit",
+        minimum=1,
+        maximum=50,
+    )
+
+    if connection_factory is None:
+        raise MultimodalInboxAutoShadowInputError(
+            "Connection factory is required."
+        )
+
+    try:
+        discovery_raw = discovery_runner(
+            anchor_capture_record_id=anchor_id,
+            connection_factory=connection_factory,
+            scan_limit=scan_limit,
+            max_candidates=max_candidates,
+            semantic_assessments=0,
+            gemini_client=None,
+            gemini_client_key="anonymous",
+            gemini_generator=None,
+        )
+    except (
+        inbox_candidate_discovery
+        .InboxCandidateDiscoveryInputError
+    ) as error:
+        raise MultimodalInboxAutoShadowInputError(
+            str(error)
+        ) from error
+    except (
+        inbox_candidate_discovery
+        .InboxCandidateDiscoveryNotFoundError
+    ) as error:
+        raise MultimodalInboxAutoShadowDiscoveryError(
+            str(error)
+        ) from error
+    except (
+        inbox_candidate_discovery
+        .InboxCandidateDiscoveryLookupError
+    ) as error:
+        raise MultimodalInboxAutoShadowDiscoveryError(
+            str(error)
+        ) from error
+    except (
+        inbox_candidate_discovery
+        .InboxCandidateDiscoveryIntegrityError
+    ) as error:
+        raise MultimodalInboxAutoShadowIntegrityError(
+            str(error)
+        ) from error
+
+    discovery = _validate_discovery(
+        discovery_raw,
+        anchor_capture_record_id=anchor_id,
+    )
+
+    selection = _automatic_selection(
+        discovery
+    )
+
+    selected = selection["selected"]
+
+    return {
+        "version": MULTIMODAL_INBOX_AUTO_SELECTION_VERSION,
+        "status": "selected",
+        "anchor_capture_record_id": anchor_id,
+        "candidate_capture_record_id": selected[
+            "capture_record_id"
+        ],
+        "subject_entity_id": selected[
+            "subject_entity_id"
+        ],
+        "candidate_score": selected[
+            "candidate_score"
+        ],
+        "candidate_reasons": selected[
+            "candidate_reasons"
+        ],
+        "shared_entity_ids": selected[
+            "shared_entity_ids"
+        ],
+        "eligible_candidate_count": selection[
+            "eligible_count"
+        ],
+        "rejected_candidate_count": selection[
+            "rejected_count"
+        ],
+        "rejected_candidates": selection[
+            "rejected"
+        ],
+        "policy": {
+            "automatic_selection_is_candidate_routing_only": True,
+            "automatic_selection_requires_exactly_one_eligible_candidate": True,
+            "eligible_candidate_requires_exactly_one_shared_entity": True,
+            "candidate_score_is_not_a_truth_confidence": True,
+            "candidate_score_is_not_an_authority_confidence": True,
+            "candidate_score_is_not_an_independence_confidence": True,
+            "discovery_gate_is_read_only": True,
+            "selected_subject_is_exact_entity_candidate_only": True,
+            "selected_subject_is_not_verified_by_auto_selection": True,
+            "affects_live_merit": False,
+        },
+    }
 
 def _validate_candidate_shadow(
     value: Any,

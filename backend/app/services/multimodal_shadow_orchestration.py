@@ -242,6 +242,7 @@ def _validate_shadow(
     subject_key: str,
     left_media_item_id: str,
     right_media_item_id: str,
+    merit_baseline_mode: str,
 ) -> Dict[str, Any]:
     shadow = _mapping(
         value,
@@ -328,6 +329,30 @@ def _validate_shadow(
                 + field
             )
 
+
+    if policy.get("merit_baseline_mode") != merit_baseline_mode:
+        raise MultimodalShadowOrchestrationIntegrityError(
+            "Multimodal shadow Merit baseline mode changed."
+        )
+    if bool(policy.get("synthetic_merit_baseline_used")):
+        raise MultimodalShadowOrchestrationIntegrityError(
+            "Multimodal shadow used a synthetic Merit baseline."
+        )
+    if merit_baseline_mode == "legacy_merit":
+        if (
+            policy.get("merit_baseline_available") is not True
+            or policy.get("merit_shadow_evaluated") is not True
+        ):
+            raise MultimodalShadowOrchestrationIntegrityError(
+                "Legacy Merit shadow state is incomplete."
+            )
+    elif (
+        bool(policy.get("merit_baseline_available"))
+        or bool(policy.get("merit_shadow_evaluated"))
+    ):
+        raise MultimodalShadowOrchestrationIntegrityError(
+            "No-Merit shadow unexpectedly evaluated Merit."
+        )
     return {
         "result": shadow,
         "claim_id": claim_id,
@@ -339,7 +364,8 @@ def execute_multimodal_shadow_orchestration(
     subject: Mapping[str, Any],
     left_capture: Mapping[str, Any],
     right_capture: Mapping[str, Any],
-    legacy_score: Mapping[str, Any],
+    legacy_score: Any,
+    merit_baseline_mode: str = "legacy_merit",
     target_claim_id: str = "",
     connection_factory,
     gemini_client: Any,
@@ -355,7 +381,23 @@ def execute_multimodal_shadow_orchestration(
     subject_payload = _mapping(subject, label="Subject")
     left_payload = _mapping(left_capture, label="Left capture")
     right_payload = _mapping(right_capture, label="Right capture")
-    score_payload = _legacy_score(legacy_score)
+    normalized_merit_baseline_mode = _clean(
+        merit_baseline_mode
+    ).lower() or "legacy_merit"
+
+    if normalized_merit_baseline_mode == "legacy_merit":
+        score_payload = _legacy_score(legacy_score)
+    elif normalized_merit_baseline_mode == "not_applicable":
+        if legacy_score is not None:
+            raise MultimodalShadowOrchestrationInputError(
+                "No-Merit execution must not receive a legacy Merit score."
+            )
+        score_payload = None
+    else:
+        raise MultimodalShadowOrchestrationInputError(
+            "Unsupported Merit baseline mode."
+        )
+
     target_claim_id = _clean(target_claim_id)
 
     if connection_factory is None:
@@ -417,6 +459,9 @@ def execute_multimodal_shadow_orchestration(
         },
         "target_claim_id": target_claim_id,
         "legacy_score": copy.deepcopy(score_payload),
+        "merit_baseline_mode": (
+            normalized_merit_baseline_mode
+        ),
     }
 
     try:
@@ -455,6 +500,9 @@ def execute_multimodal_shadow_orchestration(
         subject_key=registration["subject_key"],
         left_media_item_id=registration["left"]["media_item_id"],
         right_media_item_id=registration["right"]["media_item_id"],
+        merit_baseline_mode=(
+            normalized_merit_baseline_mode
+        ),
     )
 
     return {
@@ -480,6 +528,18 @@ def execute_multimodal_shadow_orchestration(
             "model_output_does_not_establish_authority": True,
             "model_output_does_not_establish_independence": True,
             "live_merit_shadow_only": True,
+            "merit_baseline_mode": (
+                normalized_merit_baseline_mode
+            ),
+            "merit_baseline_available": (
+                normalized_merit_baseline_mode
+                == "legacy_merit"
+            ),
+            "merit_shadow_evaluated": (
+                normalized_merit_baseline_mode
+                == "legacy_merit"
+            ),
+            "synthetic_merit_baseline_used": False,
             "live_release_not_called": True,
             "release_certificate_not_consumed": True,
             "live_enablement_authorized": False,

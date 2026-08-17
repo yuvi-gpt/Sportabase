@@ -363,15 +363,16 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
         ):
             self.enqueue("bci_missing")
 
-    def test_social_capture_is_not_enqueued_in_v1(self):
+    def test_social_capture_is_enqueued_for_no_merit_dispatch(self):
         stored = self.store_x()
         result = self.enqueue(
             stored["capture_record_id"]
         )
-        self.assertEqual(result["status"], "unsupported")
+        self.assertEqual(result["status"], "enqueued")
+        self.assertEqual(result["job_status"], "pending")
         self.assertEqual(
             self.count("browser_capture_automation_jobs"),
-            0,
+            1,
         )
 
     def test_web_capture_enqueues_pending_job(self):
@@ -457,7 +458,7 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             1,
         )
 
-    def test_reconcile_ignores_social_capture(self):
+    def test_reconcile_recovers_missing_social_job(self):
         self.store_x()
         result = automation.reconcile_browser_capture_jobs(
             analysis_version=ANALYSIS_VERSION,
@@ -466,10 +467,10 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             env_getter=self.enabled_env,
             now_provider=lambda: 1000,
         )
-        self.assertEqual(result["created"], 0)
+        self.assertEqual(result["created"], 1)
         self.assertEqual(
             self.count("browser_capture_automation_jobs"),
-            0,
+            1,
         )
 
     def test_reconcile_does_not_duplicate_existing_job(self):

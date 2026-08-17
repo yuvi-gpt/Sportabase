@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Mapping
 
 from app.services import inbox_history_auto_shadow_orchestration
+from app.services import inbox_no_merit_auto_shadow_orchestration
 
 
 BROWSER_CAPTURE_AUTOMATION_VERSION = (
@@ -353,7 +354,9 @@ def _job_row_policy(row: Mapping[str, Any]) -> Dict[str, Any]:
         "persistent_job": True,
         "lease_based_claim": True,
         "restart_recoverable": True,
-        "article_anchor_only": True,
+        "article_anchor_only": False,
+        "article_and_non_article_supported": True,
+        "baseline_mode_resolved_at_execution": True,
         "capture_remains_untrusted": True,
         "job_does_not_verify_subject": True,
         "job_does_not_establish_authority": True,
@@ -426,7 +429,7 @@ def enqueue_browser_capture_job(
         capture = _one(
             conn,
             """
-            SELECT id, platform
+            SELECT id, platform, platform_surface
             FROM browser_capture_inbox
             WHERE id = ?
             """,
@@ -437,23 +440,6 @@ def enqueue_browser_capture_job(
             raise BrowserCaptureAutomationInputError(
                 "Browser capture inbox record does not exist."
             )
-
-        if _clean(
-            capture.get("platform")
-        ).lower() != "web":
-            conn.rollback()
-            return {
-                "version": BROWSER_CAPTURE_AUTOMATION_VERSION,
-                "status": "unsupported",
-                "job_id": "",
-                "capture_record_id": capture_id,
-                "policy": {
-                    "persistent_job": False,
-                    "article_anchor_only": True,
-                    "capture_remains_untrusted": True,
-                    "affects_live_merit": False,
-                },
-            }
 
         existing = _one(
             conn,
@@ -599,8 +585,7 @@ def reconcile_browser_capture_jobs(
               ON j.capture_record_id = b.id
              AND j.analysis_version = ?
              AND j.scoring_version = ?
-            WHERE lower(b.platform) = 'web'
-              AND j.id IS NULL
+            WHERE j.id IS NULL
             ORDER BY b.first_received_at ASC, b.id ASC
             LIMIT ?
             """,
@@ -933,6 +918,58 @@ def _retry_delay(
     )
 
 
+
+def _automation_anchor_mode(
+    *,
+    capture_record_id: str,
+    connection_factory,
+) -> str:
+    conn = _connect(
+        connection_factory
+    )
+
+    try:
+        row = _one(
+            conn,
+            """
+            SELECT platform, platform_surface
+            FROM browser_capture_inbox
+            WHERE id = ?
+            """,
+            (_clean(capture_record_id),),
+        )
+    except sqlite3.Error as error:
+        raise BrowserCaptureAutomationPersistenceError(
+            "Automation anchor lookup failed."
+        ) from error
+    finally:
+        conn.close()
+
+    if row is None:
+        raise BrowserCaptureAutomationInputError(
+            "Automation anchor capture no longer exists."
+        )
+
+    platform = _clean(
+        row.get("platform")
+    ).lower()
+    surface = _clean(
+        row.get("platform_surface")
+    ).lower()
+
+    if platform == "web" and surface == "article":
+        return "article_history_merit"
+
+    if platform in (
+        inbox_no_merit_auto_shadow_orchestration
+        .SUPPORTED_NON_ARTICLE_PLATFORMS
+    ):
+        return "non_article_no_merit"
+
+    raise BrowserCaptureAutomationInputError(
+        "Automation does not support this capture platform/surface."
+    )
+
 def _result_summary(value: Mapping[str, Any]) -> Dict[str, Any]:
     return {
         "version": _clean(value.get("version")),
@@ -967,6 +1004,7 @@ def _validate_shadow_result(
     value: Any,
     *,
     capture_record_id: str,
+    execution_mode: str,
 ) -> Dict[str, Any]:
     if not isinstance(value, Mapping):
         raise BrowserCaptureAutomationIntegrityError(
@@ -975,10 +1013,22 @@ def _validate_shadow_result(
 
     result = dict(value)
 
-    if (
-        _clean(result.get("version"))
-        != inbox_history_auto_shadow_orchestration.MULTIMODAL_INBOX_HISTORY_AUTO_SHADOW_VERSION
-    ):
+    if execution_mode == "article_history_merit":
+        expected_version = (
+            inbox_history_auto_shadow_orchestration
+            .MULTIMODAL_INBOX_HISTORY_AUTO_SHADOW_VERSION
+        )
+    elif execution_mode == "non_article_no_merit":
+        expected_version = (
+            inbox_no_merit_auto_shadow_orchestration
+            .MULTIMODAL_INBOX_NO_MERIT_AUTO_SHADOW_VERSION
+        )
+    else:
+        raise BrowserCaptureAutomationIntegrityError(
+            "Background shadow execution mode is invalid."
+        )
+
+    if _clean(result.get("version")) != expected_version:
         raise BrowserCaptureAutomationIntegrityError(
             "Background shadow runner version mismatch."
         )
@@ -1015,6 +1065,17 @@ def _validate_shadow_result(
         raise BrowserCaptureAutomationIntegrityError(
             "Background shadow runner crossed a safety boundary."
         )
+
+    if execution_mode == "non_article_no_merit":
+        if (
+            policy.get("merit_baseline_mode") != "not_applicable"
+            or bool(policy.get("merit_baseline_available"))
+            or bool(policy.get("merit_shadow_evaluated"))
+            or bool(policy.get("synthetic_merit_baseline_used"))
+        ):
+            raise BrowserCaptureAutomationIntegrityError(
+                "Non-article automation crossed the no-Merit baseline boundary."
+            )
 
     return result
 
@@ -1100,6 +1161,10 @@ def execute_claimed_browser_capture_job(
         inbox_history_auto_shadow_orchestration
         .execute_multimodal_inbox_history_auto_shadow
     ),
+    non_article_runner=(
+        inbox_no_merit_auto_shadow_orchestration
+        .execute_multimodal_inbox_no_merit_auto_shadow
+    ),
 ) -> Dict[str, Any]:
     if not isinstance(job, Mapping):
         raise BrowserCaptureAutomationInputError(
@@ -1122,7 +1187,14 @@ def execute_claimed_browser_capture_job(
             "Claimed job is not owned by this worker."
         )
 
+    execution_mode = ""
+
     try:
+        execution_mode = _automation_anchor_mode(
+            capture_record_id=capture_id,
+            connection_factory=connection_factory,
+        )
+
         if not callable(gemini_client_factory):
             raise inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowProviderUnavailable(
                 "Gemini multimodal client is not configured."
@@ -1135,26 +1207,39 @@ def execute_claimed_browser_capture_job(
                 "Gemini multimodal analysis is not configured."
             )
 
-        raw = runner(
-            anchor_capture_record_id=capture_id,
-            analysis_version=_clean(
-                row.get("analysis_version")
-            ),
-            scoring_version=_clean(
-                row.get("scoring_version")
-            ),
-            connection_factory=connection_factory,
-            gemini_client=client,
-            gemini_client_key=(
-                _clean(gemini_client_key)
-                or "automation:browser-capture"
-            ),
-            gemini_generator=gemini_generator,
-        )
+        if execution_mode == "article_history_merit":
+            raw = runner(
+                anchor_capture_record_id=capture_id,
+                analysis_version=_clean(
+                    row.get("analysis_version")
+                ),
+                scoring_version=_clean(
+                    row.get("scoring_version")
+                ),
+                connection_factory=connection_factory,
+                gemini_client=client,
+                gemini_client_key=(
+                    _clean(gemini_client_key)
+                    or "automation:browser-capture"
+                ),
+                gemini_generator=gemini_generator,
+            )
+        else:
+            raw = non_article_runner(
+                anchor_capture_record_id=capture_id,
+                connection_factory=connection_factory,
+                gemini_client=client,
+                gemini_client_key=(
+                    _clean(gemini_client_key)
+                    or "automation:browser-capture"
+                ),
+                gemini_generator=gemini_generator,
+            )
 
         result = _validate_shadow_result(
             raw,
             capture_record_id=capture_id,
+            execution_mode=execution_mode,
         )
 
     except inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowBaselineUnavailable as error:
@@ -1168,7 +1253,21 @@ def execute_claimed_browser_capture_job(
             retry_cap_seconds=retry_cap_seconds,
             now_provider=now_provider,
         )
-    except inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowLookupError as error:
+    except inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowNotReady as error:
+        return _retry_or_fail(
+            job=row,
+            worker_id=worker_id,
+            outcome="selection_or_peer_not_ready",
+            error=error,
+            connection_factory=connection_factory,
+            retry_base_seconds=retry_base_seconds,
+            retry_cap_seconds=retry_cap_seconds,
+            now_provider=now_provider,
+        )
+    except (
+        inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowLookupError,
+        inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowLookupError,
+    ) as error:
         return _retry_or_fail(
             job=row,
             worker_id=worker_id,
@@ -1179,7 +1278,10 @@ def execute_claimed_browser_capture_job(
             retry_cap_seconds=retry_cap_seconds,
             now_provider=now_provider,
         )
-    except inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowProviderUnavailable as error:
+    except (
+        inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowProviderUnavailable,
+        inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowProviderUnavailable,
+    ) as error:
         return _retry_or_fail(
             job=row,
             worker_id=worker_id,
@@ -1190,7 +1292,10 @@ def execute_claimed_browser_capture_job(
             retry_cap_seconds=retry_cap_seconds,
             now_provider=now_provider,
         )
-    except inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowExecutionError as error:
+    except (
+        inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowExecutionError,
+        inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowExecutionError,
+    ) as error:
         return _retry_or_fail(
             job=row,
             worker_id=worker_id,
@@ -1204,6 +1309,9 @@ def execute_claimed_browser_capture_job(
     except (
         inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowInputError,
         inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowIntegrityError,
+        inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowInputError,
+        inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowIntegrityError,
+        BrowserCaptureAutomationInputError,
         BrowserCaptureAutomationIntegrityError,
     ) as error:
         failed = _update_claimed_job(
@@ -1252,6 +1360,7 @@ def execute_claimed_browser_capture_job(
 
     return {
         "status": "completed",
+        "execution_mode": execution_mode,
         "job": completed,
         "result": _result_summary(result),
     }
@@ -1460,6 +1569,8 @@ def start_browser_capture_automation_worker(
             "persistent_queue": True,
             "lease_based_claim": True,
             "restart_recoverable": True,
+            "article_and_non_article_supported": True,
+            "non_article_uses_no_synthetic_merit_baseline": True,
             "public_request_does_not_wait_for_gemini": True,
             "live_merit_shadow_only": True,
             "affects_live_merit": False,

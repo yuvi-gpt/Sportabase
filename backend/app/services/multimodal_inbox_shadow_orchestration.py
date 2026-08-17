@@ -202,6 +202,8 @@ def _load_capture(
 
 def _validate_orchestration(
     value: Any,
+    *,
+    merit_baseline_mode: str,
 ) -> Dict[str, Any]:
     result = _mapping(
         value,
@@ -277,6 +279,30 @@ def _validate_orchestration(
                 + field
             )
 
+
+    if policy.get("merit_baseline_mode") != merit_baseline_mode:
+        raise MultimodalInboxShadowIntegrityError(
+            "Multimodal shadow Merit baseline mode changed."
+        )
+    if bool(policy.get("synthetic_merit_baseline_used")):
+        raise MultimodalInboxShadowIntegrityError(
+            "Multimodal shadow used a synthetic Merit baseline."
+        )
+    if merit_baseline_mode == "legacy_merit":
+        if (
+            policy.get("merit_baseline_available") is not True
+            or policy.get("merit_shadow_evaluated") is not True
+        ):
+            raise MultimodalInboxShadowIntegrityError(
+                "Legacy Merit shadow state is incomplete."
+            )
+    elif (
+        bool(policy.get("merit_baseline_available"))
+        or bool(policy.get("merit_shadow_evaluated"))
+    ):
+        raise MultimodalInboxShadowIntegrityError(
+            "No-Merit shadow unexpectedly evaluated Merit."
+        )
     return result
 
 
@@ -285,7 +311,8 @@ def execute_multimodal_inbox_shadow_orchestration(
     subject: Mapping[str, Any],
     left_capture_record_id: str,
     right_capture_record_id: str,
-    legacy_score: Mapping[str, Any],
+    legacy_score: Any,
+    merit_baseline_mode: str = "legacy_merit",
     target_claim_id: str = "",
     connection_factory,
     gemini_client: Any,
@@ -335,10 +362,25 @@ def execute_multimodal_inbox_shadow_orchestration(
         label="Subject",
     )
 
-    normalized_score = _mapping(
-        legacy_score,
-        label="Legacy Merit score",
-    )
+    normalized_merit_baseline_mode = _clean(
+        merit_baseline_mode
+    ).lower() or "legacy_merit"
+
+    if normalized_merit_baseline_mode == "legacy_merit":
+        normalized_score = _mapping(
+            legacy_score,
+            label="Legacy Merit score",
+        )
+    elif normalized_merit_baseline_mode == "not_applicable":
+        if legacy_score is not None:
+            raise MultimodalInboxShadowInputError(
+                "No-Merit execution must not receive a legacy Merit score."
+            )
+        normalized_score = None
+    else:
+        raise MultimodalInboxShadowInputError(
+            "Unsupported Merit baseline mode."
+        )
 
     left = _load_capture(
         record_id=left_id,
@@ -360,6 +402,9 @@ def execute_multimodal_inbox_shadow_orchestration(
             left_capture=left["capture"],
             right_capture=right["capture"],
             legacy_score=normalized_score,
+            merit_baseline_mode=(
+                normalized_merit_baseline_mode
+            ),
             target_claim_id=_clean(
                 target_claim_id
             ),
@@ -410,7 +455,10 @@ def execute_multimodal_inbox_shadow_orchestration(
         ) from error
 
     orchestration = _validate_orchestration(
-        orchestration_raw
+        orchestration_raw,
+        merit_baseline_mode=(
+            normalized_merit_baseline_mode
+        ),
     )
 
     return {
@@ -437,6 +485,18 @@ def execute_multimodal_inbox_shadow_orchestration(
             "model_output_does_not_establish_truth": True,
             "model_output_does_not_establish_independence": True,
             "live_merit_shadow_only": True,
+            "merit_baseline_mode": (
+                normalized_merit_baseline_mode
+            ),
+            "merit_baseline_available": (
+                normalized_merit_baseline_mode
+                == "legacy_merit"
+            ),
+            "merit_shadow_evaluated": (
+                normalized_merit_baseline_mode
+                == "legacy_merit"
+            ),
+            "synthetic_merit_baseline_used": False,
             "live_release_not_called": True,
             "release_certificate_not_consumed": True,
             "score_effect_applied": False,

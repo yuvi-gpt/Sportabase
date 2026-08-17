@@ -423,11 +423,33 @@ def _request_parts(
         )
     )
 
-    legacy_score = _legacy_score(
-        request.get(
-            "legacy_score"
-        )
+    merit_baseline_mode = _clean(
+        request.get("merit_baseline_mode")
+    ).lower() or (
+        multimodal_intelligence_runtime
+        .MERIT_BASELINE_MODE_LEGACY
     )
+
+    if merit_baseline_mode == (
+        multimodal_intelligence_runtime
+        .MERIT_BASELINE_MODE_LEGACY
+    ):
+        legacy_score = _legacy_score(
+            request.get("legacy_score")
+        )
+    elif merit_baseline_mode == (
+        multimodal_intelligence_runtime
+        .MERIT_BASELINE_MODE_NOT_APPLICABLE
+    ):
+        if request.get("legacy_score") is not None:
+            raise MultimodalShadowApiInputError(
+                "No-Merit execution must not receive a legacy Merit score."
+            )
+        legacy_score = None
+    else:
+        raise MultimodalShadowApiInputError(
+            "Unsupported Merit baseline mode."
+        )
 
     return {
         "subject_key": subject_key,
@@ -437,6 +459,7 @@ def _request_parts(
             target_claim_id
         ),
         "legacy_score": legacy_score,
+        "merit_baseline_mode": merit_baseline_mode,
     }
 
 
@@ -446,6 +469,7 @@ def _validate_runtime_result(
     subject_key: str,
     left_media_item_id: str,
     right_media_item_id: str,
+    merit_baseline_mode: str,
 ) -> Dict[str, Any]:
     result = _mapping(
         raw,
@@ -567,6 +591,51 @@ def _validate_runtime_result(
                 + field
             )
 
+
+    if policy.get("merit_baseline_mode") != merit_baseline_mode:
+        raise MultimodalShadowApiIntegrityError(
+            "End-to-end multimodal Merit baseline mode changed."
+        )
+
+    if bool(policy.get("synthetic_merit_baseline_used")):
+        raise MultimodalShadowApiIntegrityError(
+            "End-to-end multimodal runtime used a synthetic Merit baseline."
+        )
+
+    if merit_baseline_mode == (
+        multimodal_intelligence_runtime.MERIT_BASELINE_MODE_LEGACY
+    ):
+        if (
+            policy.get("merit_baseline_available") is not True
+            or policy.get("merit_shadow_evaluated") is not True
+        ):
+            raise MultimodalShadowApiIntegrityError(
+                "Legacy Merit shadow evaluation was not completed."
+            )
+    else:
+        if (
+            bool(policy.get("merit_baseline_available"))
+            or bool(policy.get("merit_shadow_evaluated"))
+            or result.get("live_score") is not None
+        ):
+            raise MultimodalShadowApiIntegrityError(
+                "No-Merit runtime unexpectedly evaluated or exposed a Merit score."
+            )
+        stages = result.get("stages")
+        no_merit = (
+            stages.get("live_merit_shadow")
+            if isinstance(stages, Mapping)
+            else None
+        )
+        if (
+            not isinstance(no_merit, Mapping)
+            or _clean(no_merit.get("status")).lower() != "not_applicable"
+            or bool(no_merit.get("policy", {}).get("shadow_runner_called"))
+            or bool(no_merit.get("policy", {}).get("synthetic_merit_baseline_used"))
+        ):
+            raise MultimodalShadowApiIntegrityError(
+                "No-Merit runtime result is missing its explicit non-applicable shadow state."
+            )
     return result
 
 
@@ -721,6 +790,9 @@ def execute_multimodal_shadow_api(
                     "legacy_score"
                 ]
             ),
+            merit_baseline_mode=(
+                parts["merit_baseline_mode"]
+            ),
             as_of=now,
             connection_factory=(
                 connection_factory
@@ -773,6 +845,9 @@ def execute_multimodal_shadow_api(
                 "media_item_id"
             ]
         ),
+        merit_baseline_mode=(
+            parts["merit_baseline_mode"]
+        ),
     )
 
     return {
@@ -793,6 +868,18 @@ def execute_multimodal_shadow_api(
             "model_output_does_not_establish_truth": True,
             "model_output_does_not_establish_independence": True,
             "live_merit_shadow_only": True,
+            "merit_baseline_mode": (
+                parts["merit_baseline_mode"]
+            ),
+            "merit_baseline_available": (
+                result["policy"].get("merit_baseline_available")
+                is True
+            ),
+            "merit_shadow_evaluated": (
+                result["policy"].get("merit_shadow_evaluated")
+                is True
+            ),
+            "synthetic_merit_baseline_used": False,
             "live_release_not_called": True,
             "release_certificate_not_consumed": True,
             "live_enablement_authorized": False,

@@ -25,6 +25,12 @@ MULTIMODAL_INTELLIGENCE_RUNTIME_VERSION = (
     "multimodal-intelligence-runtime-v1"
 )
 
+MERIT_BASELINE_MODE_LEGACY = "legacy_merit"
+MERIT_BASELINE_MODE_NOT_APPLICABLE = "not_applicable"
+NO_MERIT_BASELINE_SHADOW_VERSION = (
+    "multimodal-no-merit-baseline-v1"
+)
+
 
 class MultimodalIntelligenceRuntimeError(RuntimeError):
     pass
@@ -52,6 +58,61 @@ def _clean(value: Any) -> str:
     return " ".join(
         str(value or "").split()
     )
+
+
+def _normalize_merit_baseline(
+    *,
+    legacy_score: Optional[Mapping[str, Any]],
+    merit_baseline_mode: str,
+) -> tuple[str, Optional[Dict[str, Any]]]:
+    mode = _clean(
+        merit_baseline_mode
+    ).lower() or MERIT_BASELINE_MODE_LEGACY
+
+    if mode == MERIT_BASELINE_MODE_LEGACY:
+        if not isinstance(legacy_score, Mapping):
+            raise MultimodalPipelineInputError(
+                "Legacy Merit score must be a mapping."
+            )
+        return mode, copy.deepcopy(dict(legacy_score))
+
+    if mode == MERIT_BASELINE_MODE_NOT_APPLICABLE:
+        if legacy_score is not None:
+            raise MultimodalPipelineInputError(
+                "No-Merit execution must not receive a synthetic legacy score."
+            )
+        return mode, None
+
+    raise MultimodalPipelineInputError(
+        "Unsupported Merit baseline mode."
+    )
+
+
+def _no_merit_shadow_result(
+    *,
+    claim_id: str,
+) -> Dict[str, Any]:
+    return {
+        "version": NO_MERIT_BASELINE_SHADOW_VERSION,
+        "status": "not_applicable",
+        "claim_id": claim_id,
+        "reason": "no_legacy_merit_baseline",
+        "live_score": None,
+        "proposed_adjustment": None,
+        "proposed_shadow_total": None,
+        "shadow_boost_eligible_under_overlay": False,
+        "policy": {
+            "merit_baseline_available": False,
+            "merit_shadow_evaluated": False,
+            "shadow_runner_called": False,
+            "synthetic_merit_baseline_used": False,
+            "live_release_not_called": True,
+            "release_certificate_not_consumed": True,
+            "score_effect_applied": False,
+            "establishes_truth": False,
+            "affects_live_merit": False,
+        },
+    }
 
 
 def _model_payload(value: Any) -> Dict[str, Any]:
@@ -1285,7 +1346,7 @@ def run_multimodal_intelligence_runtime(
     right_capture: Mapping[str, Any],
     left_bindings: bridge_models.BridgeBindings,
     right_bindings: bridge_models.BridgeBindings,
-    legacy_score: Mapping[str, Any],
+    legacy_score: Optional[Mapping[str, Any]],
     as_of: str,
     connection_factory,
     semantic_interpreter,
@@ -1306,6 +1367,9 @@ def run_multimodal_intelligence_runtime(
         Mapping[str, Any]
     ] = None,
     recorded_at: Optional[str] = None,
+    merit_baseline_mode: str = (
+        MERIT_BASELINE_MODE_LEGACY
+    ),
     browser_ingestor=(
         browser_ingestion
         .ingest_browser_capture
@@ -1383,16 +1447,14 @@ def run_multimodal_intelligence_runtime(
             "two distinct verified media items."
         )
 
-    if not isinstance(
-        legacy_score,
-        Mapping,
-    ):
-        raise MultimodalPipelineInputError(
-            "Legacy Merit score must be a mapping."
-        )
-
-    original_legacy = copy.deepcopy(
-        dict(legacy_score)
+    (
+        normalized_merit_baseline_mode,
+        original_legacy,
+    ) = _normalize_merit_baseline(
+        legacy_score=legacy_score,
+        merit_baseline_mode=(
+            merit_baseline_mode
+        ),
     )
 
     if semantic_interpreter is None:
@@ -1832,28 +1894,44 @@ def run_multimodal_intelligence_runtime(
         )
     )
 
-    shadow = _require_shadow_result(
-        shadow_runner(
-            corroboration_result=(
-                corroboration
+    if (
+        normalized_merit_baseline_mode
+        == MERIT_BASELINE_MODE_LEGACY
+    ):
+        if original_legacy is None:
+            raise MultimodalPipelineIntegrityError(
+                "Legacy Merit baseline disappeared before shadow evaluation."
+            )
+
+        shadow = _require_shadow_result(
+            shadow_runner(
+                corroboration_result=(
+                    corroboration
+                ),
+                legacy_score=copy.deepcopy(
+                    original_legacy
+                ),
             ),
-            legacy_score=copy.deepcopy(
+            claim_id=claim_id,
+            legacy_score=(
                 original_legacy
             ),
-        ),
-        claim_id=claim_id,
-        legacy_score=(
-            original_legacy
-        ),
-    )
+        )
 
-    if (
-        dict(legacy_score)
-        != original_legacy
-    ):
-        raise MultimodalPipelineIntegrityError(
-            "End-to-end runtime mutated "
-            "the caller legacy score."
+        if (
+            not isinstance(legacy_score, Mapping)
+            or dict(legacy_score) != original_legacy
+        ):
+            raise MultimodalPipelineIntegrityError(
+                "End-to-end runtime mutated the caller legacy score."
+            )
+    else:
+        if legacy_score is not None:
+            raise MultimodalPipelineIntegrityError(
+                "No-Merit execution acquired an unexpected legacy score."
+            )
+        shadow = _no_merit_shadow_result(
+            claim_id=claim_id
         )
 
     return {
@@ -2003,6 +2081,20 @@ def run_multimodal_intelligence_runtime(
                 False,
             "idempotent_stage_replay_supported":
                 True,
+            "merit_baseline_mode":
+                normalized_merit_baseline_mode,
+            "merit_baseline_available":
+                (
+                    normalized_merit_baseline_mode
+                    == MERIT_BASELINE_MODE_LEGACY
+                ),
+            "merit_shadow_evaluated":
+                (
+                    normalized_merit_baseline_mode
+                    == MERIT_BASELINE_MODE_LEGACY
+                ),
+            "synthetic_merit_baseline_used":
+                False,
             "merit_shadow_only":
                 True,
             "live_release_not_called":
