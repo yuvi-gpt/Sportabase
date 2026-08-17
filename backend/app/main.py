@@ -157,6 +157,7 @@ from app.models.api import (
 )
 from app.services import browser_ingestion
 from app.services import browser_capture_inbox
+from app.services import browser_capture_automation
 from app.services import multimodal_shadow_api
 from app.routes import multimodal_admin
 from app.services.content_resolution import (
@@ -2065,6 +2066,12 @@ def browser_capture_preview(
             req=req,
             connection_factory=db_conn,
             response_model=BrowserCaptureResponse,
+            automation_enqueue=(
+                browser_capture_automation
+                .enqueue_browser_capture_job
+            ),
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
         )
     )
 
@@ -2177,3 +2184,12 @@ def analyze(
     )
 
 app.include_router(multimodal_admin.build_router(MULTIMODAL_SHADOW_API_ENABLED, require_admin, db_conn, gemini_client, request_client_key, generate_gemini_content, ANALYSIS_VERSION, SCORING_VERSION))
+
+browser_capture_automation.register_browser_capture_automation_lifecycle(
+    app=app,
+    connection_factory=db_conn,
+    analysis_version=ANALYSIS_VERSION,
+    scoring_version=SCORING_VERSION,
+    gemini_client_factory=gemini_client,
+    gemini_generator=generate_gemini_content,
+)

@@ -1102,4 +1102,61 @@ ON browser_capture_inbox(platform);
 CREATE INDEX IF NOT EXISTS idx_browser_capture_inbox_observed
 ON browser_capture_inbox(observed_at);
 
+CREATE TABLE IF NOT EXISTS browser_capture_automation_jobs (
+  id TEXT PRIMARY KEY,
+  capture_record_id TEXT NOT NULL,
+  analysis_version TEXT NOT NULL,
+  scoring_version TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 24,
+  available_at_epoch INTEGER NOT NULL,
+  lease_owner TEXT NOT NULL DEFAULT '',
+  lease_expires_at_epoch INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  started_at TEXT,
+  finished_at TEXT,
+  last_outcome TEXT NOT NULL DEFAULT '',
+  error_type TEXT NOT NULL DEFAULT '',
+  error_detail TEXT NOT NULL DEFAULT '',
+  result_json TEXT NOT NULL DEFAULT '{}',
+  UNIQUE (
+    capture_record_id,
+    analysis_version,
+    scoring_version
+  ),
+  CHECK (
+    status IN (
+      'pending',
+      'running',
+      'completed',
+      'failed'
+    )
+  ),
+  CHECK (attempts >= 0),
+  CHECK (max_attempts >= 1),
+  CHECK (available_at_epoch >= 0),
+  CHECK (lease_expires_at_epoch >= 0),
+  FOREIGN KEY(capture_record_id)
+    REFERENCES browser_capture_inbox(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_browser_capture_automation_ready
+ON browser_capture_automation_jobs(
+  status,
+  available_at_epoch
+);
+
+CREATE INDEX IF NOT EXISTS idx_browser_capture_automation_capture
+ON browser_capture_automation_jobs(capture_record_id);
+
+CREATE INDEX IF NOT EXISTS idx_browser_capture_automation_versions
+ON browser_capture_automation_jobs(
+  analysis_version,
+  scoring_version,
+  status
+);
+
 """

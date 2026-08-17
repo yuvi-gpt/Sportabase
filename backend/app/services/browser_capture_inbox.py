@@ -713,6 +713,9 @@ def preview_and_maybe_store_browser_capture(
     short_video_threshold_seconds: float,
     connection_factory,
     env_getter=os.getenv,
+    automation_enqueue=None,
+    analysis_version: str = "",
+    scoring_version: str = "",
 ) -> Dict[str, Any]:
     try:
         preview = (
@@ -793,6 +796,22 @@ def preview_and_maybe_store_browser_capture(
         "status"
     ]
 
+    if callable(automation_enqueue):
+        try:
+            automation_enqueue(
+                capture_record_id=stored[
+                    "capture_record_id"
+                ],
+                analysis_version=analysis_version,
+                scoring_version=scoring_version,
+                connection_factory=connection_factory,
+                env_getter=env_getter,
+            )
+        except Exception:
+            # Public acquisition stays fail-open. The persistent
+            # worker reconciles any missed article inbox records.
+            pass
+
     return payload
 
 
@@ -801,6 +820,9 @@ def execute_browser_capture_http(
     req,
     connection_factory,
     response_model,
+    automation_enqueue=None,
+    analysis_version: str = "",
+    scoring_version: str = "",
 ):
     try:
         payload = (
@@ -812,6 +834,11 @@ def execute_browser_capture_http(
                 connection_factory=(
                     connection_factory
                 ),
+                automation_enqueue=(
+                    automation_enqueue
+                ),
+                analysis_version=analysis_version,
+                scoring_version=scoring_version,
             )
         )
     except BrowserCaptureInboxInputError as error:
