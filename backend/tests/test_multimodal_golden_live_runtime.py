@@ -36,19 +36,13 @@ class _FakeClient:
 
 
 class TestLiveSubsetContract(unittest.TestCase):
-    def test_frozen_subset_has_two_cases(self):
-        self.assertEqual(len(golden_live_scoring.DEFAULT_LIVE_CASE_IDS), 2)
+    def test_frozen_subset_has_one_full_case(self):
+        self.assertEqual(len(golden_live_scoring.DEFAULT_LIVE_CASE_IDS), 1)
 
-    def test_frozen_subset_contains_football_case(self):
-        self.assertIn(
-            "football_bellingham_real_madrid_2023",
+    def test_frozen_subset_is_bellingham_case(self):
+        self.assertEqual(
             golden_live_scoring.DEFAULT_LIVE_CASE_IDS,
-        )
-
-    def test_frozen_subset_contains_f1_case(self):
-        self.assertIn(
-            "f1_alonso_aston_extension_2024",
-            golden_live_scoring.DEFAULT_LIVE_CASE_IDS,
+            ("football_bellingham_real_madrid_2023",),
         )
 
     def test_selected_cases_resolve_frozen_ids(self):
@@ -59,6 +53,23 @@ class TestLiveSubsetContract(unittest.TestCase):
             [row["case_id"] for row in selected],
             list(golden_live_scoring.DEFAULT_LIVE_CASE_IDS),
         )
+
+    def test_provider_plan_keeps_all_three_routed_members(self):
+        plan = golden_live_scoring.provider_call_plan()
+        self.assertEqual(plan["candidate_pair_count"], 3)
+        self.assertEqual(
+            plan["cases"][0]["candidate_labels"],
+            ["related_primary", "related_secondary", "hard_negative_same_subject"],
+        )
+
+    def test_provider_plan_is_six_to_twelve_calls(self):
+        plan = golden_live_scoring.provider_call_plan()
+        self.assertEqual(plan["guaranteed_semantic_calls"], 6)
+        self.assertEqual(plan["conditional_observation_calls"], 6)
+        self.assertEqual(plan["minimum_calls"], 6)
+        self.assertEqual(plan["maximum_calls"], 12)
+        self.assertEqual(plan["possible_actual_calls"], [6, 8, 10, 12])
+        self.assertFalse(plan["exact_pre_run_count_available"])
 
     def test_unknown_case_is_rejected(self):
         with self.assertRaises(golden_live_budget.MultimodalGoldenLiveInputError):
@@ -81,10 +92,7 @@ class TestLiveSubsetContract(unittest.TestCase):
             },
             ("establishes_truth", "affects_live_merit", "establishes_independence"),
         )
-        self.assertEqual(
-            found,
-            {"establishes_truth", "establishes_independence"},
-        )
+        self.assertEqual(found, {"establishes_truth", "establishes_independence"})
 
     def test_true_flag_walk_ignores_false_flags(self):
         found = golden_live_scoring.walk_true_flags(
@@ -94,9 +102,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertEqual(found, set())
 
     def test_score_passes_matching_completed_case(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary", "related_secondary"],
@@ -109,9 +115,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertEqual(score["hard_safety_status"], "pass")
 
     def test_score_reports_missing_accept_member(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary"],
@@ -123,9 +127,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertIn("accepted_member_recall", score["quality_failures"])
 
     def test_score_reports_missing_rejected_member(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary", "related_secondary"],
@@ -137,9 +139,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertIn("rejected_member_recall", score["quality_failures"])
 
     def test_score_reports_story_count_mismatch(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary", "related_secondary"],
@@ -151,9 +151,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertIn("story_count", score["quality_failures"])
 
     def test_score_reports_synthetic_merit_as_hard_failure(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary", "related_secondary"],
@@ -166,9 +164,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertIn("synthetic_merit_baseline_used", score["hard_safety_failures"])
 
     def test_score_reports_live_merit_as_hard_failure(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary", "related_secondary"],
@@ -181,9 +177,7 @@ class TestLiveSubsetContract(unittest.TestCase):
         self.assertIn("affects_live_merit", score["hard_safety_failures"])
 
     def test_score_reports_truth_as_hard_failure(self):
-        case = golden_live_scoring.selected_cases([
-            "football_bellingham_real_madrid_2023"
-        ])[0]
+        case = golden_live_scoring.selected_cases(golden_live_scoring.DEFAULT_LIVE_CASE_IDS)[0]
         observed = {
             "status": "completed",
             "accepted_member_labels": ["related_primary", "related_secondary"],
@@ -197,11 +191,19 @@ class TestLiveSubsetContract(unittest.TestCase):
 
 
 class TestLiveEvaluationControl(unittest.TestCase):
+    def _budget(self):
+        return golden_live_budget.BudgetedGeminiGenerator(max_calls=12)
+
     def test_missing_api_key_requires_client(self):
+        with self.assertRaises(golden_live_budget.MultimodalGoldenLiveInputError):
+            golden_live.evaluate_live_golden_subset(api_key="")
+
+    def test_runtime_rejects_budget_that_cannot_cover_full_case(self):
         with self.assertRaises(golden_live_budget.MultimodalGoldenLiveInputError):
             golden_live.evaluate_live_golden_subset(
                 api_key="",
-                case_ids=[golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]],
+                client=_FakeClient(),
+                generator=golden_live_budget.BudgetedGeminiGenerator(max_calls=10),
             )
 
     def test_not_ready_is_quality_failure_not_hard_safety_failure(self):
@@ -213,16 +215,14 @@ class TestLiveEvaluationControl(unittest.TestCase):
         report = golden_live.evaluate_live_golden_subset(
             api_key="",
             client=_FakeClient(),
-            generator=golden_live_budget.BudgetedGeminiGenerator(max_calls=1),
-            case_ids=[golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]],
+            generator=self._budget(),
             cluster_runner=cluster_runner,
         )
         self.assertTrue(report["provider_complete"])
         self.assertEqual(report["hard_safety_status"], "pass")
-        self.assertEqual(
-            report["quality_case_failures"],
-            [golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]],
-        )
+        self.assertEqual(report["quality_case_failures"], [
+            golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]
+        ])
 
     def test_provider_unavailable_marks_run_incomplete(self):
         def cluster_runner(**kwargs):
@@ -233,8 +233,7 @@ class TestLiveEvaluationControl(unittest.TestCase):
         report = golden_live.evaluate_live_golden_subset(
             api_key="",
             client=_FakeClient(),
-            generator=golden_live_budget.BudgetedGeminiGenerator(max_calls=1),
-            case_ids=[golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]],
+            generator=self._budget(),
             cluster_runner=cluster_runner,
         )
         self.assertFalse(report["provider_complete"])
@@ -249,14 +248,13 @@ class TestLiveEvaluationControl(unittest.TestCase):
         report = golden_live.evaluate_live_golden_subset(
             api_key="",
             client=_FakeClient(),
-            generator=golden_live_budget.BudgetedGeminiGenerator(max_calls=1),
-            case_ids=[golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]],
+            generator=self._budget(),
             cluster_runner=cluster_runner,
         )
         self.assertEqual(report["hard_safety_status"], "fail")
         self.assertEqual(len(report["infrastructure_failures"]), 1)
 
-    def test_report_policy_forbids_production_usage_ledger(self):
+    def test_report_includes_call_plan_and_logging_policy(self):
         def cluster_runner(**kwargs):
             raise golden_live.inbox_story_cluster_orchestration.MultimodalInboxStoryClusterNotReady(
                 "expected"
@@ -265,19 +263,27 @@ class TestLiveEvaluationControl(unittest.TestCase):
         report = golden_live.evaluate_live_golden_subset(
             api_key="",
             client=_FakeClient(),
-            generator=golden_live_budget.BudgetedGeminiGenerator(max_calls=1),
-            case_ids=[golden_live_scoring.DEFAULT_LIVE_CASE_IDS[0]],
+            generator=self._budget(),
             cluster_runner=cluster_runner,
         )
+        self.assertEqual(report["provider_plan"]["maximum_calls"], 12)
+        self.assertTrue(report["policy"]["provider_call_plan_logged_before_calls"])
+        self.assertTrue(report["policy"]["exact_pre_run_call_count_not_fabricated"])
+        self.assertTrue(report["policy"]["per_call_token_usage_logged"])
         self.assertFalse(report["policy"]["production_usage_ledger_written"])
         self.assertFalse(report["policy"]["real_database_used"])
 
-    def test_describe_cli_uses_zero_provider_calls(self):
+    def test_describe_cli_uses_zero_provider_calls_and_prints_plan(self):
         output = io.StringIO()
         with redirect_stdout(output):
             code = run_multimodal_golden_live.main(["--describe"])
+        text = output.getvalue()
         self.assertEqual(code, 0)
-        self.assertIn("default max provider calls: 24", output.getvalue())
+        self.assertIn("default max provider calls: 12", text)
+        self.assertIn("minimum provider calls: 6", text)
+        self.assertIn("maximum provider calls: 12", text)
+        self.assertIn("possible actual provider calls: 6, 8, 10, 12", text)
+        self.assertIn("provider calls made by --describe: 0", text)
 
     def test_cli_refuses_live_run_without_explicit_opt_in(self):
         error = io.StringIO()
@@ -285,6 +291,15 @@ class TestLiveEvaluationControl(unittest.TestCase):
             code = run_multimodal_golden_live.main([])
         self.assertEqual(code, 2)
         self.assertIn("explicit --live opt-in", error.getvalue())
+
+    def test_cli_rejects_ten_call_budget_before_api_key_or_provider(self):
+        output = io.StringIO()
+        error = io.StringIO()
+        with redirect_stdout(output), redirect_stderr(error):
+            code = run_multimodal_golden_live.main(["--live", "--max-calls", "10"])
+        self.assertEqual(code, 2)
+        self.assertIn("cannot cover", error.getvalue())
+        self.assertIn("configured hard cap: 10", output.getvalue())
 
 
 if __name__ == "__main__":
