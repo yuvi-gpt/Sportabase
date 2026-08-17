@@ -202,3 +202,82 @@ class BrowserCaptureResponse(
     ] = Field(
         default_factory=dict
     )
+
+class _StrictMultimodalShadowApiModel(
+    BaseModel
+):
+    class Config:
+        extra = "forbid"
+
+
+class MultimodalShadowSideRequest(
+    _StrictMultimodalShadowApiModel
+):
+    capture: Dict[
+        str,
+        Any,
+    ] = Field(...)
+
+    source_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+    )
+
+    media_item_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+    )
+
+    story_id: str = Field(
+        "",
+        max_length=256,
+    )
+
+
+class MultimodalShadowRequest(
+    _StrictMultimodalShadowApiModel
+):
+    subject_key: str = Field(
+        ...,
+        min_length=1,
+        max_length=512,
+    )
+
+    left: MultimodalShadowSideRequest
+    right: MultimodalShadowSideRequest
+
+    target_claim_id: str = Field(
+        "",
+        max_length=512,
+    )
+
+    legacy_score: Dict[
+        str,
+        Any,
+    ] = Field(...)
+
+
+class MultimodalShadowResponse(
+    BaseModel
+):
+    version: str
+
+    status: Literal[
+        "completed_shadow"
+    ]
+
+    result: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
+    policy: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )

@@ -145,6 +145,9 @@ from app.models.api import (
     AnalyzeResponse,
     BrowserCaptureRequest,
     BrowserCaptureResponse,
+    MultimodalShadowRequest,
+    MultimodalShadowResponse,
+    MultimodalShadowSideRequest,
     ContentResolveRequest,
     ContentResolveResponse,
     IngestResponse,
@@ -153,6 +156,7 @@ from app.models.api import (
     VideoAnalyzeResponse,
 )
 from app.services import browser_ingestion
+from app.services import multimodal_shadow_api
 from app.services.content_resolution import (
     TRACKING_QUERY_PARAMETERS,
     YOUTUBE_HOSTS,
@@ -437,6 +441,22 @@ INTELLIGENCE_SHADOW_ENABLED = (
         "on",
     }
 )
+
+MULTIMODAL_SHADOW_API_ENABLED = (
+    os.getenv(
+        "SPORTABASE_MULTIMODAL_SHADOW_API_ENABLED",
+        "0",
+    )
+    .strip()
+    .lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+)
+
 
 LIVE_MERIT_ENABLED = (
     os.getenv(
@@ -2062,6 +2082,38 @@ def browser_capture_preview(
 
     return BrowserCaptureResponse(
         **payload
+    )
+
+
+@app.post(
+    "/admin/intelligence/multimodal-shadow",
+    response_model=MultimodalShadowResponse,
+)
+def admin_multimodal_shadow(
+    req: MultimodalShadowRequest,
+    request: Request,
+):
+    return (
+        multimodal_shadow_api
+        .execute_multimodal_shadow_http(
+            req=req,
+            request=request,
+            enabled=(
+                MULTIMODAL_SHADOW_API_ENABLED
+            ),
+            require_admin=require_admin,
+            gemini_client_factory=gemini_client,
+            request_client_key_resolver=(
+                request_client_key
+            ),
+            gemini_generator=(
+                generate_gemini_content
+            ),
+            connection_factory=db_conn,
+            response_model=(
+                MultimodalShadowResponse
+            ),
+        )
     )
 
 
