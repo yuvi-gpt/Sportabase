@@ -203,6 +203,20 @@ class BrowserCaptureResponse(
         default_factory=dict
     )
 
+    capture_record_id: str = ""
+    capture_persisted: bool = False
+
+    capture_inbox_status: Literal[
+        "disabled",
+        "stored",
+        "replayed",
+        "oversize",
+        "unavailable",
+    ] = "disabled"
+
+    capture_inbox_version: str = ""
+
+
 class _StrictMultimodalShadowApiModel(
     BaseModel
 ):

@@ -1075,4 +1075,31 @@ CREATE TABLE IF NOT EXISTS user_history (
 
 CREATE INDEX IF NOT EXISTS idx_user_history_recent
 ON user_history(client_key, last_analyzed_at);
+
+CREATE TABLE IF NOT EXISTS browser_capture_inbox (
+  id TEXT PRIMARY KEY,
+  capture_hash TEXT NOT NULL UNIQUE,
+  canonical_url TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  platform_surface TEXT NOT NULL DEFAULT '',
+  normalized_item_id TEXT NOT NULL,
+  normalized_content_hash TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  first_received_at TEXT NOT NULL,
+  last_received_at TEXT NOT NULL,
+  receive_count INTEGER NOT NULL DEFAULT 1,
+  capture_json TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (receive_count >= 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_browser_capture_inbox_url
+ON browser_capture_inbox(canonical_url);
+
+CREATE INDEX IF NOT EXISTS idx_browser_capture_inbox_platform
+ON browser_capture_inbox(platform);
+
+CREATE INDEX IF NOT EXISTS idx_browser_capture_inbox_observed
+ON browser_capture_inbox(observed_at);
+
 """

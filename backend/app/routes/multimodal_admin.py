@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.services import multimodal_binding_registration
 from app.services import multimodal_shadow_orchestration
+from app.services import multimodal_inbox_shadow_orchestration
 
 
 class _StrictBindingModel(BaseModel):
@@ -151,6 +152,60 @@ class MultimodalShadowRunResponse(BaseModel):
         default_factory=dict
     )
 
+
+
+class MultimodalInboxShadowRunRequest(
+    _StrictBindingModel
+):
+    subject: MultimodalBindingSubjectRequest
+
+    left_capture_record_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+    )
+
+    right_capture_record_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=256,
+    )
+
+    legacy_score: Dict[
+        str,
+        Any,
+    ] = Field(...)
+
+    target_claim_id: str = Field(
+        "",
+        max_length=512,
+    )
+
+
+class MultimodalInboxShadowRunResponse(BaseModel):
+    version: str
+
+    status: Literal[
+        "completed_shadow"
+    ]
+
+    claim_id: str
+    left_capture_record_id: str
+    right_capture_record_id: str
+
+    orchestration: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
+
+    policy: Dict[
+        str,
+        Any,
+    ] = Field(
+        default_factory=dict
+    )
 
 def _payload(req) -> Dict[str, Any]:
     if hasattr(req, "model_dump"):
@@ -390,6 +445,142 @@ def build_router(
             ) from error
 
         return MultimodalShadowRunResponse(
+            **result
+        )
+
+
+    @router.post(
+        "/admin/intelligence/multimodal-shadow-run-inbox",
+        response_model=MultimodalInboxShadowRunResponse,
+    )
+    def admin_multimodal_shadow_run_inbox(
+        req: MultimodalInboxShadowRunRequest,
+        request: Request,
+    ):
+        if not enabled:
+            raise HTTPException(
+                status_code=404,
+                detail="Not found",
+            )
+
+        require_admin(request)
+
+        if not callable(gemini_client_factory):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Gemini multimodal analysis is not configured."
+                ),
+            )
+
+        try:
+            client = gemini_client_factory()
+        except Exception as error:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Gemini multimodal analysis is not configured."
+                ),
+            ) from error
+
+        if client is None:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Gemini multimodal analysis is not configured."
+                ),
+            )
+
+        request_payload = _payload(req)
+
+        if callable(request_client_key_resolver):
+            client_key = request_client_key_resolver(
+                request
+            )
+        else:
+            client_key = "anonymous"
+
+        try:
+            result = (
+                multimodal_inbox_shadow_orchestration
+                .execute_multimodal_inbox_shadow_orchestration(
+                    subject=request_payload["subject"],
+                    left_capture_record_id=(
+                        request_payload[
+                            "left_capture_record_id"
+                        ]
+                    ),
+                    right_capture_record_id=(
+                        request_payload[
+                            "right_capture_record_id"
+                        ]
+                    ),
+                    legacy_score=(
+                        request_payload["legacy_score"]
+                    ),
+                    target_claim_id=(
+                        request_payload[
+                            "target_claim_id"
+                        ]
+                    ),
+                    connection_factory=(
+                        connection_factory
+                    ),
+                    gemini_client=client,
+                    gemini_client_key=client_key,
+                    gemini_generator=gemini_generator,
+                )
+            )
+
+        except (
+            multimodal_inbox_shadow_orchestration
+            .MultimodalInboxShadowInputError
+        ) as error:
+            raise HTTPException(
+                status_code=422,
+                detail=str(error),
+            ) from error
+
+        except (
+            multimodal_inbox_shadow_orchestration
+            .MultimodalInboxShadowBindingError
+        ) as error:
+            raise HTTPException(
+                status_code=409,
+                detail=str(error),
+            ) from error
+
+        except (
+            multimodal_inbox_shadow_orchestration
+            .MultimodalInboxShadowProviderUnavailable
+        ) as error:
+            raise HTTPException(
+                status_code=503,
+                detail=str(error),
+            ) from error
+
+        except (
+            multimodal_inbox_shadow_orchestration
+            .MultimodalInboxShadowExecutionError
+        ) as error:
+            raise HTTPException(
+                status_code=409,
+                detail=str(error),
+            ) from error
+
+        except (
+            multimodal_inbox_shadow_orchestration
+            .MultimodalInboxShadowIntegrityError
+        ) as error:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Multimodal inbox shadow integrity "
+                    "validation failed."
+                ),
+            ) from error
+
+        return MultimodalInboxShadowRunResponse(
             **result
         )
 

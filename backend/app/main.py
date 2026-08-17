@@ -156,6 +156,7 @@ from app.models.api import (
     VideoAnalyzeResponse,
 )
 from app.services import browser_ingestion
+from app.services import browser_capture_inbox
 from app.services import multimodal_shadow_api
 from app.routes import multimodal_admin
 from app.services.content_resolution import (
@@ -2058,31 +2059,13 @@ def resolve_content(
 def browser_capture_preview(
     req: BrowserCaptureRequest,
 ):
-    try:
-        payload = (
-            browser_ingestion
-            .preview_browser_capture(
-                req.capture,
-
-                short_video_threshold_seconds=(
-                    req
-                    .short_video_threshold_seconds
-                ),
-            )
+    return (
+        browser_capture_inbox
+        .execute_browser_capture_http(
+            req=req,
+            connection_factory=db_conn,
+            response_model=BrowserCaptureResponse,
         )
-    except (
-        TypeError,
-        ValueError,
-    ) as error:
-        raise HTTPException(
-            status_code=422,
-            detail=str(
-                error
-            ),
-        ) from error
-
-    return BrowserCaptureResponse(
-        **payload
     )
 
 
