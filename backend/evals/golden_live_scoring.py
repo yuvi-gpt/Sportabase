@@ -6,9 +6,9 @@ from .golden_capture import clean
 from .golden_dataset import build_golden_cases
 from .golden_live_budget import MultimodalGoldenLiveInputError
 
+
 DEFAULT_LIVE_CASE_IDS = (
     "football_bellingham_real_madrid_2023",
-    "f1_alonso_aston_extension_2024",
 )
 
 
@@ -25,6 +25,49 @@ def selected_cases(case_ids: Sequence[str]) -> list[Dict[str, Any]]:
             "Unknown live golden case IDs: " + ", ".join(unknown)
         )
     return [available[case_id] for case_id in normalized]
+
+
+def provider_call_plan(case_ids: Sequence[str] = DEFAULT_LIVE_CASE_IDS) -> Dict[str, Any]:
+    chosen = selected_cases(case_ids)
+    rows = []
+    pair_count = 0
+    guaranteed = 0
+    conditional = 0
+
+    for case in chosen:
+        labels = list(case["expectations"].get("required_member_labels") or [])
+        pairs = len(labels)
+        pair_count += pairs
+        semantic_calls = pairs * 2
+        observation_calls = pairs * 2
+        guaranteed += semantic_calls
+        conditional += observation_calls
+        rows.append({
+            "case_id": case["case_id"],
+            "candidate_labels": labels,
+            "candidate_pair_count": pairs,
+            "guaranteed_semantic_calls": semantic_calls,
+            "conditional_observation_calls": observation_calls,
+            "minimum_calls": semantic_calls,
+            "maximum_calls": semantic_calls + observation_calls,
+        })
+
+    possible = list(range(guaranteed, guaranteed + conditional + 1, 2))
+    return {
+        "case_count": len(chosen),
+        "candidate_pair_count": pair_count,
+        "guaranteed_semantic_calls": guaranteed,
+        "conditional_observation_calls": conditional,
+        "minimum_calls": guaranteed,
+        "maximum_calls": guaranteed + conditional,
+        "possible_actual_calls": possible,
+        "exact_pre_run_count_available": False,
+        "exact_pre_run_count_reason": (
+            "Each source pair always needs two semantic calls; the two claim-observation "
+            "calls happen only when that pair survives the model-dependent exact-claim gate."
+        ),
+        "cases": rows,
+    }
 
 
 def walk_true_flags(value: Any, keys: Iterable[str]) -> set[str]:
