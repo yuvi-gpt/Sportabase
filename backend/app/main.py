@@ -157,6 +157,7 @@ from app.models.api import (
 )
 from app.services import browser_ingestion
 from app.services import multimodal_shadow_api
+from app.routes import multimodal_admin
 from app.services.content_resolution import (
     TRACKING_QUERY_PARAMETERS,
     YOUTUBE_HOSTS,
@@ -2191,3 +2192,5 @@ def analyze(
         time=time,
         upsert_media_item=upsert_media_item,
     )
+
+app.include_router(multimodal_admin.build_router(MULTIMODAL_SHADOW_API_ENABLED, require_admin, db_conn))
