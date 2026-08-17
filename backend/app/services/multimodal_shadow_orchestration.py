@@ -42,6 +42,12 @@ class MultimodalShadowOrchestrationExecutionError(
     pass
 
 
+class MultimodalShadowOrchestrationClaimSelectionError(
+    MultimodalShadowOrchestrationExecutionError
+):
+    pass
+
+
 class MultimodalShadowOrchestrationIntegrityError(
     MultimodalShadowOrchestrationError
 ):
@@ -484,6 +490,10 @@ def execute_multimodal_shadow_orchestration(
         ) from error
     except multimodal_shadow_api.MultimodalShadowApiProviderUnavailable as error:
         raise MultimodalShadowOrchestrationProviderUnavailable(
+            str(error)
+        ) from error
+    except multimodal_shadow_api.MultimodalShadowApiClaimSelectionError as error:
+        raise MultimodalShadowOrchestrationClaimSelectionError(
             str(error)
         ) from error
     except multimodal_shadow_api.MultimodalShadowApiExecutionError as error:

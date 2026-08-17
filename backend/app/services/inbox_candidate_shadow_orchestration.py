@@ -47,6 +47,12 @@ class MultimodalInboxCandidateShadowExecutionError(
     pass
 
 
+class MultimodalInboxCandidateShadowClaimSelectionError(
+    MultimodalInboxCandidateShadowExecutionError
+):
+    pass
+
+
 class MultimodalInboxCandidateShadowIntegrityError(
     MultimodalInboxCandidateShadowError
 ):
@@ -765,6 +771,13 @@ def execute_multimodal_inbox_candidate_shadow(
         .MultimodalInboxShadowProviderUnavailable
     ) as error:
         raise MultimodalInboxCandidateShadowProviderUnavailable(
+            str(error)
+        ) from error
+    except (
+        multimodal_inbox_shadow_orchestration
+        .MultimodalInboxShadowClaimSelectionError
+    ) as error:
+        raise MultimodalInboxCandidateShadowClaimSelectionError(
             str(error)
         ) from error
     except (

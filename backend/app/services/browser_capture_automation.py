@@ -14,6 +14,7 @@ from typing import Any, Dict, Mapping
 
 from app.services import inbox_history_auto_shadow_orchestration
 from app.services import inbox_no_merit_auto_shadow_orchestration
+from app.services import inbox_story_cluster_orchestration
 
 
 BROWSER_CAPTURE_AUTOMATION_VERSION = (
@@ -975,11 +976,32 @@ def _result_summary(value: Mapping[str, Any]) -> Dict[str, Any]:
         "version": _clean(value.get("version")),
         "status": _clean(value.get("status")),
         "claim_id": _clean(value.get("claim_id")),
+        "claim_ids": (
+            [
+                _clean(item)
+                for item in value.get("claim_ids", [])
+                if _clean(item)
+            ]
+            if isinstance(value.get("claim_ids"), list)
+            else []
+        ),
         "anchor_capture_record_id": _clean(
             value.get("anchor_capture_record_id")
         ),
         "selected_candidate_capture_record_id": _clean(
             value.get("selected_candidate_capture_record_id")
+        ),
+        "selected_candidate_capture_record_ids": (
+            [
+                _clean(item)
+                for item in value.get("selected_candidate_capture_record_ids", [])
+                if _clean(item)
+            ]
+            if isinstance(
+                value.get("selected_candidate_capture_record_ids"),
+                list,
+            )
+            else []
         ),
         "selected_subject_entity_id": _clean(
             value.get("selected_subject_entity_id")
@@ -1080,6 +1102,111 @@ def _validate_shadow_result(
     return result
 
 
+
+def _validate_cluster_shadow_result(
+    value: Any,
+    *,
+    capture_record_id: str,
+    execution_mode: str,
+) -> Dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Background story-cluster runner returned an invalid result."
+        )
+
+    result = dict(value)
+
+    if (
+        _clean(result.get("version"))
+        != inbox_story_cluster_orchestration.MULTIMODAL_INBOX_STORY_CLUSTER_VERSION
+        or _clean(result.get("status")).lower() != "completed_shadow"
+        or _clean(result.get("anchor_capture_record_id"))
+        != capture_record_id
+        or _clean(result.get("execution_mode"))
+        != execution_mode
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Background story-cluster scope/version changed."
+        )
+
+    policy = result.get("policy")
+
+    required_true = (
+        "cluster_is_routing_candidate_only",
+        "cluster_selection_is_read_only",
+        "same_story_not_established_by_cluster",
+        "claim_groups_formed_only_from_downstream_exact_claim_ids",
+        "each_completed_member_passed_exact_common_claim_gate",
+        "each_member_revalidated_by_candidate_gate",
+        "cluster_does_not_write_story_records_directly",
+        "cluster_does_not_link_story_media_directly",
+        "live_merit_shadow_only",
+        "live_release_not_called",
+    )
+
+    for field in required_true:
+        if (
+            not isinstance(policy, Mapping)
+            or policy.get(field) is not True
+        ):
+            raise BrowserCaptureAutomationIntegrityError(
+                "Background story-cluster safety boundary missing: "
+                + field
+            )
+
+    if (
+        bool(policy.get("cluster_merit_aggregation_performed"))
+        or bool(policy.get("synthetic_merit_baseline_used"))
+        or bool(policy.get("score_effect_applied"))
+        or bool(policy.get("affects_live_merit"))
+        or bool(policy.get("establishes_truth"))
+        or bool(policy.get("establishes_authority"))
+        or bool(policy.get("establishes_independence"))
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Background story-cluster crossed a safety boundary."
+        )
+
+    if execution_mode == "article_history_merit":
+        if (
+            policy.get("merit_baseline_mode") != "legacy_merit"
+            or policy.get("merit_baseline_available") is not True
+            or policy.get("merit_shadow_evaluated_per_completed_member")
+            is not True
+        ):
+            raise BrowserCaptureAutomationIntegrityError(
+                "Article story-cluster baseline state changed."
+            )
+    elif execution_mode == "non_article_no_merit":
+        if (
+            policy.get("merit_baseline_mode") != "not_applicable"
+            or bool(policy.get("merit_baseline_available"))
+            or bool(policy.get("merit_shadow_evaluated_per_completed_member"))
+        ):
+            raise BrowserCaptureAutomationIntegrityError(
+                "Non-article story-cluster baseline state changed."
+            )
+    else:
+        raise BrowserCaptureAutomationIntegrityError(
+            "Background story-cluster execution mode is invalid."
+        )
+
+    claim_ids = result.get("claim_ids")
+    member_ids = result.get("selected_candidate_capture_record_ids")
+
+    if (
+        not isinstance(claim_ids, list)
+        or not claim_ids
+        or not isinstance(member_ids, list)
+        or not member_ids
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Background story-cluster completed without claims or members."
+        )
+
+    return result
+
+
 def _retry_or_fail(
     *,
     job: Mapping[str, Any],
@@ -1157,13 +1284,11 @@ def execute_claimed_browser_capture_job(
     retry_base_seconds: int = DEFAULT_RETRY_BASE_SECONDS,
     retry_cap_seconds: int = DEFAULT_RETRY_CAP_SECONDS,
     now_provider=time.time,
-    runner=(
-        inbox_history_auto_shadow_orchestration
-        .execute_multimodal_inbox_history_auto_shadow
-    ),
-    non_article_runner=(
-        inbox_no_merit_auto_shadow_orchestration
-        .execute_multimodal_inbox_no_merit_auto_shadow
+    runner=None,
+    non_article_runner=None,
+    cluster_runner=(
+        inbox_story_cluster_orchestration
+        .execute_multisource_inbox_story_cluster_shadow
     ),
 ) -> Dict[str, Any]:
     if not isinstance(job, Mapping):
@@ -1207,8 +1332,64 @@ def execute_claimed_browser_capture_job(
                 "Gemini multimodal analysis is not configured."
             )
 
-        if execution_mode == "article_history_merit":
-            raw = runner(
+        legacy_runner_injected = (
+            runner is not None
+            or non_article_runner is not None
+        )
+
+        if legacy_runner_injected:
+            article_runner = (
+                runner
+                or inbox_history_auto_shadow_orchestration
+                .execute_multimodal_inbox_history_auto_shadow
+            )
+            social_runner = (
+                non_article_runner
+                or inbox_no_merit_auto_shadow_orchestration
+                .execute_multimodal_inbox_no_merit_auto_shadow
+            )
+
+            if execution_mode == "article_history_merit":
+                raw = article_runner(
+                    anchor_capture_record_id=capture_id,
+                    analysis_version=_clean(
+                        row.get("analysis_version")
+                    ),
+                    scoring_version=_clean(
+                        row.get("scoring_version")
+                    ),
+                    connection_factory=connection_factory,
+                    gemini_client=client,
+                    gemini_client_key=(
+                        _clean(gemini_client_key)
+                        or "automation:browser-capture"
+                    ),
+                    gemini_generator=gemini_generator,
+                )
+            else:
+                raw = social_runner(
+                    anchor_capture_record_id=capture_id,
+                    connection_factory=connection_factory,
+                    gemini_client=client,
+                    gemini_client_key=(
+                        _clean(gemini_client_key)
+                        or "automation:browser-capture"
+                    ),
+                    gemini_generator=gemini_generator,
+                )
+
+            result = _validate_shadow_result(
+                raw,
+                capture_record_id=capture_id,
+                execution_mode=execution_mode,
+            )
+        else:
+            if not callable(cluster_runner):
+                raise BrowserCaptureAutomationInputError(
+                    "Story-cluster runner is unavailable."
+                )
+
+            raw = cluster_runner(
                 anchor_capture_record_id=capture_id,
                 analysis_version=_clean(
                     row.get("analysis_version")
@@ -1224,24 +1405,24 @@ def execute_claimed_browser_capture_job(
                 ),
                 gemini_generator=gemini_generator,
             )
-        else:
-            raw = non_article_runner(
-                anchor_capture_record_id=capture_id,
-                connection_factory=connection_factory,
-                gemini_client=client,
-                gemini_client_key=(
-                    _clean(gemini_client_key)
-                    or "automation:browser-capture"
-                ),
-                gemini_generator=gemini_generator,
+
+            result = _validate_cluster_shadow_result(
+                raw,
+                capture_record_id=capture_id,
+                execution_mode=execution_mode,
             )
 
-        result = _validate_shadow_result(
-            raw,
-            capture_record_id=capture_id,
-            execution_mode=execution_mode,
+    except inbox_story_cluster_orchestration.MultimodalInboxStoryClusterNotReady as error:
+        return _retry_or_fail(
+            job=row,
+            worker_id=worker_id,
+            outcome="cluster_not_ready",
+            error=error,
+            connection_factory=connection_factory,
+            retry_base_seconds=retry_base_seconds,
+            retry_cap_seconds=retry_cap_seconds,
+            now_provider=now_provider,
         )
-
     except inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowBaselineUnavailable as error:
         return _retry_or_fail(
             job=row,
@@ -1267,6 +1448,7 @@ def execute_claimed_browser_capture_job(
     except (
         inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowLookupError,
         inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowLookupError,
+        inbox_story_cluster_orchestration.MultimodalInboxStoryClusterLookupError,
     ) as error:
         return _retry_or_fail(
             job=row,
@@ -1281,6 +1463,7 @@ def execute_claimed_browser_capture_job(
     except (
         inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowProviderUnavailable,
         inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowProviderUnavailable,
+        inbox_story_cluster_orchestration.MultimodalInboxStoryClusterProviderUnavailable,
     ) as error:
         return _retry_or_fail(
             job=row,
@@ -1295,6 +1478,7 @@ def execute_claimed_browser_capture_job(
     except (
         inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowExecutionError,
         inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowExecutionError,
+        inbox_story_cluster_orchestration.MultimodalInboxStoryClusterExecutionError,
     ) as error:
         return _retry_or_fail(
             job=row,
@@ -1311,6 +1495,8 @@ def execute_claimed_browser_capture_job(
         inbox_history_auto_shadow_orchestration.MultimodalInboxHistoryAutoShadowIntegrityError,
         inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowInputError,
         inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowIntegrityError,
+        inbox_story_cluster_orchestration.MultimodalInboxStoryClusterInputError,
+        inbox_story_cluster_orchestration.MultimodalInboxStoryClusterIntegrityError,
         BrowserCaptureAutomationInputError,
         BrowserCaptureAutomationIntegrityError,
     ) as error:
@@ -1570,6 +1756,11 @@ def start_browser_capture_automation_worker(
             "lease_based_claim": True,
             "restart_recoverable": True,
             "article_and_non_article_supported": True,
+            "multisource_story_cluster_execution": True,
+            "cluster_selection_is_read_only": True,
+            "cluster_does_not_establish_same_story": True,
+            "cluster_member_exact_claim_gate_required": True,
+            "cluster_merit_aggregation_performed": False,
             "non_article_uses_no_synthetic_merit_baseline": True,
             "public_request_does_not_wait_for_gemini": True,
             "live_merit_shadow_only": True,

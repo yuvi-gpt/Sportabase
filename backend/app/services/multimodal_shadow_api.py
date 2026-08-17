@@ -46,6 +46,12 @@ class MultimodalShadowApiExecutionError(
     pass
 
 
+class MultimodalShadowApiClaimSelectionError(
+    MultimodalShadowApiExecutionError
+):
+    pass
+
+
 class MultimodalShadowApiIntegrityError(
     MultimodalShadowApiError
 ):
@@ -816,6 +822,13 @@ def execute_multimodal_shadow_api(
             ),
             recorded_at=now,
         )
+    except (
+        multimodal_intelligence_runtime
+        .MultimodalClaimSelectionError
+    ) as error:
+        raise MultimodalShadowApiClaimSelectionError(
+            str(error)
+        ) from error
     except (
         multimodal_intelligence_runtime
         .MultimodalIntelligenceRuntimeError
