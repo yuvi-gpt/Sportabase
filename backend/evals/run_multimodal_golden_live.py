@@ -15,7 +15,11 @@ from .golden_live import (
     MultimodalGoldenLiveError,
     evaluate_live_golden_subset,
 )
-from .golden_live_budget import HARD_MAX_PROVIDER_CALLS
+from .golden_live_budget import (
+    HARD_MAX_PROVIDER_CALLS,
+    MultimodalGoldenLiveInputError,
+    bounded_calls,
+)
 from .golden_live_scoring import provider_call_plan
 
 
@@ -30,8 +34,8 @@ def _parser() -> argparse.ArgumentParser:
         "--live",
         action="store_true",
         help=(
-            "Required explicit opt-in. This command makes "
-            "real Gemini API calls."
+            "Required explicit opt-in for a nonzero run. "
+            "This command makes real Gemini API calls."
         ),
     )
     parser.add_argument(
@@ -39,9 +43,9 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_MAX_PROVIDER_CALLS,
         help=(
-            "Hard provider call budget; maximum "
+            "Provider call budget from 0 to "
             + str(HARD_MAX_PROVIDER_CALLS)
-            + "."
+            + ". 0 is a true zero-call dry run."
         ),
     )
     parser.add_argument(
@@ -52,7 +56,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--describe",
         action="store_true",
-        help="Print the frozen live subset and zero-cost provider plan, then exit.",
+        help=(
+            "Print the frozen live subset and zero-cost "
+            "provider plan, then exit."
+        ),
     )
     return parser
 
@@ -125,8 +132,20 @@ def _provider_event_logger(event) -> None:
         )
 
 
+def _validated_budget(value):
+    try:
+        return bounded_calls(value)
+    except MultimodalGoldenLiveInputError as error:
+        print(type(error).__name__ + ": " + str(error), file=sys.stderr)
+        return None
+
+
 def main(argv=None) -> int:
     args = _parser().parse_args(argv)
+    configured_cap = _validated_budget(args.max_calls)
+    if configured_cap is None:
+        return 2
+
     plan = provider_call_plan(DEFAULT_LIVE_CASE_IDS)
 
     if args.describe:
@@ -140,8 +159,17 @@ def main(argv=None) -> int:
         print("real DB: never used")
         print("Live Merit release: never called")
         print()
-        _print_plan(plan, configured_cap=args.max_calls)
+        _print_plan(plan, configured_cap=configured_cap)
         print("provider calls made by --describe: 0")
+        return 0
+
+    if configured_cap == 0:
+        print("Sportabase zero-call live-eval dry run")
+        _print_plan(plan, configured_cap=0)
+        print()
+        print("DRY RUN COMPLETE: exactly 0 Gemini calls made.")
+        print("API key read: FALSE")
+        print("token usage: 0")
         return 0
 
     if not args.live:
@@ -152,10 +180,12 @@ def main(argv=None) -> int:
         return 2
 
     print("Sportabase bounded live evaluation preflight")
-    _print_plan(plan, configured_cap=args.max_calls)
-    if args.max_calls < plan["maximum_calls"]:
+    _print_plan(plan, configured_cap=configured_cap)
+    if configured_cap < plan["maximum_calls"]:
         print(
-            "Configured call budget cannot cover the frozen full-case maximum.",
+            "Configured call budget cannot cover the frozen full-case maximum. "
+            "No provider calls were made. Use --max-calls 12 to preserve the "
+            "full two-positive-plus-hard-negative inspection scope.",
             file=sys.stderr,
         )
         return 2
@@ -172,7 +202,7 @@ def main(argv=None) -> int:
     try:
         report = evaluate_live_golden_subset(
             api_key=api_key,
-            max_calls=args.max_calls,
+            max_calls=configured_cap,
             event_sink=_provider_event_logger,
         )
     except MultimodalGoldenLiveError as error:
@@ -180,8 +210,8 @@ def main(argv=None) -> int:
         return 3
 
     _write_json(args.json_out, report)
-
     provider = report["provider"]
+
     print()
     print("=== EXACT PROVIDER USAGE ===")
     print("actual provider calls:", provider["call_count"])

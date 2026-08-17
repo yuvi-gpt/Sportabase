@@ -27,14 +27,18 @@ class MultimodalGoldenLiveProviderError(MultimodalGoldenLiveError):
 
 def bounded_calls(value: Any) -> int:
     if isinstance(value, bool):
-        raise MultimodalGoldenLiveInputError("Provider call budget must be an integer.")
+        raise MultimodalGoldenLiveInputError(
+            "Provider call budget must be an integer."
+        )
     try:
         result = int(value)
     except (TypeError, ValueError) as error:
-        raise MultimodalGoldenLiveInputError("Provider call budget must be an integer.") from error
-    if result < 1 or result > HARD_MAX_PROVIDER_CALLS:
         raise MultimodalGoldenLiveInputError(
-            f"Provider call budget must be between 1 and {HARD_MAX_PROVIDER_CALLS}."
+            "Provider call budget must be an integer."
+        ) from error
+    if result < 0 or result > HARD_MAX_PROVIDER_CALLS:
+        raise MultimodalGoldenLiveInputError(
+            f"Provider call budget must be between 0 and {HARD_MAX_PROVIDER_CALLS}."
         )
     return result
 
@@ -42,7 +46,11 @@ def bounded_calls(value: Any) -> int:
 def _usage_value(usage: Any, field: str) -> int:
     if usage is None:
         return 0
-    raw = usage.get(field) if isinstance(usage, Mapping) else getattr(usage, field, 0)
+    raw = (
+        usage.get(field)
+        if isinstance(usage, Mapping)
+        else getattr(usage, field, 0)
+    )
     if isinstance(raw, bool):
         return 0
     try:
@@ -52,27 +60,26 @@ def _usage_value(usage: Any, field: str) -> int:
 
 
 class BudgetedGeminiGenerator:
-    """Evaluation-only Gemini generator with a pre-call hard budget and token telemetry."""
+    """Evaluation-only Gemini generator with pre-call budget and token telemetry."""
 
     def __init__(
         self,
         *,
         max_calls: int = DEFAULT_MAX_PROVIDER_CALLS,
-        event_sink: Optional[Callable[[Dict[str, Any]], None]] = None,
+        event_sink: Optional[Callable[[Mapping[str, Any]], None]] = None,
     ):
         self.max_calls = bounded_calls(max_calls)
         self.calls = []
         self.budget_exhausted = False
-        self.event_sink = event_sink if callable(event_sink) else None
+        self.event_sink = event_sink
 
     @property
     def call_count(self) -> int:
         return len(self.calls)
 
     def _emit(self, event: str, row: Mapping[str, Any]) -> None:
-        if self.event_sink is None:
+        if not callable(self.event_sink):
             return
-        summary = self.summary()
         payload = {
             "event": event,
             "call_index": int(row.get("call_index") or 0),
@@ -85,46 +92,85 @@ class BudgetedGeminiGenerator:
             "thought_tokens": int(row.get("thought_tokens") or 0),
             "cached_tokens": int(row.get("cached_tokens") or 0),
             "total_tokens": int(row.get("total_tokens") or 0),
-            "cumulative_calls": summary["call_count"],
-            "cumulative_prompt_tokens": summary["prompt_tokens"],
-            "cumulative_output_tokens": summary["output_tokens"],
-            "cumulative_thought_tokens": summary["thought_tokens"],
-            "cumulative_cached_tokens": summary["cached_tokens"],
-            "cumulative_total_tokens": summary["total_tokens"],
+            "remaining_calls": max(0, self.max_calls - self.call_count),
         }
+        totals = self._token_totals()
+        payload.update(
+            {
+                "cumulative_calls": self.call_count,
+                "cumulative_prompt_tokens": totals["prompt_tokens"],
+                "cumulative_output_tokens": totals["output_tokens"],
+                "cumulative_thought_tokens": totals["thought_tokens"],
+                "cumulative_cached_tokens": totals["cached_tokens"],
+                "cumulative_total_tokens": totals["total_tokens"],
+            }
+        )
         self.event_sink(payload)
 
-    def __call__(self, *, client, client_key: str, mode: str, model: str, contents):
+    def _token_totals(self) -> Dict[str, int]:
+        return {
+            "prompt_tokens": sum(
+                int(row.get("prompt_tokens") or 0) for row in self.calls
+            ),
+            "output_tokens": sum(
+                int(row.get("output_tokens") or 0) for row in self.calls
+            ),
+            "thought_tokens": sum(
+                int(row.get("thought_tokens") or 0) for row in self.calls
+            ),
+            "cached_tokens": sum(
+                int(row.get("cached_tokens") or 0) for row in self.calls
+            ),
+            "total_tokens": sum(
+                int(row.get("total_tokens") or 0) for row in self.calls
+            ),
+        }
+
+    def __call__(
+        self,
+        *,
+        client,
+        client_key: str,
+        mode: str,
+        model: str,
+        contents,
+    ):
         if self.call_count >= self.max_calls:
             self.budget_exhausted = True
             raise MultimodalGoldenLiveBudgetExceeded(
                 "Live golden evaluation reached its provider call budget."
             )
+
         model_name = clean(model)
         mode_name = clean(mode)
         if not model_name:
-            raise MultimodalGoldenLiveProviderError("Gemini model name is required.")
+            raise MultimodalGoldenLiveProviderError(
+                "Gemini model name is required."
+            )
         if client is None or not hasattr(client, "models"):
-            raise MultimodalGoldenLiveProviderError("Gemini client is unavailable.")
+            raise MultimodalGoldenLiveProviderError(
+                "Gemini client is unavailable."
+            )
 
         row = {
             "call_index": self.call_count + 1,
             "mode": mode_name,
             "model": model_name,
-            "client_key": clean(client_key) or "anonymous",
             "status": "started",
             "prompt_tokens": 0,
-            "candidate_tokens": 0,
             "output_tokens": 0,
-            "total_tokens": 0,
-            "cached_tokens": 0,
             "thought_tokens": 0,
+            "cached_tokens": 0,
+            "total_tokens": 0,
         }
         self.calls.append(row)
         self._emit("provider_call_started", row)
 
         try:
-            response = client.models.generate_content(model=model_name, contents=contents)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+            )
         except MultimodalGoldenLiveError:
             row["status"] = "failed"
             self._emit("provider_call_failed", row)
@@ -133,7 +179,9 @@ class BudgetedGeminiGenerator:
             row["status"] = "failed"
             row["error_type"] = type(error).__name__
             self._emit("provider_call_failed", row)
-            raise MultimodalGoldenLiveProviderError("Gemini provider call failed.") from error
+            raise MultimodalGoldenLiveProviderError(
+                "Gemini provider call failed."
+            ) from error
 
         usage = getattr(response, "usage_metadata", None)
         prompt_tokens = _usage_value(usage, "prompt_token_count")
@@ -144,15 +192,16 @@ class BudgetedGeminiGenerator:
         if total_tokens <= 0:
             total_tokens = prompt_tokens + output_tokens + thought_tokens
 
-        row.update({
-            "status": "completed",
-            "prompt_tokens": prompt_tokens,
-            "candidate_tokens": output_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-            "cached_tokens": cached_tokens,
-            "thought_tokens": thought_tokens,
-        })
+        row.update(
+            {
+                "status": "completed",
+                "prompt_tokens": prompt_tokens,
+                "output_tokens": output_tokens,
+                "thought_tokens": thought_tokens,
+                "cached_tokens": cached_tokens,
+                "total_tokens": total_tokens,
+            }
+        )
         self._emit("provider_call_completed", row)
         return response
 
@@ -166,18 +215,34 @@ class BudgetedGeminiGenerator:
                 by_mode[mode] = by_mode.get(mode, 0) + 1
             if model:
                 by_model[model] = by_model.get(model, 0) + 1
+
+        totals = self._token_totals()
+        safe_log = [
+            {
+                "call_index": int(row.get("call_index") or 0),
+                "mode": clean(row.get("mode")),
+                "model": clean(row.get("model")),
+                "status": clean(row.get("status")),
+                "prompt_tokens": int(row.get("prompt_tokens") or 0),
+                "output_tokens": int(row.get("output_tokens") or 0),
+                "thought_tokens": int(row.get("thought_tokens") or 0),
+                "cached_tokens": int(row.get("cached_tokens") or 0),
+                "total_tokens": int(row.get("total_tokens") or 0),
+                **(
+                    {"error_type": clean(row.get("error_type"))}
+                    if clean(row.get("error_type"))
+                    else {}
+                ),
+            }
+            for row in self.calls
+        ]
         return {
             "call_count": self.call_count,
             "max_calls": self.max_calls,
-            "remaining_calls": max(0, self.max_calls - self.call_count),
             "budget_exhausted": self.budget_exhausted,
+            "remaining_calls": max(0, self.max_calls - self.call_count),
             "calls_by_mode": dict(sorted(by_mode.items())),
             "calls_by_model": dict(sorted(by_model.items())),
-            "prompt_tokens": sum(int(row.get("prompt_tokens") or 0) for row in self.calls),
-            "candidate_tokens": sum(int(row.get("candidate_tokens") or 0) for row in self.calls),
-            "output_tokens": sum(int(row.get("output_tokens") or 0) for row in self.calls),
-            "total_tokens": sum(int(row.get("total_tokens") or 0) for row in self.calls),
-            "cached_tokens": sum(int(row.get("cached_tokens") or 0) for row in self.calls),
-            "thought_tokens": sum(int(row.get("thought_tokens") or 0) for row in self.calls),
-            "call_log": [dict(row) for row in self.calls],
+            **totals,
+            "call_log": safe_log,
         }
