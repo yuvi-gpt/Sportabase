@@ -9,6 +9,7 @@ from app.services import multimodal_binding_registration
 from app.services import multimodal_shadow_orchestration
 from app.services import multimodal_inbox_shadow_orchestration
 from app.routes import inbox_discovery_admin
+from app.routes import inbox_candidate_shadow_admin
 
 
 class _StrictBindingModel(BaseModel):
@@ -229,6 +230,19 @@ def build_router(
 
     router.include_router(
         inbox_discovery_admin.build_router(
+            enabled=enabled,
+            require_admin=require_admin,
+            connection_factory=connection_factory,
+            gemini_client_factory=gemini_client_factory,
+            request_client_key_resolver=(
+                request_client_key_resolver
+            ),
+            gemini_generator=gemini_generator,
+        )
+    )
+
+    router.include_router(
+        inbox_candidate_shadow_admin.build_router(
             enabled=enabled,
             require_admin=require_admin,
             connection_factory=connection_factory,
