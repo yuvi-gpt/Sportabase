@@ -150,6 +150,35 @@ CREATE INDEX IF NOT EXISTS idx_intelligence_claims_type
 ON intelligence_claims(claim_type);
 
 
+CREATE TABLE IF NOT EXISTS story_claim_links (
+  story_id TEXT NOT NULL,
+  claim_id TEXT NOT NULL,
+  relationship_type TEXT NOT NULL DEFAULT 'exact_claim_group',
+  link_basis TEXT NOT NULL DEFAULT 'downstream_exact_common_claim_id',
+  linked_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  PRIMARY KEY (
+    story_id,
+    claim_id
+  ),
+  CHECK (
+    relationship_type = 'exact_claim_group'
+  ),
+  CHECK (
+    link_basis = 'downstream_exact_common_claim_id'
+  ),
+  FOREIGN KEY(story_id)
+    REFERENCES intelligence_stories(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_story_claim_links_claim
+ON story_claim_links(claim_id);
+
+
 CREATE TABLE IF NOT EXISTS canonical_entities (
   id TEXT PRIMARY KEY,
   entity_key TEXT NOT NULL UNIQUE,

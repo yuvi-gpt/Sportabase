@@ -15,6 +15,7 @@ from typing import Any, Dict, Mapping
 from app.services import inbox_history_auto_shadow_orchestration
 from app.services import inbox_no_merit_auto_shadow_orchestration
 from app.services import inbox_story_cluster_orchestration
+from app.services import story_claim_graph_materialization
 
 
 BROWSER_CAPTURE_AUTOMATION_VERSION = (
@@ -1014,6 +1015,40 @@ def _result_summary(value: Mapping[str, Any]) -> Dict[str, Any]:
             )
             else {}
         ),
+        "story_ids": (
+            [
+                _clean(item)
+                for item in (
+                    value["story_graph_materialization"]
+                    .get("story_ids", [])
+                )
+                if _clean(item)
+            ]
+            if (
+                isinstance(
+                    value.get("story_graph_materialization"),
+                    Mapping,
+                )
+                and isinstance(
+                    value["story_graph_materialization"]
+                    .get("story_ids"),
+                    list,
+                )
+            )
+            else []
+        ),
+        "story_count": (
+            int(
+                value["story_graph_materialization"]
+                .get("story_count")
+                or 0
+            )
+            if isinstance(
+                value.get("story_graph_materialization"),
+                Mapping,
+            )
+            else 0
+        ),
         "policy": {
             "live_merit_shadow_only": True,
             "score_effect_applied": False,
@@ -1207,6 +1242,108 @@ def _validate_cluster_shadow_result(
     return result
 
 
+def _validate_story_graph_materialization(
+    value: Any,
+    *,
+    cluster_result: Mapping[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(value, Mapping):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Story graph materializer returned an invalid result."
+        )
+
+    result = dict(value)
+
+    if (
+        _clean(result.get("version"))
+        != (
+            story_claim_graph_materialization
+            .STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION
+        )
+        or _clean(result.get("status")).lower()
+        != "materialized"
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Story graph materialization version/status changed."
+        )
+
+    if (
+        _clean(result.get("anchor_capture_record_id"))
+        != _clean(cluster_result.get("anchor_capture_record_id"))
+        or _clean(result.get("selected_subject_entity_id"))
+        != _clean(cluster_result.get("selected_subject_entity_id"))
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Story graph materialization changed cluster scope."
+        )
+
+    cluster_claim_ids = cluster_result.get("claim_ids")
+    graph_claim_ids = result.get("claim_ids")
+    story_ids = result.get("story_ids")
+
+    if (
+        not isinstance(cluster_claim_ids, list)
+        or not cluster_claim_ids
+        or not isinstance(graph_claim_ids, list)
+        or graph_claim_ids != cluster_claim_ids
+        or not isinstance(story_ids, list)
+        or not story_ids
+        or len(story_ids) != len(set(story_ids))
+        or int(result.get("story_count") or 0)
+        != len(story_ids)
+        or len(story_ids) != len(graph_claim_ids)
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Story graph materialization claim/story scope is invalid."
+        )
+
+    policy = result.get("policy")
+
+    required_true = (
+        "source_cluster_version_required",
+        "materialization_requires_downstream_exact_claim_groups",
+        "nested_binding_provenance_required",
+        "persisted_claim_subject_must_match_cluster_subject",
+        "persisted_media_identity_required",
+        "one_deterministic_story_per_exact_claim_id",
+        "story_claim_edge_persisted",
+        "story_media_links_persisted",
+        "materialization_is_atomic",
+        "materialization_is_idempotent",
+        "raw_candidate_scores_not_persisted",
+        "rejected_cluster_members_not_persisted",
+        "structural_link_confidence_is_not_truth_confidence",
+        "story_membership_does_not_establish_truth",
+        "story_membership_does_not_establish_authority",
+        "story_membership_does_not_establish_independence",
+        "story_membership_does_not_verify_evidence",
+        "live_release_not_called",
+    )
+
+    for field in required_true:
+        if (
+            not isinstance(policy, Mapping)
+            or policy.get(field) is not True
+        ):
+            raise BrowserCaptureAutomationIntegrityError(
+                "Story graph safety boundary missing: "
+                + field
+            )
+
+    if (
+        bool(policy.get("score_effect_applied"))
+        or bool(policy.get("establishes_truth"))
+        or bool(policy.get("establishes_authority"))
+        or bool(policy.get("establishes_independence"))
+        or bool(policy.get("affects_live_merit"))
+    ):
+        raise BrowserCaptureAutomationIntegrityError(
+            "Story graph materialization crossed a safety boundary."
+        )
+
+    return result
+
+
 def _retry_or_fail(
     *,
     job: Mapping[str, Any],
@@ -1289,6 +1426,10 @@ def execute_claimed_browser_capture_job(
     cluster_runner=(
         inbox_story_cluster_orchestration
         .execute_multisource_inbox_story_cluster_shadow
+    ),
+    story_graph_materializer=(
+        story_claim_graph_materialization
+        .materialize_story_claim_graph
     ),
 ) -> Dict[str, Any]:
     if not isinstance(job, Mapping):
@@ -1412,6 +1553,33 @@ def execute_claimed_browser_capture_job(
                 execution_mode=execution_mode,
             )
 
+            if not callable(story_graph_materializer):
+                raise BrowserCaptureAutomationInputError(
+                    "Story graph materializer is unavailable."
+                )
+
+            graph_raw = story_graph_materializer(
+                cluster_result=result,
+                connection_factory=connection_factory,
+            )
+            graph_result = _validate_story_graph_materialization(
+                graph_raw,
+                cluster_result=result,
+            )
+            result = dict(result)
+            result["story_graph_materialization"] = graph_result
+
+    except story_claim_graph_materialization.StoryClaimGraphMaterializationPersistenceError as error:
+        return _retry_or_fail(
+            job=row,
+            worker_id=worker_id,
+            outcome="story_graph_persistence_unavailable",
+            error=error,
+            connection_factory=connection_factory,
+            retry_base_seconds=retry_base_seconds,
+            retry_cap_seconds=retry_cap_seconds,
+            now_provider=now_provider,
+        )
     except inbox_story_cluster_orchestration.MultimodalInboxStoryClusterNotReady as error:
         return _retry_or_fail(
             job=row,
@@ -1497,6 +1665,8 @@ def execute_claimed_browser_capture_job(
         inbox_no_merit_auto_shadow_orchestration.MultimodalInboxNoMeritAutoShadowIntegrityError,
         inbox_story_cluster_orchestration.MultimodalInboxStoryClusterInputError,
         inbox_story_cluster_orchestration.MultimodalInboxStoryClusterIntegrityError,
+        story_claim_graph_materialization.StoryClaimGraphMaterializationInputError,
+        story_claim_graph_materialization.StoryClaimGraphMaterializationIntegrityError,
         BrowserCaptureAutomationInputError,
         BrowserCaptureAutomationIntegrityError,
     ) as error:
@@ -1761,6 +1931,11 @@ def start_browser_capture_automation_worker(
             "cluster_does_not_establish_same_story": True,
             "cluster_member_exact_claim_gate_required": True,
             "cluster_merit_aggregation_performed": False,
+            "validated_story_graph_materialization": True,
+            "story_materialization_requires_exact_claim_groups": True,
+            "story_claim_edges_persisted": True,
+            "story_membership_does_not_establish_truth": True,
+            "story_membership_does_not_establish_independence": True,
             "non_article_uses_no_synthetic_merit_baseline": True,
             "public_request_does_not_wait_for_gemini": True,
             "live_merit_shadow_only": True,
