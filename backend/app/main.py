@@ -2176,4 +2176,4 @@ def analyze(
         upsert_media_item=upsert_media_item,
     )
 
-app.include_router(multimodal_admin.build_router(MULTIMODAL_SHADOW_API_ENABLED, require_admin, db_conn, gemini_client, request_client_key, generate_gemini_content))
+app.include_router(multimodal_admin.build_router(MULTIMODAL_SHADOW_API_ENABLED, require_admin, db_conn, gemini_client, request_client_key, generate_gemini_content, ANALYSIS_VERSION, SCORING_VERSION))

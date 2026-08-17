@@ -11,6 +11,7 @@ from app.services import multimodal_inbox_shadow_orchestration
 from app.routes import inbox_discovery_admin
 from app.routes import inbox_candidate_shadow_admin
 from app.routes import inbox_auto_shadow_admin
+from app.routes import inbox_history_auto_shadow_admin
 
 
 class _StrictBindingModel(BaseModel):
@@ -226,6 +227,8 @@ def build_router(
     gemini_client_factory=None,
     request_client_key_resolver=None,
     gemini_generator=None,
+    analysis_version="",
+    scoring_version="",
 ) -> APIRouter:
     router = APIRouter()
 
@@ -260,6 +263,21 @@ def build_router(
             enabled=enabled,
             require_admin=require_admin,
             connection_factory=connection_factory,
+            gemini_client_factory=gemini_client_factory,
+            request_client_key_resolver=(
+                request_client_key_resolver
+            ),
+            gemini_generator=gemini_generator,
+        )
+    )
+
+    router.include_router(
+        inbox_history_auto_shadow_admin.build_router(
+            enabled=enabled,
+            require_admin=require_admin,
+            connection_factory=connection_factory,
+            analysis_version=analysis_version,
+            scoring_version=scoring_version,
             gemini_client_factory=gemini_client_factory,
             request_client_key_resolver=(
                 request_client_key_resolver
