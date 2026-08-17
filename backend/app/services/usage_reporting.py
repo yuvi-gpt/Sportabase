@@ -10,6 +10,11 @@ from typing import (
     List,
 )
 
+from app.services.gemini_capacity import (
+    capacity_policy_for_model,
+    provider_usage_day,
+)
+
 
 def usage_derived_metrics(
     summary: Dict[str, Any],
@@ -914,8 +919,20 @@ def admin_usage_summary(
     client_daily_call_cap: int,
     input_cost_per_million_usd: float,
     output_cost_per_million_usd: float,
+    provider_day_resolver=None,
+    capacity_policy_resolver=None,
 ) -> Dict[str, Any]:
     usage_day = usage_day_resolver()
+    provider_day = (
+        provider_day_resolver()
+        if callable(provider_day_resolver)
+        else provider_usage_day()
+    )
+    capacity_resolver = (
+        capacity_policy_resolver
+        if callable(capacity_policy_resolver)
+        else capacity_policy_for_model
+    )
 
     window_end_day = usage_day
 
@@ -932,6 +949,141 @@ def admin_usage_summary(
             usage_day=usage_day,
         )
         conn.commit()
+
+        usage_columns = {
+            str(row["name"])
+            for row in conn.execute(
+                "PRAGMA table_info(gemini_usage)"
+            ).fetchall()
+        }
+
+        if "provider_day" in usage_columns:
+            provider_today_row = conn.execute(
+                """
+                SELECT
+                  COUNT(*) AS provider_attempts
+                FROM gemini_usage
+                WHERE provider_day = ?
+                  AND cache_hit = 0
+                  AND inflight_join = 0
+                  AND status IN (
+                    'reserved',
+                    'success',
+                    'failed',
+                    'expired'
+                  )
+                """,
+                (provider_day,),
+            ).fetchone()
+
+            provider_top_client_row = conn.execute(
+                """
+                SELECT COALESCE(
+                  MAX(client_attempts),
+                  0
+                ) AS highest_client_attempts
+                FROM (
+                  SELECT COUNT(*) AS client_attempts
+                  FROM gemini_usage
+                  WHERE provider_day = ?
+                    AND cache_hit = 0
+                    AND inflight_join = 0
+                    AND status IN (
+                      'reserved',
+                      'success',
+                      'failed',
+                      'expired'
+                    )
+                  GROUP BY client_key
+                )
+                """,
+                (provider_day,),
+            ).fetchone()
+
+            provider_model_rows = conn.execute(
+                """
+                SELECT
+                  model,
+                  COUNT(*) AS provider_attempts
+                FROM gemini_usage
+                WHERE provider_day = ?
+                  AND cache_hit = 0
+                  AND inflight_join = 0
+                  AND status IN (
+                    'reserved',
+                    'success',
+                    'failed',
+                    'expired'
+                  )
+                GROUP BY model
+                ORDER BY model
+                """,
+                (provider_day,),
+            ).fetchall()
+
+        else:
+            provider_today_row = conn.execute(
+                """
+                SELECT
+                  COUNT(*) AS provider_attempts
+                FROM gemini_usage
+                WHERE usage_day = ?
+                  AND cache_hit = 0
+                  AND inflight_join = 0
+                  AND status IN (
+                    'reserved',
+                    'success',
+                    'failed',
+                    'expired'
+                  )
+                """,
+                (usage_day,),
+            ).fetchone()
+
+            provider_top_client_row = conn.execute(
+                """
+                SELECT COALESCE(
+                  MAX(client_attempts),
+                  0
+                ) AS highest_client_attempts
+                FROM (
+                  SELECT COUNT(*) AS client_attempts
+                  FROM gemini_usage
+                  WHERE usage_day = ?
+                    AND cache_hit = 0
+                    AND inflight_join = 0
+                    AND status IN (
+                      'reserved',
+                      'success',
+                      'failed',
+                      'expired'
+                    )
+                  GROUP BY client_key
+                )
+                """,
+                (usage_day,),
+            ).fetchone()
+
+            provider_model_rows = conn.execute(
+                """
+                SELECT
+                  model,
+                  COUNT(*) AS provider_attempts
+                FROM gemini_usage
+                WHERE usage_day = ?
+                  AND cache_hit = 0
+                  AND inflight_join = 0
+                  AND status IN (
+                    'reserved',
+                    'success',
+                    'failed',
+                    'expired'
+                  )
+                GROUP BY model
+                ORDER BY model
+                """,
+                (usage_day,),
+            ).fetchall()
 
         today_row = conn.execute(
             """
@@ -2002,8 +2154,15 @@ def admin_usage_summary(
         in dict(rolling_row).items()
     }
 
+    provider_attempts = int(
+        provider_today_row[
+            "provider_attempts"
+        ]
+        or 0
+    )
+
     highest_client_attempts = int(
-        top_client_row[
+        provider_top_client_row[
             "highest_client_attempts"
         ]
         or 0
@@ -2015,7 +2174,7 @@ def admin_usage_summary(
         else max(
             0,
             global_daily_call_cap
-            - today["gemini_attempts"],
+            - provider_attempts,
         )
     )
 
@@ -2418,11 +2577,101 @@ def admin_usage_summary(
         "daily": rolling_daily,
     }
 
+    default_capacity_policy = (
+        capacity_resolver("")
+    )
+    default_capacity = (
+        default_capacity_policy.as_dict()
+        if hasattr(
+            default_capacity_policy,
+            "as_dict",
+        )
+        else {}
+    )
+
+    provider_models = []
+
+    for row in provider_model_rows:
+        model_name = str(
+            row["model"] or "unknown-model"
+        )
+        attempts = int(
+            row["provider_attempts"]
+            or 0
+        )
+        model_policy = capacity_resolver(
+            model_name
+        )
+        descriptor = (
+            model_policy.as_dict()
+            if hasattr(
+                model_policy,
+                "as_dict",
+            )
+            else {}
+        )
+        usable_rpd = int(
+            descriptor.get(
+                "usable_rpd",
+                0,
+            )
+            or 0
+        )
+
+        provider_models.append(
+            {
+                "model": model_name,
+                "provider_attempts": attempts,
+                "usable_rpd": usable_rpd,
+                "rpd_remaining": (
+                    None
+                    if usable_rpd <= 0
+                    else max(
+                        0,
+                        usable_rpd
+                        - attempts,
+                    )
+                ),
+                "policy": descriptor,
+            }
+        )
+
     return {
         "generated_at": datetime.now(
             timezone.utc
         ).isoformat(),
         "usage_day_utc": usage_day,
+        "provider_capacity": {
+            "provider_day": provider_day,
+            "provider_timezone": (
+                default_capacity.get(
+                    "provider_timezone",
+                    "America/Los_Angeles",
+                )
+            ),
+            "provider_attempts": (
+                provider_attempts
+            ),
+            "global_daily_call_cap": (
+                global_daily_call_cap
+            ),
+            "global_calls_remaining": (
+                global_remaining
+            ),
+            "client_daily_call_cap": (
+                client_daily_call_cap
+            ),
+            "highest_client_attempts": (
+                highest_client_attempts
+            ),
+            "highest_client_calls_remaining": (
+                highest_client_remaining
+            ),
+            "default_policy": (
+                default_capacity
+            ),
+            "by_model": provider_models,
+        },
         "pricing": {
             "currency": "USD",
             "estimate_type": "paid_standard",

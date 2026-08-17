@@ -187,6 +187,10 @@ from app.services.analysis_cache import (
     make_analysis_cache_key as _make_analysis_cache_key_cache_impl,
     set_cached_analysis as _set_cached_analysis_cache_impl,
 )
+from app.services.gemini_capacity import (
+    capacity_policy_for_model as _capacity_policy_for_model_impl,
+    sportabase_daily_caps as _sportabase_daily_caps_impl,
+)
 from app.services.gemini_runtime import (
     classify_gemini_failure as _classify_gemini_failure_runtime_impl,
     expire_stale_gemini_reservations as _expire_stale_gemini_reservations_runtime_impl,
@@ -401,18 +405,14 @@ LIVE_CACHE_TTL_SECONDS = int(
     )
 )
 
-GLOBAL_DAILY_GEMINI_CALL_CAP = int(
-    os.getenv(
-        "SPORTABASE_GLOBAL_DAILY_GEMINI_CALL_CAP",
-        "300",
-    )
+_GEMINI_CAPACITY_POLICY = (
+    _capacity_policy_for_model_impl("")
 )
-
-CLIENT_DAILY_GEMINI_CALL_CAP = int(
-    os.getenv(
-        "SPORTABASE_CLIENT_DAILY_GEMINI_CALL_CAP",
-        "30",
-    )
+(
+    GLOBAL_DAILY_GEMINI_CALL_CAP,
+    CLIENT_DAILY_GEMINI_CALL_CAP,
+) = _sportabase_daily_caps_impl(
+    _GEMINI_CAPACITY_POLICY
 )
 
 GEMINI_RESERVATION_TIMEOUT_SECONDS = max(
@@ -1423,6 +1423,7 @@ def reserve_gemini_call(
     client_key: str,
     mode: str,
     model: str,
+    estimated_prompt_tokens: int = 0,
 ) -> int:
     return (
         _reserve_gemini_call_runtime_impl(
@@ -1441,6 +1442,9 @@ def reserve_gemini_call(
             ),
             client_daily_call_cap=(
                 CLIENT_DAILY_GEMINI_CALL_CAP
+            ),
+            estimated_prompt_tokens=(
+                estimated_prompt_tokens
             ),
         )
     )

@@ -25,6 +25,14 @@ from fastapi import (
     Request,
 )
 
+from app.services.gemini_capacity import (
+    GeminiCapacityPacingRequired,
+    capacity_policy_for_model,
+    estimate_prompt_tokens,
+    normalized_model_name,
+    provider_usage_day,
+)
+
 
 def request_client_key(
     request: Request,
@@ -76,12 +84,6 @@ def expire_stale_gemini_reservations(
         else datetime.now(timezone.utc)
     )
 
-    current_usage_day = (
-        str(usage_day)
-        if usage_day
-        else current_time.date().isoformat()
-    )
-
     cutoff = (
         current_time
         - timedelta(
@@ -91,8 +93,7 @@ def expire_stale_gemini_reservations(
         )
     ).isoformat()
 
-    cursor = conn.execute(
-        """
+    query = """
         UPDATE gemini_usage
         SET
           status = 'expired',
@@ -100,21 +101,155 @@ def expire_stale_gemini_reservations(
           failure_detail = (
             'Gemini reservation expired before completion.'
           )
-        WHERE usage_day = ?
-          AND status = 'reserved'
+        WHERE status = 'reserved'
           AND created_at < ?
           AND cache_hit = 0
           AND inflight_join = 0
-        """,
-        (
-            current_usage_day,
-            cutoff,
-        ),
+    """
+    params = [cutoff]
+
+    if usage_day:
+        query += " AND usage_day = ?"
+        params.append(str(usage_day))
+
+    cursor = conn.execute(
+        query,
+        tuple(params),
     )
 
     return max(
         0,
         int(cursor.rowcount or 0),
+    )
+
+
+def _capacity_timestamp(
+    value: Any,
+) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(
+            str(value or "")
+        )
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(
+            "Invalid Gemini capacity timestamp."
+        ) from error
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(
+            tzinfo=timezone.utc,
+        )
+
+    return parsed.astimezone(
+        timezone.utc
+    )
+
+
+def _capacity_pacing_wait(
+    *,
+    rows,
+    current_time: datetime,
+    estimated_prompt_tokens: int,
+    dispatch_rpm: int,
+    usable_tpm: int,
+    minimum_interval_seconds: float,
+) -> tuple[float, str]:
+    if not rows:
+        return (0.0, "")
+
+    parsed = [
+        (
+            _capacity_timestamp(
+                row[0]
+            ),
+            max(
+                0,
+                int(row[1] or 0),
+            ),
+        )
+        for row in rows
+    ]
+
+    wait_seconds = 0.0
+    reason = ""
+
+    latest_time = parsed[-1][0]
+    since_latest = max(
+        0.0,
+        (
+            current_time
+            - latest_time
+        ).total_seconds(),
+    )
+    spacing_wait = (
+        float(minimum_interval_seconds)
+        - since_latest
+    )
+
+    if spacing_wait > wait_seconds:
+        wait_seconds = spacing_wait
+        reason = "rpm"
+
+    if len(parsed) >= int(dispatch_rpm):
+        oldest_in_limit = parsed[
+            -int(dispatch_rpm)
+        ][0]
+        age = max(
+            0.0,
+            (
+                current_time
+                - oldest_in_limit
+            ).total_seconds(),
+        )
+        rolling_wait = 60.0 - age
+
+        if rolling_wait > wait_seconds:
+            wait_seconds = rolling_wait
+            reason = "rpm"
+
+    current_tokens = sum(
+        tokens
+        for _, tokens in parsed
+    )
+
+    if (
+        current_tokens
+        + int(estimated_prompt_tokens)
+        > int(usable_tpm)
+    ):
+        remaining = current_tokens
+
+        for timestamp, tokens in parsed:
+            remaining -= tokens
+
+            if (
+                remaining
+                + int(estimated_prompt_tokens)
+                <= int(usable_tpm)
+            ):
+                age = max(
+                    0.0,
+                    (
+                        current_time
+                        - timestamp
+                    ).total_seconds(),
+                )
+                token_wait = 60.0 - age
+
+                if token_wait > wait_seconds:
+                    wait_seconds = token_wait
+                    reason = "tpm"
+                break
+
+    if wait_seconds <= 0.0:
+        return (0.0, "")
+
+    return (
+        max(
+            0.05,
+            wait_seconds + 0.01,
+        ),
+        reason or "capacity",
     )
 
 
@@ -128,10 +263,60 @@ def reserve_gemini_call(
     expire_reservations,
     global_daily_call_cap: int,
     client_daily_call_cap: int,
+    estimated_prompt_tokens: int = 0,
+    now: Optional[datetime] = None,
 ) -> int:
-    usage_day = usage_day_resolver()
-    created_at = datetime.now(
+    current_time = (
+        now
+        if now is not None
+        else datetime.now(timezone.utc)
+    )
+
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(
+            tzinfo=timezone.utc,
+        )
+
+    current_time = current_time.astimezone(
         timezone.utc
+    )
+
+    usage_day = usage_day_resolver()
+    provider_day = provider_usage_day(
+        current_time
+    )
+    normalized_model = normalized_model_name(
+        model
+    )
+    policy = capacity_policy_for_model(
+        normalized_model
+    )
+
+    estimate = max(
+        0,
+        int(
+            estimated_prompt_tokens
+            or 0
+        ),
+    )
+
+    if (
+        estimate
+        > policy.max_estimated_input_tokens
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                "This AI request is too large "
+                "for the current Sportabase "
+                "Gemini capacity budget."
+            ),
+        )
+
+    created_at = current_time.isoformat()
+    minute_cutoff = (
+        current_time
+        - timedelta(seconds=60)
     ).isoformat()
 
     conn = connection_factory()
@@ -141,48 +326,92 @@ def reserve_gemini_call(
 
         expire_reservations(
             conn,
-            usage_day=usage_day,
+            now=current_time,
+        )
+
+        true_provider_statuses = (
+            "reserved",
+            "success",
+            "failed",
+            "expired",
+        )
+
+        placeholders = ",".join(
+            "?"
+            for _ in true_provider_statuses
         )
 
         global_count = int(
             conn.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM gemini_usage
-                WHERE usage_day = ?
+                WHERE provider_day = ?
                   AND cache_hit = 0
                   AND inflight_join = 0
-                  AND status IN (
-                    'reserved',
-                    'success',
-                    'failed'
-                  )
+                  AND status IN ({placeholders})
                 """,
-                (usage_day,),
+                (
+                    provider_day,
+                    *true_provider_statuses,
+                ),
             ).fetchone()[0]
         )
 
         client_count = int(
             conn.execute(
-                """
+                f"""
                 SELECT COUNT(*)
                 FROM gemini_usage
-                WHERE usage_day = ?
+                WHERE provider_day = ?
                   AND client_key = ?
                   AND cache_hit = 0
                   AND inflight_join = 0
-                  AND status IN (
-                    'reserved',
-                    'success',
-                    'failed'
-                  )
+                  AND status IN ({placeholders})
                 """,
                 (
-                    usage_day,
+                    provider_day,
                     client_key,
+                    *true_provider_statuses,
                 ),
             ).fetchone()[0]
         )
+
+        model_daily_count = int(
+            conn.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM gemini_usage
+                WHERE provider_day = ?
+                  AND model = ?
+                  AND cache_hit = 0
+                  AND inflight_join = 0
+                  AND status IN ({placeholders})
+                """,
+                (
+                    provider_day,
+                    normalized_model,
+                    *true_provider_statuses,
+                ),
+            ).fetchone()[0]
+        )
+
+        if (
+            model_daily_count
+            >= policy.usable_rpd
+        ):
+            conn.rollback()
+
+            raise HTTPException(
+                status_code=429,
+                detail=(
+                    "Sportabase is preserving "
+                    "the Gemini daily provider "
+                    "reserve for this model. "
+                    "Please try again after the "
+                    "provider's Pacific-day reset."
+                ),
+            )
 
         if (
             global_daily_call_cap > 0
@@ -194,10 +423,9 @@ def reserve_gemini_call(
             raise HTTPException(
                 status_code=429,
                 detail=(
-                    "Sportabase beta capacity "
-                    "has been reached for today. "
-                    "Please try again after the "
-                    "daily UTC reset."
+                    "Sportabase beta AI capacity "
+                    "has been reached for the "
+                    "current provider day."
                 ),
             )
 
@@ -213,10 +441,59 @@ def reserve_gemini_call(
                 detail=(
                     "This Sportabase beta "
                     "installation has reached "
-                    "its daily analysis limit. "
-                    "Please try again after the "
-                    "daily UTC reset."
+                    "its fair-share AI capacity "
+                    "for the current provider day."
                 ),
+            )
+
+        recent_rows = conn.execute(
+            f"""
+            SELECT
+              created_at,
+              CASE
+                WHEN prompt_tokens > 0
+                  THEN prompt_tokens
+                ELSE estimated_prompt_tokens
+              END AS input_tokens
+            FROM gemini_usage
+            WHERE model = ?
+              AND created_at >= ?
+              AND cache_hit = 0
+              AND inflight_join = 0
+              AND status IN ({placeholders})
+            ORDER BY created_at ASC, id ASC
+            """,
+            (
+                normalized_model,
+                minute_cutoff,
+                *true_provider_statuses,
+            ),
+        ).fetchall()
+
+        wait_seconds, wait_reason = (
+            _capacity_pacing_wait(
+                rows=recent_rows,
+                current_time=current_time,
+                estimated_prompt_tokens=estimate,
+                dispatch_rpm=(
+                    policy.dispatch_rpm
+                ),
+                usable_tpm=(
+                    policy.usable_tpm
+                ),
+                minimum_interval_seconds=(
+                    policy
+                    .minimum_dispatch_interval_seconds
+                ),
+            )
+        )
+
+        if wait_seconds > 0.0:
+            conn.rollback()
+
+            raise GeminiCapacityPacingRequired(
+                wait_seconds=wait_seconds,
+                reason=wait_reason,
             )
 
         cursor = conn.execute(
@@ -224,21 +501,27 @@ def reserve_gemini_call(
             INSERT INTO gemini_usage (
               created_at,
               usage_day,
+              provider_day,
               client_key,
               mode,
               model,
               status,
+              estimated_prompt_tokens,
               cache_hit
             )
-            VALUES (?, ?, ?, ?, ?, ?, 0)
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?, ?, 0
+            )
             """,
             (
                 created_at,
                 usage_day,
+                provider_day,
                 client_key,
                 str(mode),
-                str(model),
+                normalized_model,
                 "reserved",
+                estimate,
             ),
         )
 
@@ -250,7 +533,10 @@ def reserve_gemini_call(
 
         return usage_id
 
-    except HTTPException:
+    except (
+        HTTPException,
+        GeminiCapacityPacingRequired,
+    ):
         raise
 
     except Exception:
@@ -638,6 +924,7 @@ def generate_gemini_content(
     finish_call,
     classify_failure,
     record_join,
+    sleep_func=time.sleep,
 ) -> Any:
     request_key = fingerprint_resolver(
         mode=mode,
@@ -693,11 +980,56 @@ def generate_gemini_content(
     ] = None
 
     try:
-        usage_id = reserve_call(
-            client_key=client_key,
-            mode=mode,
-            model=model,
+        estimated_prompt_tokens = (
+            estimate_prompt_tokens(
+                contents
+            )
         )
+        policy = capacity_policy_for_model(
+            model
+        )
+        total_wait = 0.0
+
+        while True:
+            try:
+                usage_id = reserve_call(
+                    client_key=client_key,
+                    mode=mode,
+                    model=model,
+                    estimated_prompt_tokens=(
+                        estimated_prompt_tokens
+                    ),
+                )
+                break
+
+            except GeminiCapacityPacingRequired as pacing:
+                wait_seconds = max(
+                    0.0,
+                    float(
+                        pacing.wait_seconds
+                    ),
+                )
+
+                if (
+                    total_wait
+                    + wait_seconds
+                    > policy.max_pacing_wait_seconds
+                ):
+                    raise HTTPException(
+                        status_code=429,
+                        detail=(
+                            "Sportabase is pacing "
+                            "Gemini traffic to stay "
+                            "inside provider RPM/TPM "
+                            "capacity. Please retry "
+                            "shortly."
+                        ),
+                    )
+
+                sleep_func(
+                    wait_seconds
+                )
+                total_wait += wait_seconds
 
         provider_started_at = (
             time.perf_counter()
