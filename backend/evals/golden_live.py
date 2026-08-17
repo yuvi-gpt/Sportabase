@@ -5,7 +5,7 @@ import json
 import tempfile
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence
 
 from app.services import inbox_story_cluster_orchestration
 from app.services import story_claim_graph_materialization
@@ -25,9 +25,11 @@ from .golden_live_scoring import (
     DEFAULT_LIVE_CASE_IDS,
     completed_case,
     noncompleted_case,
+    provider_call_plan,
     selected_cases,
 )
 from .multimodal_golden_cases import MULTIMODAL_GOLDEN_DATASET_ID
+
 
 MULTIMODAL_GOLDEN_LIVE_EVAL_VERSION = "multimodal-golden-live-eval-v1"
 
@@ -62,6 +64,7 @@ def evaluate_live_golden_subset(
     client=None,
     client_factory=None,
     generator: Optional[BudgetedGeminiGenerator] = None,
+    event_sink: Optional[Callable[[Dict[str, Any]], None]] = None,
     cluster_runner=inbox_story_cluster_orchestration.execute_multisource_inbox_story_cluster_shadow,
     graph_materializer=story_claim_graph_materialization.materialize_story_claim_graph,
 ) -> Dict[str, Any]:
@@ -70,12 +73,25 @@ def evaluate_live_golden_subset(
         raise MultimodalGoldenLiveInputError(
             "GEMINI_API_KEY is required for the live golden evaluation."
         )
+
     chosen = selected_cases(case_ids)
-    budget = generator or BudgetedGeminiGenerator(max_calls=max_calls)
+    plan = provider_call_plan(case_ids)
+    budget = generator or BudgetedGeminiGenerator(
+        max_calls=max_calls,
+        event_sink=event_sink,
+    )
     if not isinstance(budget, BudgetedGeminiGenerator):
         raise MultimodalGoldenLiveInputError(
             "Live golden generator must be BudgetedGeminiGenerator."
         )
+    if event_sink is not None and generator is not None:
+        budget.event_sink = event_sink if callable(event_sink) else None
+    if budget.max_calls < int(plan["maximum_calls"]):
+        raise MultimodalGoldenLiveInputError(
+            "Provider budget is too small for the frozen full-case live plan; "
+            f"need {plan['maximum_calls']} calls of headroom."
+        )
+
     if client is None:
         factory = client_factory if callable(client_factory) else _new_client
         client = factory(key)
@@ -168,6 +184,7 @@ def evaluate_live_golden_subset(
         "expected_case_count": len(chosen),
         "completed_case_count": len(cases),
         "provider_complete": provider_complete,
+        "provider_plan": plan,
         "hard_safety_status": hard_safety_status,
         "quality_case_failures": quality_failures,
         "hard_safety_case_failures": safety_failures,
@@ -183,6 +200,10 @@ def evaluate_live_golden_subset(
             "explicit_live_opt_in_required_by_cli": True,
             "provider_call_budget_is_hard": True,
             "provider_call_budget_checked_before_call": True,
+            "provider_call_plan_logged_before_calls": True,
+            "exact_pre_run_call_count_not_fabricated": True,
+            "per_call_token_usage_logged": True,
+            "cumulative_token_usage_logged": True,
             "production_usage_ledger_written": False,
             "real_database_used": False,
             "temporary_database_per_case": True,
