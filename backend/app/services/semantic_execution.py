@@ -1030,31 +1030,43 @@ class GeminiSemanticInterpreter:
 
             seen.add(candidate_id)
 
-            candidates.append(
-                {
-                    "candidate_id": candidate_id,
-                    "text": text,
-                    "confidence": (
-                        _clamp_probability(
-                            raw.get(
-                                "confidence"
-                            )
-                        )
-                    ),
-                    "source_artifact_ids": (
-                        source_ids
-                    ),
-                    "modality_sources": (
-                        modalities
-                    ),
-                    "uncertainty": _clean_text(
+            candidate_record = {
+                "candidate_id": candidate_id,
+                "text": text,
+                "confidence": (
+                    _clamp_probability(
                         raw.get(
-                            "uncertainty",
-                            "",
-                        ),
-                        700,
+                            "confidence"
+                        )
+                    )
+                ),
+                "source_artifact_ids": (
+                    source_ids
+                ),
+                "modality_sources": (
+                    modalities
+                ),
+                "uncertainty": _clean_text(
+                    raw.get(
+                        "uncertainty",
+                        "",
                     ),
-                }
+                    700,
+                ),
+            }
+
+            if (
+                "structured_claim_output"
+                in raw
+            ):
+                candidate_record[
+                    "structured_claim_output"
+                ] = raw.get(
+                    "structured_claim_output"
+                )
+
+            candidates.append(
+                candidate_record
             )
 
         return {
@@ -1299,6 +1311,56 @@ def build_semantic_executors(
             ),
         )
 
+        candidate_payload_rows = []
+        structured_outputs = {}
+
+        for raw_candidate in result[
+            "claim_candidates"
+        ]:
+            candidate_row = dict(
+                raw_candidate
+            )
+
+            if (
+                "structured_claim_output"
+                in candidate_row
+            ):
+                candidate_id = str(
+                    candidate_row.get(
+                        "candidate_id",
+                        "",
+                    )
+                    or ""
+                ).strip()
+
+                structured_output = (
+                    candidate_row.pop(
+                        "structured_claim_output"
+                    )
+                )
+
+                if (
+                    candidate_id
+                    and candidate_id
+                    not in structured_outputs
+                ):
+                    structured_outputs[
+                        candidate_id
+                    ] = structured_output
+
+            candidate_payload_rows.append(
+                candidate_row
+            )
+
+        claim_candidate_metadata = {
+            "semantic_only": True
+        }
+
+        if structured_outputs:
+            claim_candidate_metadata[
+                "structured_claim_outputs_by_candidate_id"
+            ] = structured_outputs
+
         return [
             {
                 "artifact_kind": (
@@ -1335,16 +1397,16 @@ def build_semantic_executors(
                         SEMANTIC_EXECUTION_VERSION
                     ),
                     "model": result["model"],
-                    "candidates": result[
-                        "claim_candidates"
-                    ],
+                    "candidates": (
+                        candidate_payload_rows
+                    ),
                     "context_artifact_ids": result[
                         "context_artifact_ids"
                     ],
                 },
-                "metadata": {
-                    "semantic_only": True
-                },
+                "metadata": (
+                    claim_candidate_metadata
+                ),
             },
         ]
 
