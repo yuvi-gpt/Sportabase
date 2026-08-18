@@ -19,6 +19,7 @@ from app.services import multimodal_structured_shadow_caller
 from app.services import multimodal_live_merit_shadow
 from app.services import observation_semantics
 from app.services import semantic_execution
+from app.services import structured_claim_fusion
 from app.services import verified_persistence_execution
 
 
@@ -1427,6 +1428,9 @@ def run_multimodal_intelligence_runtime(
     structured_claim_allowed_entity_keys: Sequence[
         str
     ] = (),
+    structured_claim_allowed_entities: Optional[
+        Mapping[str, Any]
+    ] = None,
     structured_shadow_sink=None,
     structured_shadow_bridge_builder=None,
 ) -> Dict[str, Any]:
@@ -1503,6 +1507,125 @@ def run_multimodal_intelligence_runtime(
             "two distinct content items."
         )
 
+    resolved_structured_claim_allowed_entity_keys = []
+
+    for raw_key in tuple(
+        structured_claim_allowed_entity_keys
+        or ()
+    ):
+        entity_key = _clean(
+            raw_key
+        ).casefold()
+
+        if (
+            entity_key
+            and entity_key
+            not in (
+                resolved_structured_claim_allowed_entity_keys
+            )
+        ):
+            (
+                resolved_structured_claim_allowed_entity_keys
+                .append(
+                    entity_key
+                )
+            )
+
+    if isinstance(
+        structured_claim_allowed_entities,
+        Mapping,
+    ):
+        for raw_key in (
+            structured_claim_allowed_entities
+            .keys()
+        ):
+            entity_key = _clean(
+                raw_key
+            ).casefold()
+
+            if (
+                entity_key
+                and entity_key
+                not in (
+                    resolved_structured_claim_allowed_entity_keys
+                )
+            ):
+                (
+                    resolved_structured_claim_allowed_entity_keys
+                    .append(
+                        entity_key
+                    )
+                )
+
+    left_structured_claim_context = None
+    right_structured_claim_context = None
+
+    if structured_claim_shadow_enabled and left_structured_claim_outputs is None:
+        left_structured_claim_context = (
+            structured_claim_fusion
+            .structured_claim_fusion_context_for_bindings(
+                bindings=left_binding,
+                allowed_entity_keys=tuple(
+                    resolved_structured_claim_allowed_entity_keys
+                ),
+                allowed_entities=(
+                    structured_claim_allowed_entities
+                    if isinstance(
+                        structured_claim_allowed_entities,
+                        Mapping,
+                    )
+                    else None
+                ),
+            )
+        )
+
+    if structured_claim_shadow_enabled and right_structured_claim_outputs is None:
+        right_structured_claim_context = (
+            structured_claim_fusion
+            .structured_claim_fusion_context_for_bindings(
+                bindings=right_binding,
+                allowed_entity_keys=tuple(
+                    resolved_structured_claim_allowed_entity_keys
+                ),
+                allowed_entities=(
+                    structured_claim_allowed_entities
+                    if isinstance(
+                        structured_claim_allowed_entities,
+                        Mapping,
+                    )
+                    else None
+                ),
+            )
+        )
+
+    left_semantic_options = dict(
+        left_perception_options
+        or {}
+    )
+
+    right_semantic_options = dict(
+        right_perception_options
+        or {}
+    )
+
+    if (
+        left_structured_claim_context
+        is not None
+    ):
+        left_semantic_options[
+            structured_claim_fusion
+            .STRUCTURED_CLAIM_CONTEXT_OPTION
+        ] = left_structured_claim_context
+
+    if (
+        right_structured_claim_context
+        is not None
+    ):
+        right_semantic_options[
+            structured_claim_fusion
+            .STRUCTURED_CLAIM_CONTEXT_OPTION
+        ] = right_structured_claim_context
+
     # Preflight both media items through semantic execution and the
     # dry-run bridge before either side is persisted.
     with ExitStack() as stack:
@@ -1528,10 +1651,7 @@ def run_multimodal_intelligence_runtime(
                         perception_executor_builder
                     ),
                     perception_options=(
-                        dict(
-                            left_perception_options
-                            or {}
-                        )
+                        left_semantic_options
                     ),
                 ),
                 item_id=(
@@ -1558,10 +1678,7 @@ def run_multimodal_intelligence_runtime(
                         perception_executor_builder
                     ),
                     perception_options=(
-                        dict(
-                            right_perception_options
-                            or {}
-                        )
+                        right_semantic_options
                     ),
                 ),
                 item_id=(
@@ -1631,8 +1748,7 @@ def run_multimodal_intelligence_runtime(
                     left_structured_claim_outputs
                 ),
                 allowed_entity_keys=tuple(
-                    structured_claim_allowed_entity_keys
-                    or ()
+                    resolved_structured_claim_allowed_entity_keys
                 ),
                 production_bridge_builder=(
                     bridge_builder
@@ -1655,8 +1771,7 @@ def run_multimodal_intelligence_runtime(
                     right_structured_claim_outputs
                 ),
                 allowed_entity_keys=tuple(
-                    structured_claim_allowed_entity_keys
-                    or ()
+                    resolved_structured_claim_allowed_entity_keys
                 ),
                 production_bridge_builder=(
                     bridge_builder

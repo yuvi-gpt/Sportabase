@@ -11,7 +11,12 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 from google.genai import types
 
 from app.models import artifacts as artifact_models
-from app.services import artifact_extraction, media_execution, perception_execution
+from app.services import (
+    artifact_extraction,
+    media_execution,
+    perception_execution,
+    structured_claim_fusion,
+)
 
 
 SEMANTIC_EXECUTION_VERSION = "semantic-execution-v1"
@@ -737,6 +742,9 @@ class GeminiSemanticInterpreter:
         caption_media_pairs: Sequence[
             Sequence[str]
         ],
+        structured_claim_context: Optional[
+            Mapping[str, Any]
+        ] = None,
     ) -> Dict[str, Any]:
         context = _bounded_context(
             artifacts,
@@ -804,6 +812,17 @@ class GeminiSemanticInterpreter:
             f"{json.dumps(context, ensure_ascii=False)}\n"
             "</UNTRUSTED_CONTEXT>"
         )
+
+        if (
+            structured_claim_context
+            is not None
+        ):
+            prompt += (
+                structured_claim_fusion
+                .build_structured_claim_fusion_prompt_fragment(
+                    structured_claim_context
+                )
+            )
 
         payload = self._generate(
             mode="multimodal_fusion",
@@ -1126,6 +1145,9 @@ def build_semantic_executors(
     perception_options: Optional[
         Mapping[str, Any]
     ] = None,
+    structured_claim_context: Optional[
+        Mapping[str, Any]
+    ] = None,
 ) -> Dict[str, Callable[..., Any]]:
     build_perception = (
         perception_executor_builder
@@ -1300,6 +1322,16 @@ def build_semantic_executors(
         available_artifacts,
         _dependency_outputs,
     ):
+        fusion_kwargs = {}
+
+        if (
+            structured_claim_context
+            is not None
+        ):
+            fusion_kwargs[
+                "structured_claim_context"
+            ] = structured_claim_context
+
         result = interpreter.fuse(
             available_artifacts,
             caption_media_pairs=list(
@@ -1309,6 +1341,7 @@ def build_semantic_executors(
                 )
                 or []
             ),
+            **fusion_kwargs,
         )
 
         candidate_payload_rows = []
@@ -1439,6 +1472,19 @@ def execute_semantic_manifest(
         Mapping[str, Any]
     ] = None,
 ) -> artifact_models.ItemArtifactManifest:
+    perception_options = dict(
+        perception_options
+        or {}
+    )
+
+    structured_claim_context = (
+        perception_options.pop(
+            structured_claim_fusion
+            .STRUCTURED_CLAIM_CONTEXT_OPTION,
+            None,
+        )
+    )
+
     return artifact_extraction.execute_item_artifact_manifest(
         manifest,
         executors=build_semantic_executors(
@@ -1449,6 +1495,9 @@ def execute_semantic_manifest(
             ),
             perception_options=(
                 perception_options
+            ),
+            structured_claim_context=(
+                structured_claim_context
             ),
         ),
     )
