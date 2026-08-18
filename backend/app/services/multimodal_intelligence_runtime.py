@@ -15,6 +15,7 @@ from app.services import multimodal_adjudication_intake
 from app.services import multimodal_adjudication_runtime
 from app.services import multimodal_corroboration_runtime
 from app.services import multimodal_intelligence_bridge
+from app.services import multimodal_structured_shadow_caller
 from app.services import multimodal_live_merit_shadow
 from app.services import observation_semantics
 from app.services import semantic_execution
@@ -1416,6 +1417,18 @@ def run_multimodal_intelligence_runtime(
     right_perception_options: Optional[
         Mapping[str, Any]
     ] = None,
+    structured_claim_shadow_enabled: bool = False,
+    left_structured_claim_outputs: Optional[
+        Mapping[str, Any]
+    ] = None,
+    right_structured_claim_outputs: Optional[
+        Mapping[str, Any]
+    ] = None,
+    structured_claim_allowed_entity_keys: Sequence[
+        str
+    ] = (),
+    structured_shadow_sink=None,
+    structured_shadow_bridge_builder=None,
 ) -> Dict[str, Any]:
     """Run the multimodal intelligence path through shadow Merit only.
 
@@ -1560,35 +1573,143 @@ def run_multimodal_intelligence_runtime(
             )
         )
 
-    left_plan = _require_bridge_plan(
-        bridge_builder(
-            item=left_ingestion.item,
-            manifest=left_manifest,
-            bindings=left_binding,
-            relationships=tuple(
-                left_relationships
+    if not structured_claim_shadow_enabled:
+        left_plan = _require_bridge_plan(
+            bridge_builder(
+                item=left_ingestion.item,
+                manifest=left_manifest,
+                bindings=left_binding,
+                relationships=tuple(
+                    left_relationships
+                ),
             ),
-        ),
-        item_id=(
-            left_ingestion.item.item_id
-        ),
-        label="Left",
-    )
+            item_id=(
+                left_ingestion.item.item_id
+            ),
+            label="Left",
+        )
 
-    right_plan = _require_bridge_plan(
-        bridge_builder(
-            item=right_ingestion.item,
-            manifest=right_manifest,
-            bindings=right_binding,
-            relationships=tuple(
-                right_relationships
+        right_plan = _require_bridge_plan(
+            bridge_builder(
+                item=right_ingestion.item,
+                manifest=right_manifest,
+                bindings=right_binding,
+                relationships=tuple(
+                    right_relationships
+                ),
             ),
-        ),
-        item_id=(
-            right_ingestion.item.item_id
-        ),
-        label="Right",
-    )
+            item_id=(
+                right_ingestion.item.item_id
+            ),
+            label="Right",
+        )
+
+    else:
+        shadow_builder_kwargs = {}
+
+        if (
+            structured_shadow_bridge_builder
+            is not None
+        ):
+            shadow_builder_kwargs[
+                "shadow_bridge_builder"
+            ] = (
+                structured_shadow_bridge_builder
+            )
+
+        left_shadow_bridge = (
+            multimodal_structured_shadow_caller
+            .build_runtime_bridge_plan(
+                item=left_ingestion.item,
+                manifest=left_manifest,
+                bindings=left_binding,
+                relationships=tuple(
+                    left_relationships
+                ),
+                shadow_enabled=True,
+                structured_outputs_by_candidate_id=(
+                    left_structured_claim_outputs
+                ),
+                allowed_entity_keys=tuple(
+                    structured_claim_allowed_entity_keys
+                    or ()
+                ),
+                production_bridge_builder=(
+                    bridge_builder
+                ),
+                **shadow_builder_kwargs,
+            )
+        )
+
+        right_shadow_bridge = (
+            multimodal_structured_shadow_caller
+            .build_runtime_bridge_plan(
+                item=right_ingestion.item,
+                manifest=right_manifest,
+                bindings=right_binding,
+                relationships=tuple(
+                    right_relationships
+                ),
+                shadow_enabled=True,
+                structured_outputs_by_candidate_id=(
+                    right_structured_claim_outputs
+                ),
+                allowed_entity_keys=tuple(
+                    structured_claim_allowed_entity_keys
+                    or ()
+                ),
+                production_bridge_builder=(
+                    bridge_builder
+                ),
+                **shadow_builder_kwargs,
+            )
+        )
+
+        left_plan = _require_bridge_plan(
+            left_shadow_bridge[
+                "production_plan"
+            ],
+            item_id=(
+                left_ingestion.item.item_id
+            ),
+            label="Left",
+        )
+
+        right_plan = _require_bridge_plan(
+            right_shadow_bridge[
+                "production_plan"
+            ],
+            item_id=(
+                right_ingestion.item.item_id
+            ),
+            label="Right",
+        )
+
+        (
+            multimodal_structured_shadow_caller
+            .emit_structured_shadow_diagnostic(
+                sink=structured_shadow_sink,
+                side="left",
+                report=(
+                    left_shadow_bridge[
+                        "structured_shadow"
+                    ]
+                ),
+            )
+        )
+
+        (
+            multimodal_structured_shadow_caller
+            .emit_structured_shadow_diagnostic(
+                sink=structured_shadow_sink,
+                side="right",
+                report=(
+                    right_shadow_bridge[
+                        "structured_shadow"
+                    ]
+                ),
+            )
+        )
 
     (
         claim_id,
