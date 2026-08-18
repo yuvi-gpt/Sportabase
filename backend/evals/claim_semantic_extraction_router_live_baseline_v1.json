@@ -1,0 +1,114 @@
+{
+  "anchor_provider_calls": 0,
+  "baseline_digest": "6618f4f81773d19689392c71da8990f2bd068ffb4467aab9b9724058b84f50aa",
+  "case_id": "football_bellingham_real_madrid_2023",
+  "claim_persistence_changed": false,
+  "comparison": {
+    "kind": "none",
+    "safe_acceptance": false,
+    "safe_exclusion": false,
+    "same_core": false,
+    "status": "not_comparable",
+    "structural_conflicts": []
+  },
+  "deterministic_anchor_only": true,
+  "exact_provider_calls": 1,
+  "extraction": {
+    "candidate": null,
+    "core_fingerprint": "",
+    "core_key": "",
+    "error": "partial candidate failed the locked #35D partial-semantics path: Unsupported partial semantic contract version.",
+    "error_type": "ClaimSemanticExtractionRouterOutputError",
+    "identity_complete": false,
+    "label": "hard_negative",
+    "missing_identity_fields": [],
+    "raw_provider_response_stored": false,
+    "reason": "",
+    "route": "none",
+    "safe_acceptance": false,
+    "safe_exclusion": false,
+    "specific_fingerprint": "",
+    "status": "invalid_output"
+  },
+  "hard_negative_only": true,
+  "hard_safety": {
+    "affects_live_merit": false,
+    "establishes_authority": false,
+    "establishes_corroboration": false,
+    "establishes_independence": false,
+    "establishes_reliability": false,
+    "establishes_truth": false,
+    "failures": [],
+    "status": "pass"
+  },
+  "historical_35c_baseline_changed": false,
+  "live_merit_effect": false,
+  "model": "gemini-3.5-flash",
+  "model_dependent": true,
+  "policy": {
+    "affects_live_merit": false,
+    "api_key_stored": false,
+    "establishes_authority": false,
+    "establishes_corroboration": false,
+    "establishes_independence": false,
+    "establishes_reliability": false,
+    "establishes_truth": false,
+    "full_identity_authority_is_product35a": true,
+    "model_output_is_candidate_semantics_only": true,
+    "partial_semantics_can_establish_same_claim": false,
+    "partial_semantics_never_mint_fingerprints": true,
+    "partial_semantics_validator_is_product35d": true,
+    "quality_failure_is_measured_result": true,
+    "raw_prompt_stored": false,
+    "raw_provider_response_stored": false,
+    "three_way_router_is_product35e": true,
+    "user_identity_stored": false
+  },
+  "positive_provider_calls": 0,
+  "production_bridge_changed": false,
+  "provider": {
+    "cached_tokens": 0,
+    "call_count": 1,
+    "call_log": [
+      {
+        "cached_tokens": 0,
+        "call_index": 1,
+        "mode": "claim_semantic_extraction_router",
+        "model": "gemini-3.5-flash",
+        "output_tokens": 129,
+        "prompt_tokens": 4093,
+        "provider_day": "2026-08-18",
+        "source_label": "hard_negative",
+        "status": "completed",
+        "thought_tokens": 1498,
+        "total_tokens": 5720,
+        "usage_id": 12
+      }
+    ],
+    "calls_by_mode": {
+      "claim_semantic_extraction_router": 1
+    },
+    "calls_by_model": {
+      "gemini-3.5-flash": 1
+    },
+    "output_tokens": 129,
+    "prompt_tokens": 4093,
+    "thought_tokens": 1498,
+    "total_tokens": 5720
+  },
+  "quality": {
+    "failures": [
+      "hard_negative_not_partial",
+      "hard_negative_wrong_route",
+      "hard_negative_missing_candidate",
+      "hard_negative_missing_identity_fields",
+      "hard_negative_not_structurally_incompatible",
+      "hard_negative_not_safe_to_exclude"
+    ],
+    "status": "fail"
+  },
+  "source_commit": "2a4c308c8e9057cbac30708e095dc42235b2547d",
+  "source_label": "hard_negative",
+  "source_report_digest": "282b987a3882fbd0e3d7cd94bf85a8ef7586fbccf532f7b22d05f1ecf1da7462",
+  "version": "claim-semantic-extraction-router-live-baseline-v1"
+}
