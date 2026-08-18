@@ -1,0 +1,155 @@
+{
+  "anchor_provider_calls": 0,
+  "baseline_digest": "63303febdc2b33fa04eae95034d1f9ebf15c22f8a4d236acdc1e1f0dbf06168a",
+  "case_id": "football_bellingham_real_madrid_2023",
+  "claim_persistence_changed": false,
+  "comparison": {
+    "kind": "full_vs_partial",
+    "safe_acceptance": false,
+    "safe_exclusion": true,
+    "same_core": false,
+    "status": "structurally_incompatible",
+    "structural_conflicts": [
+      "event_type"
+    ]
+  },
+  "deterministic_anchor_only": true,
+  "exact_provider_calls": 1,
+  "extraction": {
+    "candidate": {
+      "event_type": "match_event",
+      "facets": {},
+      "negated": false,
+      "roles": {},
+      "state": "scored",
+      "subject_key": "football|player|jude-bellingham",
+      "version": "partial-claim-semantics-contract-v1"
+    },
+    "core_fingerprint": "",
+    "core_key": "",
+    "identity_complete": false,
+    "label": "hard_negative",
+    "missing_identity_fields": [
+      "facets.event_key"
+    ],
+    "protocol_ownership": {
+      "candidate_contract_version_removed_before_validation": true,
+      "candidate_contract_version_supplied_by_model": true,
+      "policy": {
+        "affects_live_merit": false,
+        "candidate_contract_version_is_transport_metadata": true,
+        "candidate_contract_version_removed_before_validation": true,
+        "establishes_authority": false,
+        "establishes_corroboration": false,
+        "establishes_independence": false,
+        "establishes_reliability": false,
+        "establishes_truth": false,
+        "forbidden_identity_fields_still_fail_closed": true,
+        "fuzzy_similarity_used": false,
+        "model_controls_candidate_contract_version": false,
+        "model_controls_outer_envelope_version": true,
+        "model_equivalence_decision_used": false,
+        "outer_envelope_version_remains_strict": true,
+        "partial_semantics_can_establish_same_claim": false,
+        "reason_is_not_rewritten": true,
+        "semantic_fields_are_not_rewritten": true,
+        "status_is_not_rewritten": true,
+        "status_mismatch_still_fails_closed": true,
+        "training_eligible": false,
+        "unknown_semantic_fields_still_fail_closed": true,
+        "validator_assigns_internal_candidate_contract_version": true
+      },
+      "reason_rewritten": false,
+      "semantic_fields_rewritten": false,
+      "status_rewritten": false,
+      "validator_assigned_candidate_contract_version": "partial-claim-semantics-contract-v1",
+      "version": "claim-semantic-protocol-ownership-contract-v1"
+    },
+    "raw_provider_response_stored": false,
+    "reason": "The text indicates that Jude Bellingham scored in a match, which supports a match_event with the state 'scored'. However, it lacks the event_key required for a complete, durable identity under the full canonical claim contract.",
+    "route": "partial_semantics",
+    "safe_acceptance": false,
+    "safe_exclusion": false,
+    "specific_fingerprint": "",
+    "status": "partial"
+  },
+  "hard_negative_only": true,
+  "hard_safety": {
+    "affects_live_merit": false,
+    "establishes_authority": false,
+    "establishes_corroboration": false,
+    "establishes_independence": false,
+    "establishes_reliability": false,
+    "establishes_truth": false,
+    "failures": [],
+    "status": "pass"
+  },
+  "historical_35c_baseline_changed": false,
+  "historical_35f_baseline_changed": false,
+  "live_merit_effect": false,
+  "model": "gemini-3.5-flash",
+  "model_dependent": true,
+  "policy": {
+    "affects_live_merit": false,
+    "api_key_stored": false,
+    "establishes_authority": false,
+    "establishes_corroboration": false,
+    "establishes_independence": false,
+    "establishes_reliability": false,
+    "establishes_truth": false,
+    "full_identity_authority_is_product35a": true,
+    "model_controls_candidate_contract_version": false,
+    "model_output_is_candidate_semantics_only": true,
+    "partial_semantics_validator_is_product35d": true,
+    "protocol_ownership_is_product35g": true,
+    "quality_failure_is_measured_result": true,
+    "raw_prompt_stored": false,
+    "raw_provider_response_stored": false,
+    "three_way_router_is_product35e": true,
+    "user_identity_stored": false
+  },
+  "positive_provider_calls": 0,
+  "production_bridge_changed": false,
+  "prompt_digest": "e46304c0dff30c35ea1f2e4435f96516428faf71f1645914055462efe3cdc4e5",
+  "prompt_rewritten_after_product35f": false,
+  "protocol_ownership_is_product35g": true,
+  "provider": {
+    "cached_tokens": 0,
+    "call_count": 1,
+    "call_log": [
+      {
+        "cached_tokens": 0,
+        "call_index": 1,
+        "mode": "claim_semantic_protocol_owned_router",
+        "model": "gemini-3.5-flash",
+        "output_tokens": 136,
+        "prompt_tokens": 4093,
+        "provider_day": "2026-08-18",
+        "source_label": "hard_negative",
+        "status": "completed",
+        "thought_tokens": 1380,
+        "total_tokens": 5609,
+        "usage_id": 13
+      }
+    ],
+    "calls_by_mode": {
+      "claim_semantic_protocol_owned_router": 1
+    },
+    "calls_by_model": {
+      "gemini-3.5-flash": 1
+    },
+    "output_tokens": 136,
+    "prompt_tokens": 4093,
+    "thought_tokens": 1380,
+    "total_tokens": 5609
+  },
+  "quality": {
+    "failures": [],
+    "status": "pass"
+  },
+  "same_product35e_prompt": true,
+  "source_commit": "1ef14ef097fa5896545aafa8be12b3996cc123f9",
+  "source_label": "hard_negative",
+  "source_report_digest": "3731195ec80391eed944b2763f45ba90285a9bc4548648a0a738d9dba0bb320e",
+  "version": "claim-semantic-protocol-owned-live-baseline-v1"
+}
