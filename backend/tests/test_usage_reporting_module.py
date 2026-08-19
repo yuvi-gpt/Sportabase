@@ -17,19 +17,26 @@ if str(BACKEND_DIR) not in sys.path:
 
 
 from app import main
-from app.services import (
-    usage_reporting,
-)
+from app.operations import usage as operations_usage
+from app.services import usage_reporting
 
 
 class UsageReportingModuleTests(
     unittest.TestCase
 ):
+    def test_historical_usage_reporting_path_is_true_alias(
+        self,
+    ):
+        self.assertIs(
+            usage_reporting,
+            operations_usage,
+        )
+
     def test_derived_metrics_use_explicit_pricing_and_capacity(
         self,
     ):
         result = (
-            usage_reporting
+            operations_usage
             .usage_derived_metrics(
                 {
                     "total_records": 10,
@@ -75,7 +82,7 @@ class UsageReportingModuleTests(
         self,
     ):
         result = (
-            usage_reporting
+            operations_usage
             .usage_savings_metrics(
                 {
                     "cache_hits": 2,
@@ -111,7 +118,7 @@ class UsageReportingModuleTests(
         self,
     ):
         result = (
-            usage_reporting
+            operations_usage
             .usage_scope_savings_summary(
                 [
                     {

@@ -32,7 +32,6 @@ SERVICE_MODULES = (
     "app.services.analysis_history",
     "app.services.analysis_cache",
     "app.services.gemini_runtime",
-    "app.services.usage_reporting",
     "app.services.article_rules",
     "app.services.video_support",
     "app.services.video_analysis",
@@ -40,6 +39,16 @@ SERVICE_MODULES = (
     "app.services.analysis_handlers",
     "app.services.legacy_handlers",
     "app.services.intelligence_facade",
+)
+
+
+OPERATIONS_MODULES = (
+    "app.operations.usage",
+)
+
+
+COMPATIBILITY_MODULES = (
+    "app.services.usage_reporting",
 )
 
 
@@ -139,6 +148,36 @@ class MainDecompositionContractTests(
         self,
     ):
         for module_name in APPLICATION_MODULES:
+            with self.subTest(
+                module=module_name
+            ):
+                module = importlib.import_module(
+                    module_name
+                )
+
+                self.assertIsNotNone(
+                    module
+                )
+
+    def test_operations_modules_import(
+        self,
+    ):
+        for module_name in OPERATIONS_MODULES:
+            with self.subTest(
+                module=module_name
+            ):
+                module = importlib.import_module(
+                    module_name
+                )
+
+                self.assertIsNotNone(
+                    module
+                )
+
+    def test_historical_compatibility_modules_import(
+        self,
+    ):
+        for module_name in COMPATIBILITY_MODULES:
             with self.subTest(
                 module=module_name
             ):
