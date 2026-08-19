@@ -146,3 +146,95 @@ GEMINI_OUTPUT_COST_PER_MILLION_USD = float(
         "9.00",
     )
 )
+
+# Control Room security is disabled by default. All identity, application,
+# allowlist, and audit credentials are deployment configuration only; none are
+# committed to the repository.
+CONTROL_ROOM_ENABLED = (
+    os.getenv(
+        "SPORTABASE_CONTROL_ROOM_ENABLED",
+        "0",
+    )
+    .strip()
+    .lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+)
+
+CONTROL_ROOM_CLOUDFLARE_TEAM_DOMAIN = os.getenv(
+    "SPORTABASE_CONTROL_ROOM_CLOUDFLARE_TEAM_DOMAIN",
+    "",
+).strip()
+
+CONTROL_ROOM_CLOUDFLARE_ACCOUNT_ID = os.getenv(
+    "SPORTABASE_CONTROL_ROOM_CLOUDFLARE_ACCOUNT_ID",
+    "",
+).strip()
+
+CONTROL_ROOM_CLOUDFLARE_APPLICATION_ID = os.getenv(
+    "SPORTABASE_CONTROL_ROOM_CLOUDFLARE_APPLICATION_ID",
+    "",
+).strip()
+
+CONTROL_ROOM_CLOUDFLARE_APPLICATION_AUDIENCE = os.getenv(
+    "SPORTABASE_CONTROL_ROOM_CLOUDFLARE_APPLICATION_AUDIENCE",
+    "",
+).strip()
+
+CONTROL_ROOM_GOOGLE_IDP_ID = os.getenv(
+    "SPORTABASE_CONTROL_ROOM_GOOGLE_IDP_ID",
+    "",
+).strip()
+
+CONTROL_ROOM_ALLOWED_EMAILS = tuple(
+    value.strip()
+    for value in os.getenv(
+        "SPORTABASE_CONTROL_ROOM_ALLOWED_EMAILS",
+        "",
+    ).split(",")
+    if value.strip()
+)
+
+CONTROL_ROOM_CLOUDFLARE_POLICY_AUDIT_API_TOKEN = os.getenv(
+    "SPORTABASE_CONTROL_ROOM_CLOUDFLARE_POLICY_AUDIT_API_TOKEN",
+    "",
+).strip()
+
+CONTROL_ROOM_POLICY_CACHE_TTL_SECONDS = int(
+    os.getenv(
+        "SPORTABASE_CONTROL_ROOM_POLICY_CACHE_TTL_SECONDS",
+        "240",
+    )
+)
+
+CONTROL_ROOM_CLOUDFLARE_REQUEST_TIMEOUT_SECONDS = int(
+    os.getenv(
+        "SPORTABASE_CONTROL_ROOM_CLOUDFLARE_REQUEST_TIMEOUT_SECONDS",
+        "10",
+    )
+)
+
+CONTROL_ROOM_MAX_SESSION_DURATION_SECONDS = int(
+    os.getenv(
+        "SPORTABASE_CONTROL_ROOM_MAX_SESSION_DURATION_SECONDS",
+        "900",
+    )
+)
+
+CONTROL_ROOM_MAX_POLICY_PAGES = int(
+    os.getenv(
+        "SPORTABASE_CONTROL_ROOM_MAX_POLICY_PAGES",
+        "10",
+    )
+)
+
+CONTROL_ROOM_CLOCK_SKEW_SECONDS = int(
+    os.getenv(
+        "SPORTABASE_CONTROL_ROOM_CLOCK_SKEW_SECONDS",
+        "60",
+    )
+)
