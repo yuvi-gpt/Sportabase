@@ -11,6 +11,9 @@ from app.routes import (
     product_api,
     usage_admin,
 )
+from app.security.control_room_runtime import (
+    build_default_control_room_guard,
+)
 from app.workflows import browser_capture_automation
 
 
@@ -66,6 +69,12 @@ def compose_application(
     scoring_version: str,
     control_room_guard: Callable[..., Any] | None = None,
 ) -> None:
+    effective_control_room_guard = (
+        control_room_guard
+        if callable(control_room_guard)
+        else build_default_control_room_guard()
+    )
+
     app.include_router(
         product_api.build_router(
             health_handler=health_handler,
@@ -94,7 +103,9 @@ def compose_application(
 
     app.include_router(
         control_room_admin.build_router(
-            require_control_room=control_room_guard,
+            require_control_room=(
+                effective_control_room_guard
+            ),
         )
     )
 
