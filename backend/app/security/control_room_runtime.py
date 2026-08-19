@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from threading import Lock
 from time import time
 from typing import Any, Callable, Mapping
@@ -10,10 +10,11 @@ from fastapi import Request
 from app.security.cloudflare_access import (
     CloudflareAccessVerifierConfig,
     normalize_cloudflare_team_domain,
+    verify_cloudflare_access_request,
 )
 from app.security.cloudflare_control_room import (
     CloudflareIndependentMfaAssurancePolicy,
-    build_cloudflare_control_room_guard,
+    build_attested_independent_mfa_assurance_resolver,
 )
 from app.security.cloudflare_policy_audit import (
     CloudflarePolicyAuditConfig,
@@ -24,6 +25,7 @@ from app.security.control_room import (
     ControlRoomPrincipal,
     ControlRoomSecurityMisconfigured,
     ControlRoomSecurityPolicy,
+    authorize_control_room_identity,
     normalize_email_allowlist,
 )
 
@@ -221,7 +223,6 @@ def build_control_room_runtime_guard(
 
     def guard(request: Request) -> ControlRoomPrincipal:
         validate_control_room_runtime_config(config)
-        audited = cache.get_result()
         team_domain = normalize_cloudflare_team_domain(
             config.team_domain
         )
@@ -234,6 +235,53 @@ def build_control_room_runtime_guard(
             audience=audience,
             clock_skew_seconds=skew,
         )
+
+        # Verify the caller's Cloudflare-signed token before touching the
+        # privileged policy-audit API token. Random or forged requests can never
+        # trigger the authenticated Cloudflare configuration audit.
+        verify_kwargs: dict[str, Any] = {
+            "config": verifier_config,
+        }
+        if jwks_client_factory is not None:
+            verify_kwargs["jwks_client_factory"] = jwks_client_factory
+
+        identity = verify_cloudflare_access_request(
+            request,
+            **verify_kwargs,
+        )
+
+        audited = cache.get_result()
+        assurance_policy = CloudflareIndependentMfaAssurancePolicy(
+            max_attestation_age_seconds=300,
+            max_application_token_lifetime_seconds=max_session,
+            clock_skew_seconds=skew,
+            require_every_login=True,
+        )
+        assurance_resolver = (
+            build_attested_independent_mfa_assurance_resolver(
+                attestation=audited.attestation,
+                expected_audience=audience,
+                policy=assurance_policy,
+                now_epoch_resolver=clock,
+            )
+        )
+        assurance = assurance_resolver(
+            {
+                "iat": identity.issued_at_epoch,
+                "exp": identity.expires_at_epoch,
+                "auth_time": identity.authenticated_at_epoch,
+                "amr": identity.auth_methods,
+            }
+        )
+        strong_identity = replace(
+            identity,
+            authenticated_at_epoch=(
+                assurance.authenticated_at_epoch
+            ),
+            auth_strength=assurance.auth_strength,
+            auth_methods=assurance.auth_methods,
+        )
+
         authorization_policy = ControlRoomSecurityPolicy(
             enabled=True,
             allowed_emails=normalize_email_allowlist(
@@ -245,27 +293,11 @@ def build_control_room_runtime_guard(
             max_session_age_seconds=max_session,
             clock_skew_seconds=skew,
         )
-        assurance_policy = CloudflareIndependentMfaAssurancePolicy(
-            max_attestation_age_seconds=300,
-            max_application_token_lifetime_seconds=max_session,
-            clock_skew_seconds=skew,
-            require_every_login=True,
+        return authorize_control_room_identity(
+            strong_identity,
+            policy=authorization_policy,
+            now_epoch=int(clock()),
         )
-
-        kwargs: dict[str, Any] = {
-            "verifier_config": verifier_config,
-            "authorization_policy": authorization_policy,
-            "mfa_attestation": audited.attestation,
-            "assurance_policy": assurance_policy,
-            "now_epoch_resolver": clock,
-        }
-        if jwks_client_factory is not None:
-            kwargs["jwks_client_factory"] = jwks_client_factory
-
-        provider_guard = build_cloudflare_control_room_guard(
-            **kwargs,
-        )
-        return provider_guard(request)
 
     # Expose only non-secret operational hooks for deterministic tests.
     setattr(guard, "clear_policy_cache", cache.clear)
