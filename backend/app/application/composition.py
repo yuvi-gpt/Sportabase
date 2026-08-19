@@ -10,7 +10,7 @@ from app.routes import (
     product_api,
     usage_admin,
 )
-from app.services import browser_capture_automation
+from app.workflows import browser_capture_automation
 
 
 APP_TITLE = "Sportabase API (RSS-first)"
