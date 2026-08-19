@@ -595,7 +595,6 @@ def utc_usage_day() -> str:
     ).date().isoformat()
 
 
-
 def analysis_content_hash(
     content: str,
 ) -> str:
@@ -605,7 +604,6 @@ def analysis_content_hash(
             clean_html=clean_html,
         )
     )
-
 
 
 def source_domain_for_url(
@@ -1063,18 +1061,6 @@ def load_evidence_context_for_subject(
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 def load_evidence_analysis_bundle_for_media_item(
     *,
     media_item_id: str,
@@ -1093,14 +1079,6 @@ def load_evidence_analysis_state_for_media_item(
         _facade_load_evidence_analysis_state_for_media_item_impl,
         locals(),
     )
-
-
-
-
-
-
-
-
 
 
 

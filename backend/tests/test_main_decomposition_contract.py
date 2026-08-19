@@ -138,7 +138,7 @@ class MainDecompositionContractTests(
 
         self.assertLessEqual(
             line_count,
-            2250,
+            2200,
             (
                 "main.py exceeded the decomposition "
                 "budget. New business logic should "
