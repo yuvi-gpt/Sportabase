@@ -57,6 +57,7 @@ class VerifiedControlRoomIdentity:
     token_verified: bool
     subject: str
     email: str
+    email_verified: bool
     issuer: str
     audiences: tuple[str, ...]
     issued_at_epoch: int
@@ -71,6 +72,7 @@ class ControlRoomPrincipal:
     version: str
     subject: str
     email: str
+    email_verified: bool
     issuer: str
     audience: str
     auth_strength: ControlRoomAuthStrength
@@ -83,6 +85,7 @@ class ControlRoomPrincipal:
             "version": self.version,
             "subject": self.subject,
             "email": self.email,
+            "email_verified": self.email_verified,
             "issuer": self.issuer,
             "audience": self.audience,
             "auth_strength": self.auth_strength,
@@ -177,6 +180,11 @@ def authorize_control_room_identity(
     if not email:
         raise ControlRoomAccessDenied("Control Room identity email is missing.")
 
+    if not bool(identity.email_verified):
+        raise ControlRoomAccessDenied(
+            "Control Room identity email is not verified."
+        )
+
     if email not in normalize_email_allowlist(policy.allowed_emails):
         raise ControlRoomAccessDenied(
             "Control Room identity is not allowlisted."
@@ -245,6 +253,7 @@ def authorize_control_room_identity(
         version=CONTROL_ROOM_SECURITY_VERSION,
         subject=subject,
         email=email,
+        email_verified=True,
         issuer=issuer,
         audience=expected_audience,
         auth_strength=identity.auth_strength,
