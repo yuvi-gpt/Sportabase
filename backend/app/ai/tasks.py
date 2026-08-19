@@ -6,12 +6,17 @@ from typing import Mapping
 
 from app.ai.models import (
     DEFAULT_GEMINI_MODEL,
-    FREE_GEMINI_MODEL_IDS,
-    model_spec,
+    HOSTED_GENERATION_MODEL_IDS,
+)
+from app.ai.resources import (
+    EMBEDDING,
+    LOCAL_EMBEDDING,
+    MANAGED_AGENT,
+    resource_spec,
 )
 
 
-TASK_REGISTRY_VERSION = "ai-task-registry-v1"
+TASK_REGISTRY_VERSION = "ai-task-registry-v2"
 
 ARTICLE_TLDR = "article_tldr"
 ARTICLE_SINGLE_PASS = "article_single_pass"
@@ -23,33 +28,101 @@ CORROBORATION_CANDIDATE_SEMANTICS = (
 CORROBORATION_COLLECTION_SEMANTICS = (
     "corroboration_collection_semantics"
 )
+RETRIEVAL_EMBEDDING = "retrieval_embedding"
+PROVENANCE_RESEARCH = "provenance_research"
 
 
 @dataclass(frozen=True)
 class TaskPolicy:
     task_id: str
-    primary_model: str
-    evaluation_models: tuple[str, ...]
-    fallback_models: tuple[str, ...] = ()
+    production_enabled: bool
+    primary_resource_id: str | None
+    evaluation_resource_ids: tuple[str, ...]
+    allowed_resource_kinds: tuple[str, ...]
     automatic_fallback_enabled: bool = False
+    fallback_resource_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, object]:
         return {
             "task_id": self.task_id,
-            "primary_model": self.primary_model,
-            "evaluation_models": list(
-                self.evaluation_models
+            "production_enabled": self.production_enabled,
+            "primary_resource_id": self.primary_resource_id,
+            "evaluation_resource_ids": list(
+                self.evaluation_resource_ids
             ),
-            "fallback_models": list(
-                self.fallback_models
+            "allowed_resource_kinds": list(
+                self.allowed_resource_kinds
             ),
             "automatic_fallback_enabled": (
                 self.automatic_fallback_enabled
             ),
+            "fallback_resource_ids": list(
+                self.fallback_resource_ids
+            ),
         }
 
 
-_TASK_IDS = (
+def _validate_policy(
+    policy: TaskPolicy,
+) -> TaskPolicy:
+    if (
+        policy.production_enabled
+        and not policy.primary_resource_id
+    ):
+        raise RuntimeError(
+            "Production AI task requires a primary resource."
+        )
+
+    if policy.primary_resource_id:
+        primary = resource_spec(
+            policy.primary_resource_id
+        )
+
+        if (
+            primary.resource_kind
+            not in policy.allowed_resource_kinds
+        ):
+            raise RuntimeError(
+                "Task primary resource has an invalid resource kind."
+            )
+
+        if (
+            policy.primary_resource_id
+            not in policy.evaluation_resource_ids
+        ):
+            raise RuntimeError(
+                "Task primary resource must be in its evaluation pool."
+            )
+
+    for resource_id in (
+        policy.evaluation_resource_ids
+        + policy.fallback_resource_ids
+    ):
+        spec = resource_spec(
+            resource_id
+        )
+
+        if (
+            spec.resource_kind
+            not in policy.allowed_resource_kinds
+        ):
+            raise RuntimeError(
+                "Task resource has an invalid resource kind: "
+                + resource_id
+            )
+
+    if (
+        policy.automatic_fallback_enabled
+        and not policy.fallback_resource_ids
+    ):
+        raise RuntimeError(
+            "Automatic fallback requires explicit fallback resources."
+        )
+
+    return policy
+
+
+_LIVE_GENERATION_TASKS = (
     ARTICLE_TLDR,
     ARTICLE_SINGLE_PASS,
     ARTICLE_CLASSIFIER,
@@ -58,56 +131,73 @@ _TASK_IDS = (
     CORROBORATION_COLLECTION_SEMANTICS,
 )
 
+_TASK_POLICIES = [
+    _validate_policy(
+        TaskPolicy(
+            task_id=task_id,
+            production_enabled=True,
+            primary_resource_id=(
+                DEFAULT_GEMINI_MODEL
+            ),
+            evaluation_resource_ids=(
+                HOSTED_GENERATION_MODEL_IDS
+            ),
+            allowed_resource_kinds=(
+                "generation",
+            ),
+            automatic_fallback_enabled=False,
+            fallback_resource_ids=(),
+        )
+    )
+    for task_id in _LIVE_GENERATION_TASKS
+]
 
-def _build_policy(
-    task_id: str,
-) -> TaskPolicy:
-    policy = TaskPolicy(
-        task_id=task_id,
-        primary_model=DEFAULT_GEMINI_MODEL,
-        evaluation_models=(
-            FREE_GEMINI_MODEL_IDS
+_TASK_POLICIES.extend(
+    (
+        _validate_policy(
+            TaskPolicy(
+                task_id=RETRIEVAL_EMBEDDING,
+                production_enabled=False,
+                primary_resource_id=None,
+                evaluation_resource_ids=(
+                    "gemini-embedding-2",
+                    "google/embeddinggemma-300M",
+                ),
+                allowed_resource_kinds=(
+                    EMBEDDING,
+                    LOCAL_EMBEDDING,
+                ),
+                automatic_fallback_enabled=False,
+                fallback_resource_ids=(),
+            )
         ),
-        fallback_models=(),
-        automatic_fallback_enabled=False,
+        _validate_policy(
+            TaskPolicy(
+                task_id=PROVENANCE_RESEARCH,
+                production_enabled=False,
+                primary_resource_id=None,
+                evaluation_resource_ids=(
+                    "antigravity-preview-05-2026",
+                    "deep-research-preview-04-2026",
+                    "deep-research-max-preview-04-2026",
+                ),
+                allowed_resource_kinds=(
+                    MANAGED_AGENT,
+                ),
+                automatic_fallback_enabled=False,
+                fallback_resource_ids=(),
+            )
+        ),
     )
+)
 
-    model_spec(
-        policy.primary_model
-    )
-
-    for model_id in (
-        policy.evaluation_models
-    ):
-        model_spec(
-            model_id
-        )
-
-    if (
-        policy.primary_model
-        not in policy.evaluation_models
-    ):
-        raise RuntimeError(
-            "Task primary model must be present in its evaluation pool."
-        )
-
-    if (
-        policy.automatic_fallback_enabled
-        and not policy.fallback_models
-    ):
-        raise RuntimeError(
-            "Automatic fallback requires explicit fallback models."
-        )
-
-    return policy
-
-
-_TASK_REGISTRY: Mapping[str, TaskPolicy] = MappingProxyType(
+_TASK_REGISTRY: Mapping[
+    str,
+    TaskPolicy,
+] = MappingProxyType(
     {
-        task_id: _build_policy(
-            task_id
-        )
-        for task_id in _TASK_IDS
+        policy.task_id: policy
+        for policy in _TASK_POLICIES
     }
 )
 

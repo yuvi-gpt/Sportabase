@@ -1,132 +1,78 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Mapping
+from app.ai.resources import (
+    GENERATION,
+    AIResourceSpec,
+    resource_spec,
+    resources_by_kind,
+)
 
 
-MODEL_REGISTRY_VERSION = "google-model-registry-v1"
+MODEL_REGISTRY_VERSION = "google-generation-model-registry-v2"
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 
 
-@dataclass(frozen=True)
-class ModelSpec:
-    model_id: str
-    provider: str
-    model_family: str
-    model_class: str
-    stable: bool
-    free_pool: bool
+def _generation_ids(
+    *,
+    family: str | None = None,
+) -> tuple[str, ...]:
+    normalized_family = (
+        str(family).strip().lower()
+        if family is not None
+        else None
+    )
 
-    def as_dict(self) -> dict[str, object]:
-        return {
-            "model_id": self.model_id,
-            "provider": self.provider,
-            "model_family": self.model_family,
-            "model_class": self.model_class,
-            "stable": self.stable,
-            "free_pool": self.free_pool,
-        }
+    return tuple(
+        spec.resource_id
+        for spec in resources_by_kind(
+            GENERATION
+        )
+        if (
+            normalized_family is None
+            or spec.family == normalized_family
+        )
+    )
 
 
-_MODEL_SPECS = (
-    ModelSpec(
-        model_id="gemini-3.6-flash",
-        provider="google",
-        model_family="gemini",
-        model_class="flash",
-        stable=True,
-        free_pool=True,
-    ),
-    ModelSpec(
-        model_id="gemini-3.5-flash",
-        provider="google",
-        model_family="gemini",
-        model_class="flash",
-        stable=True,
-        free_pool=True,
-    ),
-    ModelSpec(
-        model_id="gemini-3.5-flash-lite",
-        provider="google",
-        model_family="gemini",
-        model_class="flash_lite",
-        stable=True,
-        free_pool=True,
-    ),
-    ModelSpec(
-        model_id="gemini-3.1-flash-lite",
-        provider="google",
-        model_family="gemini",
-        model_class="flash_lite",
-        stable=True,
-        free_pool=True,
-    ),
-    ModelSpec(
-        model_id="gemini-2.5-flash",
-        provider="google",
-        model_family="gemini",
-        model_class="flash",
-        stable=True,
-        free_pool=True,
-    ),
-    ModelSpec(
-        model_id="gemini-2.5-flash-lite",
-        provider="google",
-        model_family="gemini",
-        model_class="flash_lite",
-        stable=True,
-        free_pool=True,
-    ),
+HOSTED_GENERATION_MODEL_IDS = (
+    _generation_ids()
 )
-
-_MODEL_REGISTRY: Mapping[str, ModelSpec] = MappingProxyType(
-    {
-        spec.model_id: spec
-        for spec in _MODEL_SPECS
-    }
+GEMINI_GENERATION_MODEL_IDS = (
+    _generation_ids(
+        family="gemini"
+    )
 )
-
-FREE_GEMINI_MODEL_IDS = tuple(
-    spec.model_id
-    for spec in _MODEL_SPECS
-    if spec.free_pool
+GEMMA_HOSTED_MODEL_IDS = (
+    _generation_ids(
+        family="gemma"
+    )
 )
 
 
-if DEFAULT_GEMINI_MODEL not in _MODEL_REGISTRY:
+if DEFAULT_GEMINI_MODEL not in HOSTED_GENERATION_MODEL_IDS:
     raise RuntimeError(
-        "Default Gemini model is missing from the model registry."
+        "Default Gemini model is missing from the generation registry."
     )
 
 
 def registered_model_ids() -> tuple[str, ...]:
-    return tuple(
-        _MODEL_REGISTRY.keys()
-    )
+    return HOSTED_GENERATION_MODEL_IDS
 
 
 def model_spec(
     model_id: str,
-) -> ModelSpec:
-    normalized = str(
-        model_id or ""
-    ).strip().lower()
+) -> AIResourceSpec:
+    spec = resource_spec(
+        model_id
+    )
 
-    if not normalized:
+    if spec.resource_kind != GENERATION:
         raise KeyError(
-            "Gemini model ID is required."
+            "AI resource is not a generation model: "
+            + spec.resource_id
         )
 
-    try:
-        return _MODEL_REGISTRY[
-            normalized
-        ]
-    except KeyError as error:
-        raise KeyError(
-            "Unregistered Gemini model: "
-            + normalized
-        ) from error
+    return spec
 
 
 def is_registered_model(
