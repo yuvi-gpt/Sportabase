@@ -43,6 +43,13 @@ SERVICE_MODULES = (
 )
 
 
+ROUTE_MODULES = (
+    "app.routes.product_api",
+    "app.routes.usage_admin",
+    "app.routes.multimodal_admin",
+)
+
+
 SHALLOW_ROUTE_NAMES = (
     "health",
     "admin_usage_summary",
@@ -195,6 +202,41 @@ class MainDecompositionContractTests(
 
                 self.assertIsNotNone(
                     module
+                )
+
+    def test_extracted_route_modules_import(
+        self,
+    ):
+        for module_name in ROUTE_MODULES:
+            with self.subTest(
+                module=module_name
+            ):
+                module = importlib.import_module(
+                    module_name
+                )
+
+                self.assertIsNotNone(
+                    module
+                )
+
+    def test_main_owns_no_http_route_decorators(
+        self,
+    ):
+        forbidden = (
+            "@app.get(",
+            "@app.post(",
+            "@app.put(",
+            "@app.patch(",
+            "@app.delete(",
+        )
+
+        for marker in forbidden:
+            with self.subTest(
+                marker=marker
+            ):
+                self.assertNotIn(
+                    marker,
+                    self.source,
                 )
 
     def test_key_routes_remain_shallow(

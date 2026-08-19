@@ -159,7 +159,11 @@ from app.services import browser_ingestion
 from app.services import browser_capture_inbox
 from app.services import browser_capture_automation
 from app.services import multimodal_shadow_api
-from app.routes import multimodal_admin
+from app.routes import (
+    multimodal_admin,
+    product_api,
+    usage_admin,
+)
 from app.services.content_resolution import (
     TRACKING_QUERY_PARAMETERS,
     YOUTUBE_HOSTS,
@@ -525,7 +529,6 @@ app.add_middleware(
 # app.include_router(insights_router, prefix="/insights", tags=["insights"])
 
 
-@app.get("/health")
 def health():
     return {"ok": True, "version": "0.3.0"}
 
@@ -1659,7 +1662,6 @@ def usage_mode_metrics(
     )
 
 
-@app.get("/admin/usage/summary")
 def admin_usage_summary(
     request: Request,
     days: int = Query(7, ge=1, le=30),
@@ -1937,9 +1939,8 @@ def run_article_ai_strategy(
 
 
 # -----------------------------
-# endpoints
+# compatibility endpoint handlers
 # -----------------------------
-@app.post("/ingest", response_model=IngestResponse)
 def ingest():
     return _ingest_handler_impl(
         IngestResponse=IngestResponse,
@@ -1956,7 +1957,6 @@ def ingest():
     )
 
 
-@app.get("/stories", response_model=List[Story])
 def stories(
     sport: Optional[str] = Query(default=None),
     source: Optional[str] = Query(default=None),
@@ -2040,10 +2040,6 @@ def resolve_article_content(
 
 
 
-@app.post(
-    "/resolve-content",
-    response_model=ContentResolveResponse,
-)
 def resolve_content(
     req: ContentResolveRequest,
 ):
@@ -2057,10 +2053,6 @@ def resolve_content(
 
 
 
-@app.post(
-    "/content/browser-capture",
-    response_model=BrowserCaptureResponse,
-)
 def browser_capture_preview(
     req: BrowserCaptureRequest,
 ):
@@ -2080,10 +2072,7 @@ def browser_capture_preview(
     )
 
 
-@app.post(
-    "/admin/intelligence/multimodal-shadow",
-    response_model=MultimodalShadowResponse,
-)
+
 def admin_multimodal_shadow(
     req: MultimodalShadowRequest,
     request: Request,
@@ -2112,7 +2101,7 @@ def admin_multimodal_shadow(
     )
 
 
-@app.post("/analyze/video", response_model=VideoAnalyzeResponse)
+
 def analyze_video(
     req: VideoAnalyzeRequest,
     request: Request,
@@ -2136,7 +2125,7 @@ def analyze_video(
     )
 
 
-@app.post("/analyze", response_model=AnalyzeResponse)
+
 def analyze(
     req: AnalyzeRequest,
     request: Request,
@@ -2187,7 +2176,41 @@ def analyze(
         upsert_media_item=upsert_media_item,
     )
 
-app.include_router(multimodal_admin.build_router(MULTIMODAL_SHADOW_API_ENABLED, require_admin, db_conn, gemini_client, request_client_key, generate_gemini_content, ANALYSIS_VERSION, SCORING_VERSION))
+
+app.include_router(
+    product_api.build_router(
+        health_handler=health,
+        ingest_handler=ingest,
+        stories_handler=stories,
+        resolve_content_handler=resolve_content,
+        browser_capture_handler=(
+            browser_capture_preview
+        ),
+        analyze_video_handler=analyze_video,
+        analyze_handler=analyze,
+    )
+)
+
+app.include_router(
+    usage_admin.build_router(
+        usage_summary_handler=(
+            admin_usage_summary
+        ),
+    )
+)
+
+app.include_router(
+    multimodal_admin.build_router(
+        MULTIMODAL_SHADOW_API_ENABLED,
+        require_admin,
+        db_conn,
+        gemini_client,
+        request_client_key,
+        generate_gemini_content,
+        ANALYSIS_VERSION,
+        SCORING_VERSION,
+    )
+)
 
 browser_capture_automation.register_browser_capture_automation_lifecycle(
     app=app,

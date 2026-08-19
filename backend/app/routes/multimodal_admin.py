@@ -5,7 +5,12 @@ from typing import Any, Dict, Literal
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.models.api import (
+    MultimodalShadowRequest,
+    MultimodalShadowResponse,
+)
 from app.services import multimodal_binding_registration
+from app.services import multimodal_shadow_api
 from app.services import multimodal_shadow_orchestration
 from app.services import multimodal_inbox_shadow_orchestration
 from app.routes import inbox_discovery_admin
@@ -157,7 +162,6 @@ class MultimodalShadowRunResponse(BaseModel):
     )
 
 
-
 class MultimodalInboxShadowRunRequest(
     _StrictBindingModel
 ):
@@ -210,6 +214,7 @@ class MultimodalInboxShadowRunResponse(BaseModel):
     ] = Field(
         default_factory=dict
     )
+
 
 def _payload(req) -> Dict[str, Any]:
     if hasattr(req, "model_dump"):
@@ -285,6 +290,37 @@ def build_router(
             gemini_generator=gemini_generator,
         )
     )
+
+    @router.post(
+        "/admin/intelligence/multimodal-shadow",
+        response_model=MultimodalShadowResponse,
+    )
+    def admin_multimodal_shadow(
+        req: MultimodalShadowRequest,
+        request: Request,
+    ):
+        return (
+            multimodal_shadow_api
+            .execute_multimodal_shadow_http(
+                req=req,
+                request=request,
+                enabled=enabled,
+                require_admin=require_admin,
+                gemini_client_factory=(
+                    gemini_client_factory
+                ),
+                request_client_key_resolver=(
+                    request_client_key_resolver
+                ),
+                gemini_generator=gemini_generator,
+                connection_factory=(
+                    connection_factory
+                ),
+                response_model=(
+                    MultimodalShadowResponse
+                ),
+            )
+        )
 
     @router.post(
         "/admin/intelligence/multimodal-bindings",
@@ -507,7 +543,6 @@ def build_router(
         return MultimodalShadowRunResponse(
             **result
         )
-
 
     @router.post(
         "/admin/intelligence/multimodal-shadow-run-inbox",
