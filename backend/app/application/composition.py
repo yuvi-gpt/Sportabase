@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes import (
+    control_room_admin,
     multimodal_admin,
     product_api,
     usage_admin,
@@ -63,6 +64,7 @@ def compose_application(
     gemini_generator: Callable[..., Any],
     analysis_version: str,
     scoring_version: str,
+    control_room_guard: Callable[..., Any] | None = None,
 ) -> None:
     app.include_router(
         product_api.build_router(
@@ -87,6 +89,12 @@ def compose_application(
             usage_summary_handler=(
                 usage_summary_handler
             ),
+        )
+    )
+
+    app.include_router(
+        control_room_admin.build_router(
+            require_control_room=control_room_guard,
         )
     )
 
