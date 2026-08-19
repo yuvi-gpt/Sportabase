@@ -10,7 +10,6 @@ import threading
 import hashlib
 import hmac
 import sqlite3
-from pathlib import Path
 from concurrent.futures import Future
 from functools import lru_cache
 from datetime import datetime, timezone, timedelta
@@ -23,16 +22,43 @@ import feedparser
 from bs4 import BeautifulSoup
 from dateutil import parser as dtparser
 
-from fastapi import FastAPI, Query, Request, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Query, Request, HTTPException
 from pydantic import BaseModel, Field
 
-from dotenv import load_dotenv
 from google import genai
 from lingua import LanguageDetectorBuilder
 from app.db.schema import SCHEMA
 from app.db.connection import connect_database
 from app.db.migrations import initialize_database
+from app.application.config import (
+    BACKEND_DIR,
+    DATA_DIR,
+    DOTENV_PATH,
+    DB_PATH,
+    SOURCES_PATH,
+    MAX_ANALYZE_CHARS,
+    ANALYSIS_VERSION,
+    SCORING_VERSION,
+    ANALYSIS_CACHE_TTL_SECONDS,
+    LIVE_CACHE_TTL_SECONDS,
+    _GEMINI_CAPACITY_POLICY,
+    GLOBAL_DAILY_GEMINI_CALL_CAP,
+    CLIENT_DAILY_GEMINI_CALL_CAP,
+    GEMINI_RESERVATION_TIMEOUT_SECONDS,
+    ADMIN_API_KEY,
+    INTELLIGENCE_SHADOW_ENABLED,
+    MULTIMODAL_SHADOW_API_ENABLED,
+    LIVE_MERIT_ENABLED,
+    MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+    BRAVE_NEWS_API_KEY,
+    GEMINI_INPUT_COST_PER_MILLION_USD,
+    GEMINI_OUTPUT_COST_PER_MILLION_USD,
+)
+from app.application.composition import (
+    compose_application,
+    create_application,
+    register_startup_handler,
+)
 from app.intelligence.sources import (
     source_domain_for_url as _source_domain_for_url_impl,
     source_key_for_url as _source_key_for_url_impl,
@@ -159,11 +185,6 @@ from app.services import browser_ingestion
 from app.services import browser_capture_inbox
 from app.services import browser_capture_automation
 from app.services import multimodal_shadow_api
-from app.routes import (
-    multimodal_admin,
-    product_api,
-    usage_admin,
-)
 from app.services.content_resolution import (
     TRACKING_QUERY_PARAMETERS,
     YOUTUBE_HOSTS,
@@ -190,10 +211,6 @@ from app.services.analysis_cache import (
     get_cached_analysis as _get_cached_analysis_cache_impl,
     make_analysis_cache_key as _make_analysis_cache_key_cache_impl,
     set_cached_analysis as _set_cached_analysis_cache_impl,
-)
-from app.services.gemini_capacity import (
-    capacity_policy_for_model as _capacity_policy_for_model_impl,
-    sportabase_daily_caps as _sportabase_daily_caps_impl,
 )
 from app.services.gemini_runtime import (
     classify_gemini_failure as _classify_gemini_failure_runtime_impl,
@@ -361,150 +378,9 @@ def _invoke_intelligence_facade(
     )
 
 
-# from app.routes.insights import router as insights_router
-
-
 # -----------------------------
-# env + paths
+# application runtime state
 # -----------------------------
-BACKEND_DIR = Path(__file__).resolve().parent.parent  # backend/
-DATA_DIR = BACKEND_DIR / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-DOTENV_PATH = BACKEND_DIR / ".env"
-load_dotenv(DOTENV_PATH)
-
-DB_PATH = DATA_DIR / "sportabase.db"
-SOURCES_PATH = DATA_DIR / "sources.json"
-
-# Keep extension scans fast. Most sports articles can be summarized/scored well
-# without sending the full extracted page body to Gemini.
-MAX_ANALYZE_CHARS = int(
-    os.getenv(
-        "SPORTABASE_MAX_ANALYZE_CHARS",
-        "6000",
-    )
-)
-
-ANALYSIS_VERSION = os.getenv(
-    "SPORTABASE_ANALYSIS_VERSION",
-    "article-video-v14-score-single-pass",
-).strip()
-SCORING_VERSION = os.getenv(
-    "SPORTABASE_SCORING_VERSION",
-    "merit-v2-certified-corroboration",
-).strip()
-
-ANALYSIS_CACHE_TTL_SECONDS = int(
-    os.getenv(
-        "SPORTABASE_CACHE_TTL_SECONDS",
-        "21600",
-    )
-)
-
-LIVE_CACHE_TTL_SECONDS = int(
-    os.getenv(
-        "SPORTABASE_LIVE_CACHE_TTL_SECONDS",
-        "180",
-    )
-)
-
-_GEMINI_CAPACITY_POLICY = (
-    _capacity_policy_for_model_impl("")
-)
-(
-    GLOBAL_DAILY_GEMINI_CALL_CAP,
-    CLIENT_DAILY_GEMINI_CALL_CAP,
-) = _sportabase_daily_caps_impl(
-    _GEMINI_CAPACITY_POLICY
-)
-
-GEMINI_RESERVATION_TIMEOUT_SECONDS = max(
-    60,
-    int(
-        os.getenv(
-            "SPORTABASE_GEMINI_RESERVATION_TIMEOUT_SECONDS",
-            "900",
-        )
-    ),
-)
-
-ADMIN_API_KEY = os.getenv(
-    "SPORTABASE_ADMIN_API_KEY",
-    "",
-).strip()
-
-INTELLIGENCE_SHADOW_ENABLED = (
-    os.getenv(
-        "SPORTABASE_INTELLIGENCE_SHADOW_ENABLED",
-        "0",
-    )
-    .strip()
-    .lower()
-    in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-)
-
-MULTIMODAL_SHADOW_API_ENABLED = (
-    os.getenv(
-        "SPORTABASE_MULTIMODAL_SHADOW_API_ENABLED",
-        "0",
-    )
-    .strip()
-    .lower()
-    in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-)
-
-
-LIVE_MERIT_ENABLED = (
-    os.getenv(
-        "SPORTABASE_LIVE_MERIT_ENABLED",
-        "1",
-    )
-    .strip()
-    .lower()
-    in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-)
-
-MERIT_SCORE_RELEASE_CERTIFICATE_PATH = (
-    DATA_DIR
-    / "merit_score_release_certificate.json"
-)
-
-BRAVE_NEWS_API_KEY = os.getenv(
-    "SPORTABASE_BRAVE_NEWS_API_KEY",
-    "",
-).strip()
-
-
-GEMINI_INPUT_COST_PER_MILLION_USD = float(
-    os.getenv(
-        "SPORTABASE_GEMINI_INPUT_COST_PER_MILLION_USD",
-        "1.50",
-    )
-)
-
-GEMINI_OUTPUT_COST_PER_MILLION_USD = float(
-    os.getenv(
-        "SPORTABASE_GEMINI_OUTPUT_COST_PER_MILLION_USD",
-        "9.00",
-    )
-)
-
 _INFLIGHT_GEMINI_LOCK = threading.Lock()
 
 _INFLIGHT_GEMINI_CALLS: Dict[
@@ -516,17 +392,7 @@ _INFLIGHT_GEMINI_CALLS: Dict[
 # -----------------------------
 # app
 # -----------------------------
-app = FastAPI(title="Sportabase API (RSS-first)", version="0.3.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# app.include_router(insights_router, prefix="/insights", tags=["insights"])
+app = create_application()
 
 
 def health():
@@ -556,8 +422,8 @@ def init_db():
 # initializes the production schema before requests are
 # served, while tests may explicitly override DB_PATH and
 # call init_db() against temporary databases.
-app.add_event_handler(
-    "startup",
+register_startup_handler(
+    app,
     init_db,
 )
 
@@ -821,6 +687,8 @@ def record_reporter_observation(
         _facade_record_reporter_observation_impl,
         locals(),
     )
+
+
 def evidence_key_for_record(
     *,
     evidence_type: str,
@@ -871,6 +739,8 @@ def record_evidence_link(
         _facade_record_evidence_link_impl,
         locals(),
     )
+
+
 def _observation_dependency_identity(
     *,
     relationship_type: str,
@@ -937,6 +807,8 @@ def record_observation_dependency(
         _facade_record_observation_dependency_impl,
         locals(),
     )
+
+
 def observation_independence_assertion_id_for_record(
     *,
     observed_at: str,
@@ -1079,42 +951,6 @@ def load_evidence_analysis_state_for_media_item(
         _facade_load_evidence_analysis_state_for_media_item_impl,
         locals(),
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def media_item_id_for_url(
@@ -1278,7 +1114,6 @@ def record_user_history(
     )
 
 
-
 def make_analysis_cache_key(
     mode: str,
     url: str,
@@ -1369,7 +1204,6 @@ def set_cached_analysis(
             ),
         )
     )
-
 
 
 def request_client_key(
@@ -1569,7 +1403,6 @@ def record_analysis_cache_hit(
     )
 
 
-
 def usage_derived_metrics(
     summary: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -1684,31 +1517,13 @@ def admin_usage_summary(
     )
 
 
-
-
 # -----------------------------
 # helpers
 # -----------------------------
-
-
-
-
 def load_sources() -> List[Dict[str, str]]:
     return _load_sources_handler_impl(
         SOURCES_PATH=SOURCES_PATH,
     )
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # -----------------------------
@@ -1894,26 +1709,9 @@ def run_article_ai_strategy(
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # -----------------------------
 # AI article type classifier beta
 # -----------------------------
-
 
 
 # -----------------------------
@@ -1950,28 +1748,6 @@ def stories(
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def ai_video_claim_readout(
     title: str,
     transcript: str,
@@ -1994,19 +1770,6 @@ def ai_video_claim_readout(
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 def resolve_article_content(
     normalized_url: str,
 ) -> Dict[str, Any]:
@@ -2015,7 +1778,6 @@ def resolve_article_content(
         extract_article_content=extract_article_content,
         fetch_safe_article_html=fetch_safe_article_html,
     )
-
 
 
 def resolve_content(
@@ -2028,7 +1790,6 @@ def resolve_content(
         resolve_article_content=resolve_article_content,
         resolve_youtube_content=resolve_youtube_content,
     )
-
 
 
 def browser_capture_preview(
@@ -2048,7 +1809,6 @@ def browser_capture_preview(
             scoring_version=SCORING_VERSION,
         )
     )
-
 
 
 def admin_multimodal_shadow(
@@ -2079,7 +1839,6 @@ def admin_multimodal_shadow(
     )
 
 
-
 def analyze_video(
     req: VideoAnalyzeRequest,
     request: Request,
@@ -2101,7 +1860,6 @@ def analyze_video(
         validate_video_analysis_consistency=validate_video_analysis_consistency,
         video_analysis_cache_decision=video_analysis_cache_decision,
     )
-
 
 
 def analyze(
@@ -2155,46 +1913,28 @@ def analyze(
     )
 
 
-app.include_router(
-    product_api.build_router(
-        health_handler=health,
-        ingest_handler=ingest,
-        stories_handler=stories,
-        resolve_content_handler=resolve_content,
-        browser_capture_handler=(
-            browser_capture_preview
-        ),
-        analyze_video_handler=analyze_video,
-        analyze_handler=analyze,
-    )
-)
-
-app.include_router(
-    usage_admin.build_router(
-        usage_summary_handler=(
-            admin_usage_summary
-        ),
-    )
-)
-
-app.include_router(
-    multimodal_admin.build_router(
-        MULTIMODAL_SHADOW_API_ENABLED,
-        require_admin,
-        db_conn,
-        gemini_client,
-        request_client_key,
-        generate_gemini_content,
-        ANALYSIS_VERSION,
-        SCORING_VERSION,
-    )
-)
-
-browser_capture_automation.register_browser_capture_automation_lifecycle(
+compose_application(
     app=app,
+    health_handler=health,
+    ingest_handler=ingest,
+    stories_handler=stories,
+    resolve_content_handler=resolve_content,
+    browser_capture_handler=(
+        browser_capture_preview
+    ),
+    analyze_video_handler=analyze_video,
+    analyze_handler=analyze,
+    usage_summary_handler=admin_usage_summary,
+    multimodal_shadow_api_enabled=(
+        MULTIMODAL_SHADOW_API_ENABLED
+    ),
+    require_admin=require_admin,
     connection_factory=db_conn,
+    gemini_client_factory=gemini_client,
+    request_client_key_resolver=(
+        request_client_key
+    ),
+    gemini_generator=generate_gemini_content,
     analysis_version=ANALYSIS_VERSION,
     scoring_version=SCORING_VERSION,
-    gemini_client_factory=gemini_client,
-    gemini_generator=generate_gemini_content,
 )

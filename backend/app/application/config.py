@@ -6,7 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from app.services.gemini_capacity import (
+from app.ai.quota import (
     capacity_policy_for_model,
     sportabase_daily_caps,
 )

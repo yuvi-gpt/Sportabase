@@ -50,6 +50,12 @@ ROUTE_MODULES = (
 )
 
 
+APPLICATION_MODULES = (
+    "app.application.config",
+    "app.application.composition",
+)
+
+
 SHALLOW_ROUTE_NAMES = (
     "health",
     "admin_usage_summary",
@@ -128,6 +134,21 @@ class MainDecompositionContractTests(
                 ),
             )
         }
+
+    def test_application_bootstrap_modules_import(
+        self,
+    ):
+        for module_name in APPLICATION_MODULES:
+            with self.subTest(
+                module=module_name
+            ):
+                module = importlib.import_module(
+                    module_name
+                )
+
+                self.assertIsNotNone(
+                    module
+                )
 
     def test_main_stays_within_decomposition_budget(
         self,
@@ -235,6 +256,42 @@ class MainDecompositionContractTests(
                 marker=marker
             ):
                 self.assertNotIn(
+                    marker,
+                    self.source,
+                )
+
+    def test_main_delegates_application_bootstrap(
+        self,
+    ):
+        forbidden = (
+            "FastAPI(",
+            "CORSMiddleware",
+            ".include_router(",
+            "register_browser_capture_automation_lifecycle(",
+            "load_dotenv(",
+            "SPORTABASE_MAX_ANALYZE_CHARS",
+        )
+
+        for marker in forbidden:
+            with self.subTest(
+                marker=marker
+            ):
+                self.assertNotIn(
+                    marker,
+                    self.source,
+                )
+
+        required = (
+            "create_application()",
+            "register_startup_handler(",
+            "compose_application(",
+        )
+
+        for marker in required:
+            with self.subTest(
+                marker=marker
+            ):
+                self.assertIn(
                     marker,
                     self.source,
                 )
