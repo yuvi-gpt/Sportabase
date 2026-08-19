@@ -55,6 +55,7 @@ from app.ai.tasks import (
 
 
 EXPECTED_RESOURCES = (
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
@@ -93,15 +94,15 @@ class GoogleAIResourceFoundationTests(
     def test_registry_versions_are_explicit(self):
         self.assertEqual(
             AI_RESOURCE_REGISTRY_VERSION,
-            "google-ai-resource-registry-v1",
+            "google-ai-resource-registry-v2",
         )
         self.assertEqual(
             MODEL_REGISTRY_VERSION,
-            "google-generation-model-registry-v2",
+            "google-generation-model-registry-v3",
         )
         self.assertEqual(
             TASK_REGISTRY_VERSION,
-            "ai-task-registry-v2",
+            "ai-task-registry-v3",
         )
         self.assertEqual(
             RESOURCE_ROUTER_VERSION,
@@ -118,6 +119,7 @@ class GoogleAIResourceFoundationTests(
         self.assertEqual(
             GEMINI_GENERATION_MODEL_IDS,
             (
+                "gemini-3.7-flash",
                 "gemini-3.6-flash",
                 "gemini-3.5-flash",
                 "gemini-3.5-flash-lite",
@@ -251,6 +253,28 @@ class GoogleAIResourceFoundationTests(
         self.assertEqual(
             route.resource_id,
             "gemma-4-26b-a4b-it",
+        )
+        self.assertEqual(
+            route.selection_source,
+            "explicit_evaluation_override",
+        )
+        self.assertTrue(
+            route.requires_project_capacity_config
+        )
+        self.assertFalse(
+            route.automatic_fallback_enabled
+        )
+
+    def test_generation_evaluation_can_select_newest_flash(self):
+        route = route_task(
+            ARTICLE_CLASSIFIER,
+            requested_resource_id=(
+                "gemini-3.7-flash"
+            ),
+        )
+        self.assertEqual(
+            route.resource_id,
+            "gemini-3.7-flash",
         )
         self.assertEqual(
             route.selection_source,
