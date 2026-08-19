@@ -16,12 +16,7 @@ MODULE = (
     / "services"
     / "multimodal_structured_shadow_caller.py"
 )
-RUNTIME = (
-    ROOT
-    / "app"
-    / "services"
-    / "multimodal_intelligence_runtime.py"
-)
+RUNTIME = Path(runtime.__file__).resolve()
 README = (
     ROOT
     / "app"

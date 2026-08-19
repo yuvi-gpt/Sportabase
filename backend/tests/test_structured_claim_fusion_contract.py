@@ -18,13 +18,7 @@ SEMANTIC_PATH = (
     / "services"
     / "semantic_execution.py"
 )
-RUNTIME_PATH = (
-    ROOT
-    / "backend"
-    / "app"
-    / "services"
-    / "multimodal_intelligence_runtime.py"
-)
+RUNTIME_PATH = Path(multimodal_intelligence_runtime.__file__).resolve()
 
 
 class StructuredClaimFusionContractTests(unittest.TestCase):
