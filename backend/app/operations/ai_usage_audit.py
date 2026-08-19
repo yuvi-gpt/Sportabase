@@ -66,6 +66,13 @@ def _completed_provider_call(row: Mapping[str, Any]) -> bool:
     )
 
 
+def _sum_tokens(
+    rows: Iterable[Mapping[str, Any]],
+    field: str,
+) -> int:
+    return sum(_nonnegative_int(row[field]) for row in rows)
+
+
 def _summarize_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     normalized = tuple(rows)
     provider_rows = tuple(row for row in normalized if _provider_attempt(row))
@@ -90,30 +97,35 @@ def _summarize_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         for row in completed_rows
     ]
 
-    prompt_tokens = sum(
-        _nonnegative_int(row["prompt_tokens"])
-        for row in provider_rows
+    prompt_tokens = _sum_tokens(provider_rows, "prompt_tokens")
+    output_tokens = _sum_tokens(provider_rows, "output_tokens")
+    thought_tokens = _sum_tokens(provider_rows, "thought_tokens")
+    total_tokens = _sum_tokens(provider_rows, "total_tokens")
+    estimated_prompt_tokens = _sum_tokens(
+        provider_rows,
+        "estimated_prompt_tokens",
     )
-    output_tokens = sum(
-        _nonnegative_int(row["output_tokens"])
-        for row in provider_rows
+
+    successful_prompt_tokens = _sum_tokens(
+        successful_rows,
+        "prompt_tokens",
     )
-    thought_tokens = sum(
-        _nonnegative_int(row["thought_tokens"])
-        for row in provider_rows
+    successful_output_tokens = _sum_tokens(
+        successful_rows,
+        "output_tokens",
     )
-    total_tokens = sum(
-        _nonnegative_int(row["total_tokens"])
-        for row in provider_rows
+    successful_thought_tokens = _sum_tokens(
+        successful_rows,
+        "thought_tokens",
     )
-    estimated_prompt_tokens = sum(
-        _nonnegative_int(row["estimated_prompt_tokens"])
-        for row in provider_rows
+    successful_total_tokens = _sum_tokens(
+        successful_rows,
+        "total_tokens",
     )
 
     reported_token_calls = sum(
         1
-        for row in provider_rows
+        for row in completed_rows
         if _nonnegative_int(row["total_tokens"]) > 0
     )
 
@@ -150,7 +162,7 @@ def _summarize_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "reported_token_calls": reported_token_calls,
         "token_accounting_coverage_percent": _percent(
             reported_token_calls,
-            len(provider_rows),
+            len(completed_rows),
         ),
         "estimated_prompt_tokens": estimated_prompt_tokens,
         "prompt_tokens": prompt_tokens,
@@ -158,12 +170,16 @@ def _summarize_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "thought_tokens": thought_tokens,
         "billable_output_tokens": output_tokens + thought_tokens,
         "total_tokens": total_tokens,
+        "successful_prompt_tokens": successful_prompt_tokens,
+        "successful_output_tokens": successful_output_tokens,
+        "successful_thought_tokens": successful_thought_tokens,
+        "successful_total_tokens": successful_total_tokens,
         "average_total_tokens_per_provider_attempt": round(
             total_tokens / len(provider_rows),
             2,
         ) if provider_rows else 0.0,
         "average_total_tokens_per_success": round(
-            total_tokens / len(successful_rows),
+            successful_total_tokens / len(successful_rows),
             2,
         ) if successful_rows else 0.0,
         "latency": {
