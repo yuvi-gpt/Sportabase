@@ -19,6 +19,9 @@ from app.ai.benchmark import (
     build_article_single_pass_benchmark_plan,
     score_article_single_pass_run,
 )
+from app.ai.benchmark_reporting import (
+    score_article_observations_with_reliability,
+)
 from app.ai.evaluation import (
     EvaluationBudget,
     EvaluationCapacityBlocked,
@@ -173,11 +176,20 @@ def main() -> int:
         run,
         cases=cases,
     )
+    quality_reliability = (
+        score_article_observations_with_reliability(
+            run.observations,
+            cases=cases,
+        )
+    )
 
     payload = {
         **plan_payload,
         "run": run.as_dict(),
         "benchmark": report.as_dict(),
+        "benchmark_quality_reliability": (
+            quality_reliability.as_dict()
+        ),
     }
 
     _write_payload(payload, args.output)
