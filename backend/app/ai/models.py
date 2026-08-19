@@ -8,7 +8,7 @@ from app.ai.resources import (
 )
 
 
-MODEL_REGISTRY_VERSION = "google-generation-model-registry-v2"
+MODEL_REGISTRY_VERSION = "google-generation-model-registry-v3"
 DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 
 
