@@ -59,6 +59,9 @@ EXPECTED_RESOURCES = (
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
     "gemma-4-31b-it",
     "gemma-4-26b-a4b-it",
     "gemini-embedding-2",
@@ -119,6 +122,9 @@ class GoogleAIResourceFoundationTests(
                 "gemini-3.5-flash",
                 "gemini-3.5-flash-lite",
                 "gemini-3.1-flash-lite",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
             ),
         )
         self.assertEqual(
@@ -256,6 +262,32 @@ class GoogleAIResourceFoundationTests(
         self.assertFalse(
             route.automatic_fallback_enabled
         )
+
+    def test_generation_evaluation_can_select_legacy_free_tier_models(self):
+        for model_id in (
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+        ):
+            with self.subTest(
+                model=model_id
+            ):
+                route = route_task(
+                    ARTICLE_CLASSIFIER,
+                    requested_resource_id=(
+                        model_id
+                    ),
+                )
+                self.assertEqual(
+                    route.resource_id,
+                    model_id,
+                )
+                self.assertTrue(
+                    route.requires_project_capacity_config
+                )
+                self.assertFalse(
+                    route.automatic_fallback_enabled
+                )
 
     def test_embedding_task_is_evaluation_only(self):
         policy = task_policy(
