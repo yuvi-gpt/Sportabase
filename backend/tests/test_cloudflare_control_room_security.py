@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from time import time
 from types import SimpleNamespace
 
 import jwt
@@ -30,7 +31,7 @@ from app.security.control_room import (
 )
 
 
-NOW = 2_000_000_000
+NOW = int(time())
 TEAM = "https://team.cloudflareaccess.com"
 AUDIENCE = "control-room-audience"
 OWNER = "owner@example.com"
