@@ -16,7 +16,7 @@ from app.ai.resources import (
 )
 
 
-TASK_REGISTRY_VERSION = "ai-task-registry-v2"
+TASK_REGISTRY_VERSION = "ai-task-registry-v3"
 
 ARTICLE_TLDR = "article_tldr"
 ARTICLE_SINGLE_PASS = "article_single_pass"
