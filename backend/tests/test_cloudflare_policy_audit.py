@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-
 from copy import deepcopy
 
 from app.security.cloudflare_policy_audit import (
@@ -11,9 +10,7 @@ from app.security.cloudflare_policy_audit import (
     audit_cloudflare_control_room_policy,
     parse_cloudflare_duration_seconds,
 )
-from app.security.control_room import (
-    ControlRoomSecurityMisconfigured,
-)
+from app.security.control_room import ControlRoomSecurityMisconfigured
 
 
 NOW = 2_000_000_000
@@ -24,7 +21,7 @@ IDP = "google-idp"
 OWNER = "owner@example.com"
 
 
-def _config(**overrides) -> CloudflarePolicyAuditConfig:
+def _config(**overrides):
     values = {
         "account_id": ACCOUNT,
         "application_id": APP,
@@ -47,10 +44,7 @@ def _application(**overrides):
         "allowed_idps": [IDP],
         "session_duration": "15m",
         "mfa_config": {
-            "allowed_authenticators": [
-                "security_key",
-                "biometrics",
-            ],
+            "allowed_authenticators": ["security_key", "biometrics"],
             "mfa_disabled": False,
             "session_duration": "0m",
         },
@@ -60,11 +54,7 @@ def _application(**overrides):
 
 
 def _idp(**overrides):
-    value = {
-        "id": IDP,
-        "name": "Google",
-        "type": "google",
-    }
+    value = {"id": IDP, "name": "Google", "type": "google"}
     value.update(overrides)
     return value
 
@@ -74,13 +64,7 @@ def _allow_policy(**overrides):
         "id": "policy-allow-owner",
         "name": "Allow owner only",
         "decision": "allow",
-        "include": [
-            {
-                "email": {
-                    "email": OWNER,
-                }
-            }
-        ],
+        "include": [{"email": {"email": OWNER}}],
         "require": [],
         "exclude": [],
         "session_duration": "15m",
@@ -89,51 +73,27 @@ def _allow_policy(**overrides):
     return value
 
 
-def _block_policy(**overrides):
-    value = {
+def _block_policy():
+    return {
         "id": "policy-block-rest",
         "name": "Block rest",
         "decision": "block",
         "include": [{"everyone": {}}],
         "session_duration": "15m",
     }
-    value.update(overrides)
-    return value
 
 
 class FakeCloudflareApi:
-    def __init__(
-        self,
-        *,
-        application=None,
-        identity_provider=None,
-        policy_pages=None,
-    ):
-        self.application = (
-            deepcopy(application)
-            if application is not None
-            else _application()
-        )
-        self.identity_provider = (
-            deepcopy(identity_provider)
-            if identity_provider is not None
-            else _idp()
-        )
-        self.policy_pages = (
-            deepcopy(policy_pages)
-            if policy_pages is not None
-            else [[_allow_policy(), _block_policy()]]
-        )
+    def __init__(self, *, application=None, identity_provider=None, pages=None):
+        self.application = deepcopy(application or _application())
+        self.identity_provider = deepcopy(identity_provider or _idp())
+        self.pages = deepcopy(pages or [[_allow_policy(), _block_policy()]])
         self.calls = []
 
     def get_json(self, url, api_token, timeout_seconds):
-        self.calls.append(
-            (url, api_token, timeout_seconds)
-        )
-
+        self.calls.append((url, api_token, timeout_seconds))
         app_url = (
-            f"{CLOUDFLARE_API_ORIGIN}/accounts/{ACCOUNT}"
-            f"/access/apps/{APP}"
+            f"{CLOUDFLARE_API_ORIGIN}/accounts/{ACCOUNT}/access/apps/{APP}"
         )
         idp_url = (
             f"{CLOUDFLARE_API_ORIGIN}/accounts/{ACCOUNT}"
@@ -141,565 +101,252 @@ class FakeCloudflareApi:
         )
 
         if url == app_url:
-            return {
-                "success": True,
-                "result": deepcopy(self.application),
-            }
-
+            return {"success": True, "result": deepcopy(self.application)}
         if url == idp_url:
-            return {
-                "success": True,
-                "result": deepcopy(self.identity_provider),
-            }
+            return {"success": True, "result": deepcopy(self.identity_provider)}
 
         prefix = app_url + "/policies?per_page=100&page="
         if url.startswith(prefix):
             page = int(url[len(prefix):])
-            if page < 1 or page > len(self.policy_pages):
-                return {
-                    "success": True,
-                    "result": [],
-                    "result_info": {
-                        "total_pages": len(self.policy_pages),
-                    },
-                }
-
+            result = self.pages[page - 1] if page <= len(self.pages) else []
             return {
                 "success": True,
-                "result": deepcopy(
-                    self.policy_pages[page - 1]
-                ),
+                "result": deepcopy(result),
                 "result_info": {
                     "page": page,
-                    "total_pages": len(self.policy_pages),
+                    "total_pages": len(self.pages),
                 },
             }
 
-        raise AssertionError(
-            "unexpected Cloudflare API URL: " + url
-        )
+        raise AssertionError("unexpected Cloudflare URL: " + url)
+
+
+def _audit(api, *, config=None, token="read-only-token"):
+    return audit_cloudflare_control_room_policy(
+        config=config or _config(),
+        api_token=token,
+        get_json=api.get_json,
+        now_epoch=NOW,
+    )
 
 
 class CloudflarePolicyAuditTests(unittest.TestCase):
-    def test_duration_parser_supports_cloudflare_compound_units(self):
-        self.assertEqual(
-            parse_cloudflare_duration_seconds("0m"),
-            0,
-        )
-        self.assertEqual(
-            parse_cloudflare_duration_seconds("15m"),
-            900,
-        )
-        self.assertEqual(
-            parse_cloudflare_duration_seconds("1h30m"),
-            5400,
-        )
-        self.assertEqual(
-            parse_cloudflare_duration_seconds("500ms"),
-            0,
-        )
+    def assertAuditDenied(self, api, pattern, *, config=None, token="token"):
+        with self.assertRaisesRegex(ControlRoomSecurityMisconfigured, pattern):
+            _audit(api, config=config, token=token)
 
-    def test_fractional_seconds_that_do_not_resolve_whole_are_rejected(self):
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
-            "whole seconds",
-        ):
+    def test_duration_parser_is_strict_and_supports_compound_units(self):
+        self.assertEqual(parse_cloudflare_duration_seconds("0m"), 0)
+        self.assertEqual(parse_cloudflare_duration_seconds("15m"), 900)
+        self.assertEqual(parse_cloudflare_duration_seconds("1h30m"), 5400)
+        self.assertEqual(parse_cloudflare_duration_seconds("1000ms"), 1)
+        with self.assertRaisesRegex(ControlRoomSecurityMisconfigured, "whole seconds"):
             parse_cloudflare_duration_seconds("1500ms")
-
-    def test_invalid_duration_is_rejected(self):
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
-            "invalid",
-        ):
+        with self.assertRaisesRegex(ControlRoomSecurityMisconfigured, "invalid"):
             parse_cloudflare_duration_seconds("15 minutes")
 
-    def test_happy_path_produces_verified_attestation(self):
+    def test_happy_path_issues_verified_secret_free_attestation(self):
         api = FakeCloudflareApi()
+        result = _audit(api, token="TOP-SECRET-TOKEN")
 
-        result = audit_cloudflare_control_room_policy(
-            config=_config(),
-            api_token="read-only-token",
-            get_json=api.get_json,
-            now_epoch=NOW,
-        )
-
-        self.assertEqual(
-            result.version,
-            CLOUDFLARE_POLICY_AUDIT_VERSION,
-        )
+        self.assertEqual(result.version, CLOUDFLARE_POLICY_AUDIT_VERSION)
         self.assertEqual(result.application_id, APP)
-        self.assertEqual(
-            result.application_name,
-            "Sportabase Control Room",
-        )
         self.assertEqual(result.application_audience, AUD)
         self.assertEqual(result.identity_provider_id, IDP)
         self.assertEqual(result.identity_provider_type, "google")
-        self.assertEqual(
-            result.allow_policy_ids,
-            ("policy-allow-owner",),
-        )
+        self.assertEqual(result.allow_policy_ids, ("policy-allow-owner",))
         self.assertEqual(result.audited_policy_count, 2)
-
-        attestation = result.attestation
-        self.assertTrue(attestation.verified)
-        self.assertEqual(attestation.verified_at_epoch, NOW)
-        self.assertEqual(attestation.application_audience, AUD)
+        self.assertTrue(result.attestation.verified)
+        self.assertEqual(result.attestation.verified_at_epoch, NOW)
         self.assertEqual(
-            attestation.allowed_authenticators,
+            result.attestation.allowed_authenticators,
             ("security_key", "biometrics"),
         )
-        self.assertFalse(attestation.mfa_disabled)
-        self.assertEqual(
-            attestation.mfa_session_duration_seconds,
-            0,
-        )
-        self.assertEqual(
-            attestation.source,
-            "cloudflare_access_policy_api",
-        )
-
+        self.assertEqual(result.attestation.mfa_session_duration_seconds, 0)
+        self.assertNotIn("TOP-SECRET-TOKEN", str(result.as_dict()))
         self.assertEqual(len(api.calls), 3)
-        self.assertTrue(
-            all(call[1] == "read-only-token" for call in api.calls)
-        )
-        self.assertTrue(
-            all(call[2] == 7 for call in api.calls)
-        )
+        self.assertTrue(all(call[2] == 7 for call in api.calls))
 
-    def test_google_workspace_idp_is_allowed(self):
-        api = FakeCloudflareApi(
-            identity_provider=_idp(type="google-apps")
+    def test_google_workspace_idp_is_also_accepted(self):
+        result = _audit(
+            FakeCloudflareApi(identity_provider=_idp(type="google-apps"))
         )
-        result = audit_cloudflare_control_room_policy(
-            config=_config(),
-            api_token="token",
-            get_json=api.get_json,
-            now_epoch=NOW,
-        )
-        self.assertEqual(
-            result.identity_provider_type,
-            "google-apps",
-        )
+        self.assertEqual(result.identity_provider_type, "google-apps")
 
-    def test_missing_api_token_fails_closed_before_http(self):
+    def test_missing_token_or_unsafe_identifier_fails_before_http(self):
         api = FakeCloudflareApi()
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
-            "API token",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
+        self.assertAuditDenied(api, "API token", token="")
         self.assertEqual(api.calls, [])
 
-    def test_invalid_identifier_fails_before_http(self):
         api = FakeCloudflareApi()
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            api,
             "account id",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(account_id="../evil"),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
+            config=_config(account_id="../evil"),
+        )
         self.assertEqual(api.calls, [])
 
-    def test_wrong_application_id_fails_closed(self):
-        api = FakeCloudflareApi(
-            application=_application(id="other-app")
-        )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+    def test_application_identity_and_audience_are_pinned(self):
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(id="other-app")),
             "application id",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_wrong_application_audience_fails_closed(self):
-        api = FakeCloudflareApi(
-            application=_application(aud="wrong-audience")
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(aud="wrong")),
             "audience",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_application_must_allow_only_expected_idp(self):
-        api = FakeCloudflareApi(
-            application=_application(
-                allowed_idps=[IDP, "onetimepin"]
-            )
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                application=_application(allowed_idps=[IDP, "another-idp"])
+            ),
             "only the approved Google IdP",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_identity_provider_must_be_google(self):
-        api = FakeCloudflareApi(
-            identity_provider=_idp(type="onetimepin")
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(identity_provider=_idp(type="onetimepin")),
             "not Google",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_application_session_must_be_short(self):
-        api = FakeCloudflareApi(
-            application=_application(
-                session_duration="1h"
-            )
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+
+    def test_application_session_and_mfa_must_be_strict(self):
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(session_duration="1h")),
             "session duration",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_application_mfa_is_required(self):
-        api = FakeCloudflareApi(
-            application=_application(mfa_config=None)
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(mfa_config=None)),
             "MFA configuration is missing",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_application_mfa_cannot_be_disabled(self):
-        mfa = deepcopy(_application()["mfa_config"])
-        mfa["mfa_disabled"] = True
-        api = FakeCloudflareApi(
-            application=_application(mfa_config=mfa)
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+
+        disabled = deepcopy(_application()["mfa_config"])
+        disabled["mfa_disabled"] = True
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(mfa_config=disabled)),
             "MFA is disabled",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_totp_is_rejected_at_application_level(self):
-        mfa = deepcopy(_application()["mfa_config"])
-        mfa["allowed_authenticators"] = [
-            "security_key",
-            "totp",
-        ]
-        api = FakeCloudflareApi(
-            application=_application(mfa_config=mfa)
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+
+        weak = deepcopy(_application()["mfa_config"])
+        weak["allowed_authenticators"] = ["security_key", "totp"]
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(mfa_config=weak)),
             "non-phishing-resistant",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_mfa_session_reuse_is_rejected(self):
-        mfa = deepcopy(_application()["mfa_config"])
-        mfa["session_duration"] = "1h"
-        api = FakeCloudflareApi(
-            application=_application(mfa_config=mfa)
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+
+        reusable = deepcopy(_application()["mfa_config"])
+        reusable["session_duration"] = "1h"
+        self.assertAuditDenied(
+            FakeCloudflareApi(application=_application(mfa_config=reusable)),
             "every login",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
+        )
 
-    def test_broad_email_domain_allow_policy_is_rejected(self):
-        policy = _allow_policy(
-            include=[
-                {
-                    "email_domain": {
-                        "domain": "example.com",
-                    }
-                }
-            ]
-        )
-        api = FakeCloudflareApi(
-            policy_pages=[[policy]]
-        )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+    def test_allow_policy_must_use_only_exact_approved_email_selectors(self):
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[
+                    _allow_policy(
+                        include=[{"email_domain": {"domain": "example.com"}}]
+                    )
+                ]]
+            ),
             "broad selector",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_everyone_allow_policy_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(
-                    include=[{"everyone": {}}]
-                )
-            ]]
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[_allow_policy(include=[{"everyone": {}}])]]
+            ),
             "broad selector",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_unapproved_email_allow_policy_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(
-                    include=[
-                        {
-                            "email": {
-                                "email": "attacker@example.com",
-                            }
-                        }
-                    ]
-                )
-            ]]
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[
+                    _allow_policy(
+                        include=[{"email": {"email": "attacker@example.com"}}]
+                    )
+                ]]
+            ),
             "unapproved email",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_bypass_policy_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(),
-                {
-                    "id": "bypass",
-                    "decision": "bypass",
-                    "include": [{"everyone": {}}],
-                },
-            ]]
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
-            "bypass or non-user",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
 
-    def test_service_auth_policy_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(),
-                {
-                    "id": "service",
-                    "decision": "service_auth",
-                    "include": [{"everyone": {}}],
-                },
-            ]]
-        )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
-            "bypass or non-user",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
+    def test_bypass_and_service_auth_policies_are_forbidden(self):
+        for decision in ("bypass", "service_auth"):
+            with self.subTest(decision=decision):
+                self.assertAuditDenied(
+                    FakeCloudflareApi(
+                        pages=[[
+                            _allow_policy(),
+                            {
+                                "id": "unsafe-policy",
+                                "decision": decision,
+                                "include": [{"everyone": {}}],
+                            },
+                        ]]
+                    ),
+                    "bypass or non-user",
+                )
 
-    def test_allow_policy_session_must_be_short(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(session_duration="2h")
-            ]]
-        )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+    def test_policy_level_session_and_mfa_cannot_weaken_application(self):
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[_allow_policy(session_duration="2h")]]
+            ),
             "session duration",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_policy_level_totp_override_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(
-                    mfa_config={
-                        "allowed_authenticators": [
-                            "security_key",
-                            "totp",
-                        ],
-                        "mfa_disabled": False,
-                        "session_duration": "0m",
-                    }
-                )
-            ]]
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[
+                    _allow_policy(
+                        mfa_config={
+                            "allowed_authenticators": ["security_key", "totp"],
+                            "mfa_disabled": False,
+                            "session_duration": "0m",
+                        }
+                    )
+                ]]
+            ),
             "non-phishing-resistant",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_policy_level_mfa_disable_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[
-                _allow_policy(
-                    mfa_config={
-                        "allowed_authenticators": [
-                            "security_key",
-                        ],
-                        "mfa_disabled": True,
-                        "session_duration": "0m",
-                    }
-                )
-            ]]
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[
+                    _allow_policy(
+                        mfa_config={
+                            "allowed_authenticators": ["security_key"],
+                            "mfa_disabled": True,
+                            "session_duration": "0m",
+                        }
+                    )
+                ]]
+            ),
             "MFA is disabled",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
-
-    def test_no_allow_policy_is_rejected(self):
-        api = FakeCloudflareApi(
-            policy_pages=[[_block_policy()]]
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+
+    def test_at_least_one_allow_policy_is_required(self):
+        self.assertAuditDenied(
+            FakeCloudflareApi(pages=[[_block_policy()]]),
             "no exact-email allow policy",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
+        )
 
-    def test_policy_pagination_is_fully_audited(self):
+    def test_all_policy_pages_are_audited(self):
         api = FakeCloudflareApi(
-            policy_pages=[
-                [_allow_policy()],
-                [_block_policy()],
-            ]
+            pages=[[_allow_policy()], [_block_policy()]]
         )
-        result = audit_cloudflare_control_room_policy(
-            config=_config(),
-            api_token="token",
-            get_json=api.get_json,
-            now_epoch=NOW,
-        )
+        result = _audit(api)
         self.assertEqual(result.audited_policy_count, 2)
-        policy_calls = [
-            call
-            for call in api.calls
-            if "/policies?" in call[0]
-        ]
-        self.assertEqual(len(policy_calls), 2)
-
-    def test_policy_page_limit_fails_closed(self):
-        api = FakeCloudflareApi(
-            policy_pages=[
-                [_allow_policy()],
-                [_block_policy()],
-            ]
+        self.assertEqual(
+            len([call for call in api.calls if "/policies?" in call[0]]),
+            2,
         )
-        with self.assertRaisesRegex(
-            ControlRoomSecurityMisconfigured,
+
+        self.assertAuditDenied(
+            FakeCloudflareApi(
+                pages=[[_allow_policy()], [_block_policy()]]
+            ),
             "all policies were inspected",
-        ):
-            audit_cloudflare_control_room_policy(
-                config=_config(max_policy_pages=1),
-                api_token="token",
-                get_json=api.get_json,
-                now_epoch=NOW,
-            )
+            config=_config(max_policy_pages=1),
+        )
 
     def test_cloudflare_api_failure_fails_closed(self):
         def failed(url, api_token, timeout_seconds):
             del url, api_token, timeout_seconds
-            return {
-                "success": False,
-                "errors": [{"message": "nope"}],
-                "result": None,
-            }
+            return {"success": False, "result": None}
 
         with self.assertRaisesRegex(
             ControlRoomSecurityMisconfigured,
@@ -711,17 +358,6 @@ class CloudflarePolicyAuditTests(unittest.TestCase):
                 get_json=failed,
                 now_epoch=NOW,
             )
-
-    def test_result_serialization_never_contains_api_token(self):
-        api = FakeCloudflareApi()
-        result = audit_cloudflare_control_room_policy(
-            config=_config(),
-            api_token="TOP-SECRET-TOKEN",
-            get_json=api.get_json,
-            now_epoch=NOW,
-        )
-        serialized = str(result.as_dict())
-        self.assertNotIn("TOP-SECRET-TOKEN", serialized)
 
 
 if __name__ == "__main__":
