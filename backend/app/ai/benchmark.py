@@ -76,10 +76,7 @@ GOLDEN_ARTICLE_SINGLE_PASS_CASES = (
             "confirmed the permanent transfer and thanked Silva for his time "
             "at the club. No transfer fee was disclosed."
         ),
-        url=(
-            "https://northbridge.example/news/"
-            "mateo-silva-signing"
-        ),
+        url="https://northbridge.example/news/mateo-silva-signing",
         expected_article_type="transfer_official",
         required_facts=(
             "Mateo Silva",
@@ -114,9 +111,7 @@ GOLDEN_ARTICLE_SINGLE_PASS_CASES = (
     ),
     ArticleBenchmarkCase(
         case_id="transfer-roundup-grades",
-        title=(
-            "Summer transfer grades: ranking Harbor City's five signings"
-        ),
+        title="Summer transfer grades: ranking Harbor City's five signings",
         text=(
             "Harbor City completed five first-team signings during the summer "
             "window. This review grades each deal from A to F, comparing fee, "
@@ -150,10 +145,7 @@ GOLDEN_ARTICLE_SINGLE_PASS_CASES = (
             "rehabilitation. Riverside said the timetable will be reviewed "
             "during recovery and wished the player well."
         ),
-        url=(
-            "https://riverside.example/medical-update/"
-            "luis-moreno-acl"
-        ),
+        url="https://riverside.example/medical-update/luis-moreno-acl",
         expected_article_type="injury_confirmed",
         required_facts=(
             "Luis Moreno",
@@ -162,7 +154,6 @@ GOLDEN_ARTICLE_SINGLE_PASS_CASES = (
         ),
     ),
 )
-
 
 _CASES_BY_ID = {
     case.case_id: case
@@ -186,20 +177,7 @@ class ArticleBenchmarkObservationScore:
     total_tokens: int
 
     def as_dict(self) -> dict[str, object]:
-        return {
-            "case_id": self.case_id,
-            "resource_id": self.resource_id,
-            "success": self.success,
-            "json_valid": self.json_valid,
-            "classification_correct": self.classification_correct,
-            "bullet_contract_met": self.bullet_contract_met,
-            "required_fact_hits": self.required_fact_hits,
-            "required_fact_count": self.required_fact_count,
-            "required_fact_coverage": self.required_fact_coverage,
-            "overall_score": self.overall_score,
-            "latency_ms": self.latency_ms,
-            "total_tokens": self.total_tokens,
-        }
+        return dict(self.__dict__)
 
 
 @dataclass(frozen=True)
@@ -216,20 +194,7 @@ class ArticleBenchmarkResourceSummary:
     average_total_tokens: float
 
     def as_dict(self) -> dict[str, object]:
-        return {
-            "resource_id": self.resource_id,
-            "observation_count": self.observation_count,
-            "success_count": self.success_count,
-            "average_score": self.average_score,
-            "classification_accuracy": self.classification_accuracy,
-            "json_valid_rate": self.json_valid_rate,
-            "bullet_contract_rate": self.bullet_contract_rate,
-            "average_required_fact_coverage": (
-                self.average_required_fact_coverage
-            ),
-            "average_latency_ms": self.average_latency_ms,
-            "average_total_tokens": self.average_total_tokens,
-        }
+        return dict(self.__dict__)
 
 
 @dataclass(frozen=True)
@@ -252,17 +217,13 @@ class ArticleBenchmarkReport:
         }
 
 
-def article_benchmark_case(
-    case_id: str,
-) -> ArticleBenchmarkCase:
+def article_benchmark_case(case_id: str) -> ArticleBenchmarkCase:
     normalized = str(case_id or "").strip()
-
     try:
         return _CASES_BY_ID[normalized]
     except KeyError as error:
         raise KeyError(
-            "Unknown article benchmark case: "
-            + normalized
+            "Unknown article benchmark case: " + normalized
         ) from error
 
 
@@ -274,7 +235,6 @@ def select_article_benchmark_cases(
         if case_ids is not None
         else DEFAULT_LIVE_BENCHMARK_CASE_IDS
     )
-
     if not selected_ids:
         raise ValueError("At least one benchmark case is required.")
 
@@ -282,10 +242,8 @@ def select_article_benchmark_cases(
         article_benchmark_case(case_id)
         for case_id in selected_ids
     )
-
     if len({case.case_id for case in cases}) != len(cases):
         raise ValueError("Duplicate benchmark case IDs are not allowed.")
-
     return cases
 
 
@@ -296,7 +254,6 @@ def _captured_article_single_pass_prompt(
 
     def capture_generator(**kwargs):
         captured.update(kwargs)
-
         return SimpleNamespace(
             text=json.dumps(
                 {
@@ -340,41 +297,32 @@ def _captured_article_single_pass_prompt(
         raise RuntimeError(
             "Production article prompt capture returned unexpected task mode."
         )
-
     if model != "gemini-3.5-flash":
         raise RuntimeError(
             "Production article prompt capture returned unexpected baseline model."
         )
-
     if not isinstance(prompt, str) or not prompt.strip():
         raise RuntimeError("Production article prompt capture returned no prompt.")
-
     return prompt
 
 
 def compile_article_single_pass_evaluation_cases(
     cases: Sequence[ArticleBenchmarkCase],
 ) -> tuple[EvaluationCase, ...]:
-    compiled = []
-
-    for case in tuple(cases):
-        compiled.append(
-            EvaluationCase(
-                case_id=case.case_id,
-                task_id=ARTICLE_SINGLE_PASS,
-                contents=_captured_article_single_pass_prompt(case),
-            )
+    return tuple(
+        EvaluationCase(
+            case_id=case.case_id,
+            task_id=ARTICLE_SINGLE_PASS,
+            contents=_captured_article_single_pass_prompt(case),
         )
-
-    return tuple(compiled)
+        for case in tuple(cases)
+    )
 
 
 def build_article_single_pass_benchmark_plan(
     *,
     case_ids: Sequence[str] | None = None,
-    candidate_resource_ids: Sequence[str] = (
-        DEFAULT_CHALLENGER_RESOURCE_IDS
-    ),
+    candidate_resource_ids: Sequence[str] = DEFAULT_CHALLENGER_RESOURCE_IDS,
     budget: EvaluationBudget | None = None,
     capacity_configured_resolver=None,
 ) -> tuple[tuple[ArticleBenchmarkCase, ...], EvaluationPlan]:
@@ -386,7 +334,6 @@ def build_article_single_pass_benchmark_plan(
         "include_primary": True,
         "budget": budget or EvaluationBudget(),
     }
-
     if capacity_configured_resolver is not None:
         kwargs["capacity_configured_resolver"] = (
             capacity_configured_resolver
@@ -396,28 +343,25 @@ def build_article_single_pass_benchmark_plan(
         evaluation_cases,
         **kwargs,
     )
-
     return cases, plan
 
 
 def _output_text(output: Any) -> str:
-    if isinstance(output, Mapping):
-        value = output.get("text", "")
-    else:
-        value = getattr(output, "text", "")
-
+    value = (
+        output.get("text", "")
+        if isinstance(output, Mapping)
+        else getattr(output, "text", "")
+    )
     return str(value or "").strip()
 
 
 def _parsed_json_payload(output: Any) -> tuple[bool, dict[str, Any]]:
     raw = _output_text(output)
-
     if not raw:
         return False, {}
 
     start = raw.find("{")
     end = raw.rfind("}")
-
     if start != -1 and end != -1 and end > start:
         raw = raw[start:end + 1]
 
@@ -425,11 +369,11 @@ def _parsed_json_payload(output: Any) -> tuple[bool, dict[str, Any]]:
         parsed = json.loads(raw)
     except Exception:
         return False, {}
-
-    if not isinstance(parsed, dict):
-        return False, {}
-
-    return True, parsed
+    return (
+        (True, parsed)
+        if isinstance(parsed, dict)
+        else (False, {})
+    )
 
 
 def score_article_single_pass_observation(
@@ -440,14 +384,8 @@ def score_article_single_pass_observation(
     if observation.case_id != case.case_id:
         raise ValueError("Observation/case ID mismatch.")
 
-    json_valid, payload = _parsed_json_payload(
-        observation.output
-    )
-
-    article_type = str(
-        payload.get("article_type", "")
-    ).strip()
-
+    json_valid, payload = _parsed_json_payload(observation.output)
+    article_type = str(payload.get("article_type", "")).strip()
     classification_correct = bool(
         observation.success
         and json_valid
@@ -459,13 +397,11 @@ def score_article_single_pass_observation(
         [
             str(item).strip()
             for item in raw_bullets
-            if isinstance(item, str)
-            and str(item).strip()
+            if isinstance(item, str) and str(item).strip()
         ]
         if isinstance(raw_bullets, list)
         else []
     )
-
     bullet_contract_met = bool(
         observation.success
         and json_valid
@@ -480,7 +416,6 @@ def score_article_single_pass_observation(
             str(payload.get("reason", "")),
         ]
     ).lower()
-
     required_fact_hits = sum(
         1
         for fact in case.required_facts
@@ -499,7 +434,6 @@ def score_article_single_pass_observation(
         + (0.15 if bullet_contract_met else 0.0)
         + (0.25 * required_fact_coverage)
     )
-
     if not observation.success:
         overall_score = 0.0
 
@@ -512,24 +446,19 @@ def score_article_single_pass_observation(
         bullet_contract_met=bullet_contract_met,
         required_fact_hits=required_fact_hits,
         required_fact_count=required_fact_count,
-        required_fact_coverage=round(
-            required_fact_coverage,
-            6,
-        ),
-        overall_score=round(
-            overall_score,
-            6,
-        ),
+        required_fact_coverage=round(required_fact_coverage, 6),
+        overall_score=round(overall_score, 6),
         latency_ms=int(observation.latency_ms),
         total_tokens=int(observation.total_tokens),
     )
 
 
 def _average(values: Sequence[float]) -> float:
-    if not values:
-        return 0.0
-
-    return sum(float(value) for value in values) / len(values)
+    return (
+        sum(float(value) for value in values) / len(values)
+        if values
+        else 0.0
+    )
 
 
 def score_article_single_pass_run(
@@ -541,7 +470,6 @@ def score_article_single_pass_run(
         case.case_id: case
         for case in cases
     }
-
     scores = []
 
     for observation in run.observations:
@@ -552,7 +480,6 @@ def score_article_single_pass_run(
                 "Evaluation observation has no benchmark case: "
                 + observation.case_id
             ) from error
-
         scores.append(
             score_article_single_pass_observation(
                 observation,
@@ -560,91 +487,68 @@ def score_article_single_pass_run(
             )
         )
 
-    summaries = []
     resource_ids = []
-
     for score in scores:
         if score.resource_id not in resource_ids:
             resource_ids.append(score.resource_id)
 
+    summaries = []
     for resource_id in resource_ids:
         resource_scores = [
             score
             for score in scores
             if score.resource_id == resource_id
         ]
-        count = len(resource_scores)
-
         summaries.append(
             ArticleBenchmarkResourceSummary(
                 resource_id=resource_id,
-                observation_count=count,
+                observation_count=len(resource_scores),
                 success_count=sum(
-                    1
-                    for score in resource_scores
-                    if score.success
+                    1 for score in resource_scores if score.success
                 ),
                 average_score=round(
-                    _average(
-                        [
-                            score.overall_score
-                            for score in resource_scores
-                        ]
-                    ),
-                    6,
+                    _average([s.overall_score for s in resource_scores]), 6
                 ),
                 classification_accuracy=round(
-                    _average(
-                        [
-                            1.0 if score.classification_correct else 0.0
-                            for score in resource_scores
-                        ]
-                    ),
+                    _average([
+                        1.0 if s.classification_correct else 0.0
+                        for s in resource_scores
+                    ]),
                     6,
                 ),
                 json_valid_rate=round(
-                    _average(
-                        [
-                            1.0 if score.json_valid else 0.0
-                            for score in resource_scores
-                        ]
-                    ),
+                    _average([
+                        1.0 if s.json_valid else 0.0
+                        for s in resource_scores
+                    ]),
                     6,
                 ),
                 bullet_contract_rate=round(
-                    _average(
-                        [
-                            1.0 if score.bullet_contract_met else 0.0
-                            for score in resource_scores
-                        ]
-                    ),
+                    _average([
+                        1.0 if s.bullet_contract_met else 0.0
+                        for s in resource_scores
+                    ]),
                     6,
                 ),
                 average_required_fact_coverage=round(
-                    _average(
-                        [
-                            score.required_fact_coverage
-                            for score in resource_scores
-                        ]
-                    ),
+                    _average([
+                        s.required_fact_coverage
+                        for s in resource_scores
+                    ]),
                     6,
                 ),
                 average_latency_ms=round(
-                    _average(
-                        [
-                            float(score.latency_ms)
-                            for score in resource_scores
-                        ]
-                    ),
+                    _average([
+                        float(s.latency_ms)
+                        for s in resource_scores
+                    ]),
                     3,
                 ),
                 average_total_tokens=round(
-                    _average(
-                        [
-                            float(score.total_tokens)
-                            for score in resource_scores
-                        ]
-                    ),
+                    _average([
+                        float(s.total_tokens)
+                        for s in resource_scores
+                    ]),
                     3,
                 ),
             )
@@ -657,7 +561,6 @@ def score_article_single_pass_run(
             summary.resource_id,
         )
     )
-
     return ArticleBenchmarkReport(
         version=ARTICLE_BENCHMARK_VERSION,
         observation_scores=tuple(scores),
