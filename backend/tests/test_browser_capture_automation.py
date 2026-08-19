@@ -1169,8 +1169,13 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             source,
         )
 
-    def test_main_registers_worker_lifecycle(self):
-        source = Path(main.__file__).read_text(
+    def test_application_composition_registers_worker_lifecycle(self):
+        source = (
+            BACKEND_DIR
+            / "app"
+            / "application"
+            / "composition.py"
+        ).read_text(
             encoding="utf-8"
         )
         self.assertEqual(
@@ -1181,12 +1186,31 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
         )
 
     def test_main_still_defers_database_initialization_to_startup(self):
-        source = Path(main.__file__).read_text(
+        main_source = Path(main.__file__).read_text(
             encoding="utf-8"
         )
+        composition_source = (
+            BACKEND_DIR
+            / "app"
+            / "application"
+            / "composition.py"
+        ).read_text(
+            encoding="utf-8"
+        )
+
         self.assertIn(
-            'app.add_event_handler(\n    "startup",\n    init_db,\n)',
-            source,
+            "register_startup_handler(\n"
+            "    app,\n"
+            "    init_db,\n"
+            ")",
+            main_source,
+        )
+        self.assertIn(
+            'app.add_event_handler(\n'
+            '        "startup",\n'
+            '        handler,\n'
+            '    )',
+            composition_source,
         )
 
     def test_service_does_not_call_live_merit_release(self):
