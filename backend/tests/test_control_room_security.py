@@ -36,6 +36,7 @@ def _identity(**overrides) -> VerifiedControlRoomIdentity:
         "token_verified": True,
         "subject": "user-123",
         "email": "owner@example.com",
+        "email_verified": True,
         "issuer": "https://access.example.com",
         "audiences": ("control-room-audience",),
         "issued_at_epoch": NOW - 600,
@@ -75,6 +76,7 @@ class ControlRoomSecurityTests(unittest.TestCase):
         self.assertEqual(principal.version, CONTROL_ROOM_SECURITY_VERSION)
         self.assertEqual(principal.subject, "user-123")
         self.assertEqual(principal.email, "owner@example.com")
+        self.assertTrue(principal.email_verified)
         self.assertEqual(principal.audience, "control-room-audience")
         self.assertEqual(principal.auth_strength, "phishing_resistant")
         self.assertEqual(principal.auth_methods, ("passkey", "webauthn"))
@@ -113,6 +115,14 @@ class ControlRoomSecurityTests(unittest.TestCase):
         with self.assertRaisesRegex(ControlRoomAccessDenied, "email"):
             authorize_control_room_identity(
                 _identity(email=""),
+                policy=_policy(),
+                now_epoch=NOW,
+            )
+
+    def test_unverified_email_is_denied(self):
+        with self.assertRaisesRegex(ControlRoomAccessDenied, "not verified"):
+            authorize_control_room_identity(
+                _identity(email_verified=False),
                 policy=_policy(),
                 now_epoch=NOW,
             )
