@@ -5,7 +5,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 
-AI_RESOURCE_REGISTRY_VERSION = "google-ai-resource-registry-v1"
+AI_RESOURCE_REGISTRY_VERSION = "google-ai-resource-registry-v2"
 
 GENERATION = "generation"
 EMBEDDING = "embedding"
@@ -49,6 +49,18 @@ class AIResourceSpec:
 
 
 _RESOURCE_SPECS = (
+    AIResourceSpec(
+        resource_id="gemini-3.7-flash",
+        provider="google",
+        family="gemini",
+        resource_kind=GENERATION,
+        execution_backend=GENERATE_CONTENT,
+        hosted=True,
+        stable=True,
+        preview=False,
+        open_weights=False,
+        requires_project_capacity_config=True,
+    ),
     AIResourceSpec(
         resource_id="gemini-3.6-flash",
         provider="google",
