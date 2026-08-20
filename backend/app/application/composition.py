@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from inspect import isawaitable
 from typing import Any, Callable
 
 from fastapi import FastAPI
@@ -19,13 +21,168 @@ from app.workflows import browser_capture_automation
 
 APP_TITLE = "Sportabase API (RSS-first)"
 APP_VERSION = "0.3.0"
+SPORTABASE_LIFESPAN_VERSION = "sportabase-fastapi-lifespan-v1"
+
+_LIFESPAN_MANAGED_STATE = "_sportabase_lifespan_managed"
+_STARTUP_HANDLERS_STATE = "_sportabase_startup_handlers"
+_SHUTDOWN_HANDLERS_STATE = "_sportabase_shutdown_handlers"
+
+
+def _managed_lifespan_handlers(
+    app: FastAPI,
+    state_name: str,
+) -> list[Callable[[], Any]]:
+    state = getattr(app, "state", None)
+    if state is None:
+        raise RuntimeError(
+            "Sportabase application lifecycle requires FastAPI state."
+        )
+
+    handlers = getattr(state, state_name, None)
+    if handlers is None:
+        handlers = []
+        setattr(state, state_name, handlers)
+
+    return handlers
+
+
+async def _run_lifecycle_handler(
+    handler: Callable[[], Any],
+) -> None:
+    result = handler()
+    if isawaitable(result):
+        await result
+
+
+@asynccontextmanager
+async def _application_lifespan(app: FastAPI):
+    startup_handlers = tuple(
+        _managed_lifespan_handlers(
+            app,
+            _STARTUP_HANDLERS_STATE,
+        )
+    )
+
+    for handler in startup_handlers:
+        await _run_lifecycle_handler(handler)
+
+    try:
+        yield
+    finally:
+        shutdown_handlers = tuple(
+            _managed_lifespan_handlers(
+                app,
+                _SHUTDOWN_HANDLERS_STATE,
+            )
+        )
+        for handler in shutdown_handlers:
+            await _run_lifecycle_handler(handler)
+
+
+def _uses_managed_lifespan(app: object) -> bool:
+    state = getattr(app, "state", None)
+    return bool(
+        state is not None
+        and getattr(state, _LIFESPAN_MANAGED_STATE, False)
+    )
+
+
+def register_startup_handler(
+    app: FastAPI,
+    handler: Callable[[], Any],
+) -> None:
+    if not callable(handler):
+        raise TypeError("Startup handler must be callable.")
+
+    if _uses_managed_lifespan(app):
+        _managed_lifespan_handlers(
+            app,
+            _STARTUP_HANDLERS_STATE,
+        ).append(handler)
+        return
+
+    legacy_registrar = getattr(app, "add_event_handler", None)
+    if callable(legacy_registrar):
+        legacy_registrar("startup", handler)
+        return
+
+    raise RuntimeError(
+        "Application does not support Sportabase startup registration."
+    )
+
+
+def register_shutdown_handler(
+    app: FastAPI,
+    handler: Callable[[], Any],
+) -> None:
+    if not callable(handler):
+        raise TypeError("Shutdown handler must be callable.")
+
+    if _uses_managed_lifespan(app):
+        _managed_lifespan_handlers(
+            app,
+            _SHUTDOWN_HANDLERS_STATE,
+        ).append(handler)
+        return
+
+    legacy_registrar = getattr(app, "add_event_handler", None)
+    if callable(legacy_registrar):
+        legacy_registrar("shutdown", handler)
+        return
+
+    raise RuntimeError(
+        "Application does not support Sportabase shutdown registration."
+    )
+
+
+def _install_event_handler_compatibility(app: FastAPI) -> None:
+    """Bridge legacy internal registrars onto the supported lifespan API.
+
+    Starlette 1.0 removed ``add_event_handler``. Some existing Sportabase
+    modules still register startup/shutdown callbacks through that interface.
+    This instance-local bridge keeps those modules working while FastAPI itself
+    runs exclusively through the lifespan context above.
+    """
+
+    def add_event_handler(
+        event_type: str,
+        handler: Callable[[], Any],
+    ) -> None:
+        normalized = str(event_type or "").strip().casefold()
+        if normalized == "startup":
+            register_startup_handler(app, handler)
+            return
+        if normalized == "shutdown":
+            register_shutdown_handler(app, handler)
+            return
+        raise ValueError(
+            "Sportabase lifecycle compatibility only supports startup/shutdown."
+        )
+
+    setattr(app, "add_event_handler", add_event_handler)
 
 
 def create_application() -> FastAPI:
     app = FastAPI(
         title=APP_TITLE,
         version=APP_VERSION,
+        lifespan=_application_lifespan,
     )
+
+    setattr(
+        app.state,
+        _LIFESPAN_MANAGED_STATE,
+        True,
+    )
+    _managed_lifespan_handlers(
+        app,
+        _STARTUP_HANDLERS_STATE,
+    )
+    _managed_lifespan_handlers(
+        app,
+        _SHUTDOWN_HANDLERS_STATE,
+    )
+    _install_event_handler_compatibility(app)
 
     app.add_middleware(
         CORSMiddleware,
@@ -36,16 +193,6 @@ def create_application() -> FastAPI:
     )
 
     return app
-
-
-def register_startup_handler(
-    app: FastAPI,
-    handler: Callable[[], Any],
-) -> None:
-    app.add_event_handler(
-        "startup",
-        handler,
-    )
 
 
 def compose_application(
