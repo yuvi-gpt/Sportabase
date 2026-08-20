@@ -174,6 +174,9 @@ class ControlRoomAdminRouteTests(unittest.TestCase):
         app = FastAPI()
 
         with patch(
+            "app.application.config.CONTROL_ROOM_ENABLED",
+            False,
+        ), patch(
             "app.application.composition.browser_capture_automation."
             "register_browser_capture_automation_lifecycle"
         ):

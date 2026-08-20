@@ -430,7 +430,11 @@ class MainDecompositionContractTests(
         self,
     ):
         startup_handlers = list(
-            main.app.router.on_startup
+            getattr(
+                main.app.state,
+                "_sportabase_startup_handlers",
+                (),
+            )
         )
 
         self.assertIn(

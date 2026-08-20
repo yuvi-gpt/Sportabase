@@ -1189,13 +1189,12 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
         main_source = Path(main.__file__).read_text(
             encoding="utf-8"
         )
-        composition_source = (
-            BACKEND_DIR
-            / "app"
-            / "application"
-            / "composition.py"
-        ).read_text(
-            encoding="utf-8"
+        startup_handlers = tuple(
+            getattr(
+                main.app.state,
+                "_sportabase_startup_handlers",
+                (),
+            )
         )
 
         self.assertIn(
@@ -1206,11 +1205,8 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             main_source,
         )
         self.assertIn(
-            'app.add_event_handler(\n'
-            '        "startup",\n'
-            '        handler,\n'
-            '    )',
-            composition_source,
+            main.init_db,
+            startup_handlers,
         )
 
     def test_service_does_not_call_live_merit_release(self):
