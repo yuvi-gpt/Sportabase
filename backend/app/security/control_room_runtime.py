@@ -28,6 +28,9 @@ from app.security.control_room import (
     authorize_control_room_identity,
     normalize_email_allowlist,
 )
+from app.security.control_room_origin import (
+    protect_control_room_guard_with_origin_provenance,
+)
 
 
 CONTROL_ROOM_RUNTIME_VERSION = "sportabase-control-room-runtime-v1"
@@ -356,11 +359,20 @@ def build_default_control_room_guard() -> Callable[
     """Build the production guard without performing network I/O.
 
     Cloudflare policy and JWKS requests remain lazy and occur only when a
-    Control Room request reaches the protected route.
+    Control Room request reaches the protected route. The outer provenance
+    check runs first so direct-origin traffic cannot reach JWT or policy-audit
+    work without the Worker-held shared secret.
     """
+    from app.application import config as application_config
 
-    return build_control_room_runtime_guard(
+    inner_guard = build_control_room_runtime_guard(
         config=runtime_config_from_application_config(),
+    )
+    return protect_control_room_guard_with_origin_provenance(
+        inner_guard=inner_guard,
+        expected_secret=(
+            application_config.CONTROL_ROOM_ORIGIN_PROVENANCE_SECRET
+        ),
     )
 
 
