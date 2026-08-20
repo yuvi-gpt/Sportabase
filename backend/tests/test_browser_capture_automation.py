@@ -525,55 +525,46 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             stored["capture_record_id"],
             now=2000,
         )
-        job = automation.claim_next_browser_capture_job(
-            worker_id="worker-a",
-            analysis_version=ANALYSIS_VERSION,
-            scoring_version=SCORING_VERSION,
-            connection_factory=self.factory,
-            lease_seconds=30,
-            now_provider=lambda: 1000,
-        )
+        job = self.claim(now=1000)
         self.assertIsNone(job)
 
-    def test_expired_lease_is_requeued(self):
-        job = self.claimed(now=1000)
-        self.execute(
-            "UPDATE browser_capture_automation_jobs "
-            "SET lease_expires_at_epoch = 999 "
-            "WHERE id = ?",
-            (job["id"],),
-        )
-        reclaimed = self.claim(
+    def test_nonexpired_running_job_is_not_double_claimed(self):
+        self.claimed(now=1000)
+        second = self.claim(
             worker="worker-b",
-            now=1001,
+            now=1010,
         )
-        self.assertIsNotNone(reclaimed)
-        self.assertEqual(
-            reclaimed["lease_owner"],
-            "worker-b",
-        )
-        self.assertEqual(
-            int(reclaimed["attempts"]),
-            2,
-        )
+        self.assertIsNone(second)
 
-    def test_expired_final_lease_is_failed(self):
+    def test_expired_lease_is_reclaimed_before_max_attempts(self):
+        first = self.claimed(now=1000)
+        second = self.claim(
+            worker="worker-b",
+            now=1040,
+        )
+        self.assertIsNotNone(second)
+        self.assertEqual(second["id"], first["id"])
+        self.assertEqual(second["lease_owner"], "worker-b")
+        self.assertEqual(int(second["attempts"]), 2)
+
+    def test_expired_final_attempt_becomes_failed(self):
         job = self.claimed(now=1000)
         self.execute(
-            "UPDATE browser_capture_automation_jobs "
-            "SET lease_expires_at_epoch = 999, attempts = max_attempts "
-            "WHERE id = ?",
+            """
+            UPDATE browser_capture_automation_jobs
+            SET attempts = max_attempts,
+                lease_expires_at_epoch = 1001
+            WHERE id = ?
+            """,
             (job["id"],),
         )
-        self.assertIsNone(
-            self.claim(
-                worker="worker-b",
-                now=1001,
-            )
+        next_job = self.claim(
+            worker="worker-b",
+            now=1040,
         )
+        self.assertIsNone(next_job)
         row = self.one(
-            "SELECT status, last_outcome FROM "
-            "browser_capture_automation_jobs WHERE id = ?",
+            "SELECT * FROM browser_capture_automation_jobs WHERE id = ?",
             (job["id"],),
         )
         self.assertEqual(row["status"], "failed")
@@ -582,146 +573,369 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             "lease_expired_retry_exhausted",
         )
 
-    def test_complete_claimed_job(self):
-        job = self.claimed(now=1000)
-        result = automation.complete_browser_capture_job(
-            job_id=job["id"],
-            worker_id="worker-a",
-            result={"ok": True},
-            connection_factory=self.factory,
-            now_provider=lambda: 1010,
-        )
-        self.assertEqual(result["status"], "completed")
-        row = self.one(
-            "SELECT status, result_json FROM browser_capture_automation_jobs "
-            "WHERE id = ?",
-            (job["id"],),
-        )
-        self.assertEqual(row["status"], "completed")
-        self.assertEqual(
-            json.loads(row["result_json"]),
-            {"ok": True},
-        )
-
-    def test_complete_requires_matching_worker(self):
+    def test_update_rejects_wrong_lease_owner(self):
         job = self.claimed()
         with self.assertRaises(
             automation.BrowserCaptureAutomationIntegrityError
         ):
-            automation.complete_browser_capture_job(
+            automation._update_claimed_job(
                 job_id=job["id"],
-                worker_id="wrong",
-                result={"ok": True},
+                worker_id="wrong-worker",
+                status="completed",
+                available_at_epoch=1000,
+                last_outcome="completed_shadow",
+                error_type="",
+                error_detail="",
+                result={},
+                finished=True,
                 connection_factory=self.factory,
-                now_provider=lambda: 1001,
+                now_provider=lambda: 1000,
             )
 
-    def test_retry_schedules_backoff(self):
-        job = self.claimed(now=1000)
-        result = automation.retry_browser_capture_job(
-            job_id=job["id"],
-            worker_id="worker-a",
-            outcome="provider_error",
-            error_type="RuntimeError",
-            error_detail="boom",
-            connection_factory=self.factory,
-            retry_base_seconds=10,
-            retry_cap_seconds=60,
-            now_provider=lambda: 1001,
-        )
-        self.assertEqual(result["status"], "pending")
+    def test_retry_delay_is_exponential(self):
         self.assertEqual(
-            int(result["available_at_epoch"]),
-            1011,
+            automation._retry_delay(
+                1,
+                base_seconds=10,
+                cap_seconds=60,
+            ),
+            10,
+        )
+        self.assertEqual(
+            automation._retry_delay(
+                2,
+                base_seconds=10,
+                cap_seconds=60,
+            ),
+            20,
         )
 
-    def test_retry_fails_after_max_attempts(self):
-        job = self.claimed(now=1000)
-        self.execute(
-            "UPDATE browser_capture_automation_jobs "
-            "SET attempts = max_attempts WHERE id = ?",
+    def test_retry_delay_is_capped(self):
+        self.assertEqual(
+            automation._retry_delay(
+                10,
+                base_seconds=10,
+                cap_seconds=60,
+            ),
+            60,
+        )
+
+    def test_successful_runner_completes_job(self):
+        job = self.claimed()
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=lambda **kwargs: safe_shadow_result(
+                kwargs["anchor_capture_record_id"]
+            ),
+        )
+        self.assertEqual(result["status"], "completed")
+        row = self.one(
+            "SELECT * FROM browser_capture_automation_jobs WHERE id = ?",
             (job["id"],),
         )
-        result = automation.retry_browser_capture_job(
-            job_id=job["id"],
+        self.assertEqual(row["status"], "completed")
+        self.assertEqual(row["last_outcome"], "completed_shadow")
+
+    def test_success_result_is_compact_audit_summary(self):
+        job = self.claimed()
+        automation.execute_claimed_browser_capture_job(
+            job=job,
             worker_id="worker-a",
-            outcome="provider_error",
-            error_type="RuntimeError",
-            error_detail="boom",
             connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=lambda **kwargs: safe_shadow_result(
+                kwargs["anchor_capture_record_id"]
+            ),
+        )
+        row = self.one(
+            "SELECT result_json FROM browser_capture_automation_jobs WHERE id = ?",
+            (job["id"],),
+        )
+        result = json.loads(row["result_json"])
+        self.assertEqual(result["claim_id"], "claim-123")
+        self.assertFalse(result["policy"]["affects_live_merit"])
+        self.assertNotIn("orchestration", result)
+
+    def retry_exception_case(self, error, expected_outcome):
+        job = self.claimed()
+
+        def runner(**kwargs):
+            raise error
+
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
             retry_base_seconds=10,
             retry_cap_seconds=60,
-            now_provider=lambda: 1001,
+            now_provider=lambda: 1000,
+            runner=runner,
+        )
+        self.assertEqual(result["status"], "retry_scheduled")
+        row = self.one(
+            "SELECT * FROM browser_capture_automation_jobs WHERE id = ?",
+            (job["id"],),
+        )
+        self.assertEqual(row["status"], "pending")
+        self.assertEqual(row["last_outcome"], expected_outcome)
+        self.assertEqual(int(row["available_at_epoch"]), 1010)
+
+    def test_baseline_unavailable_is_retryable(self):
+        self.retry_exception_case(
+            history.MultimodalInboxHistoryAutoShadowBaselineUnavailable(
+                "baseline not ready"
+            ),
+            "baseline_not_ready",
+        )
+
+    def test_lookup_unavailable_is_retryable(self):
+        self.retry_exception_case(
+            history.MultimodalInboxHistoryAutoShadowLookupError(
+                "db busy"
+            ),
+            "lookup_unavailable",
+        )
+
+    def test_provider_unavailable_is_retryable(self):
+        self.retry_exception_case(
+            history.MultimodalInboxHistoryAutoShadowProviderUnavailable(
+                "provider down"
+            ),
+            "provider_unavailable",
+        )
+
+    def test_selection_or_shadow_failure_is_retryable(self):
+        self.retry_exception_case(
+            history.MultimodalInboxHistoryAutoShadowExecutionError(
+                "no peer yet"
+            ),
+            "selection_or_shadow_not_ready",
+        )
+
+    def terminal_exception_case(self, error):
+        job = self.claimed()
+
+        def runner(**kwargs):
+            raise error
+
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=runner,
+        )
+        self.assertEqual(result["status"], "failed")
+        row = self.one(
+            "SELECT * FROM browser_capture_automation_jobs WHERE id = ?",
+            (job["id"],),
+        )
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(
+            row["last_outcome"],
+            "terminal_integrity_or_input_failure",
+        )
+
+    def test_runner_input_error_is_terminal(self):
+        self.terminal_exception_case(
+            history.MultimodalInboxHistoryAutoShadowInputError(
+                "invalid"
+            )
+        )
+
+    def test_runner_integrity_error_is_terminal(self):
+        self.terminal_exception_case(
+            history.MultimodalInboxHistoryAutoShadowIntegrityError(
+                "unsafe"
+            )
+        )
+
+    def test_unexpected_runtime_error_is_retryable(self):
+        self.retry_exception_case(
+            RuntimeError("temporary bug"),
+            "unexpected_runtime_failure",
+        )
+
+    def test_missing_client_factory_is_retryable(self):
+        job = self.claimed()
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=None,
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+        )
+        self.assertEqual(result["status"], "retry_scheduled")
+        self.assertEqual(
+            result["job"]["last_outcome"],
+            "provider_unavailable",
+        )
+
+    def test_none_client_is_retryable(self):
+        job = self.claimed()
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: None,
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+        )
+        self.assertEqual(result["status"], "retry_scheduled")
+
+    def test_missing_generator_is_retryable(self):
+        job = self.claimed()
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=None,
+            now_provider=lambda: 1000,
+        )
+        self.assertEqual(result["status"], "retry_scheduled")
+
+    def test_client_factory_exception_is_retryable(self):
+        job = self.claimed()
+
+        def broken_factory():
+            raise RuntimeError("provider construction failed")
+
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=broken_factory,
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+        )
+        self.assertEqual(result["status"], "retry_scheduled")
+        self.assertEqual(
+            result["job"]["last_outcome"],
+            "unexpected_runtime_failure",
+        )
+
+    def test_unsafe_completed_result_is_terminal(self):
+        job = self.claimed()
+        unsafe = safe_shadow_result(
+            job["capture_record_id"]
+        )
+        unsafe["policy"]["affects_live_merit"] = True
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=lambda **kwargs: unsafe,
         )
         self.assertEqual(result["status"], "failed")
 
-    def test_worker_disabled_does_not_start(self):
-        result = automation.start_browser_capture_automation_worker(
+    def test_wrong_runner_version_is_terminal(self):
+        job = self.claimed()
+        unsafe = safe_shadow_result(
+            job["capture_record_id"]
+        )
+        unsafe["version"] = "wrong"
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
             connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=lambda **kwargs: unsafe,
+        )
+        self.assertEqual(result["status"], "failed")
+
+    def test_retry_exhaustion_becomes_failed(self):
+        stored = self.store_web()
+        self.enqueue(stored["capture_record_id"])
+        self.execute(
+            "UPDATE browser_capture_automation_jobs SET max_attempts = 1"
+        )
+        job = self.claim(now=1000)
+
+        def runner(**kwargs):
+            raise history.MultimodalInboxHistoryAutoShadowBaselineUnavailable(
+                "still unavailable"
+            )
+
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=runner,
+        )
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            result["job"]["last_outcome"].startswith(
+                "retry_exhausted:"
+            )
+        )
+
+    def test_iteration_is_disabled_by_default(self):
+        result = automation.run_browser_capture_automation_iteration(
+            worker_id="worker-a",
             analysis_version=ANALYSIS_VERSION,
             scoring_version=SCORING_VERSION,
+            connection_factory=self.factory,
             gemini_client_factory=lambda: object(),
             gemini_generator=lambda **kwargs: {},
             env_getter=self.disabled_env,
+            now_provider=lambda: 1000,
         )
         self.assertEqual(result["status"], "disabled")
 
-    def test_worker_starts_once_and_stops(self):
-        with mock.patch.object(
-            automation,
-            "_worker_loop",
-            return_value=None,
-        ):
-            result = automation.start_browser_capture_automation_worker(
-                connection_factory=self.factory,
-                analysis_version=ANALYSIS_VERSION,
-                scoring_version=SCORING_VERSION,
-                gemini_client_factory=lambda: object(),
-                gemini_generator=lambda **kwargs: {},
-                env_getter=self.enabled_env,
-            )
-            self.assertEqual(result["status"], "started")
-            stopped = automation.stop_browser_capture_automation_worker(
-                join_timeout_seconds=0.5
-            )
-            self.assertEqual(stopped["status"], "stopped")
-
-    def test_worker_duplicate_start_is_idempotent(self):
-        release = mock.Mock()
-
-        def hold_worker(config):
-            del config
-            while not automation._WORKER_STOP.is_set():
-                automation._WORKER_STOP.wait(0.01)
-            release()
-
-        with mock.patch.object(
-            automation,
-            "_worker_loop",
-            side_effect=hold_worker,
-        ):
-            first = automation.start_browser_capture_automation_worker(
-                connection_factory=self.factory,
-                analysis_version=ANALYSIS_VERSION,
-                scoring_version=SCORING_VERSION,
-                gemini_client_factory=lambda: object(),
-                gemini_generator=lambda **kwargs: {},
-                env_getter=self.enabled_env,
-            )
-            second = automation.start_browser_capture_automation_worker(
-                connection_factory=self.factory,
-                analysis_version=ANALYSIS_VERSION,
-                scoring_version=SCORING_VERSION,
-                gemini_client_factory=lambda: object(),
-                gemini_generator=lambda **kwargs: {},
-                env_getter=self.enabled_env,
-            )
-            self.assertEqual(first["status"], "started")
-            self.assertEqual(second["status"], "already_running")
-
-        automation.stop_browser_capture_automation_worker(
-            join_timeout_seconds=0.5
+    def test_iteration_is_idle_without_jobs(self):
+        result = automation.run_browser_capture_automation_iteration(
+            worker_id="worker-a",
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            env_getter=self.enabled_env,
+            now_provider=lambda: 1000,
         )
+        self.assertEqual(result["status"], "idle")
+
+    def test_iteration_claims_and_executes_one_job(self):
+        stored = self.store_web()
+        self.enqueue(stored["capture_record_id"])
+        with mock.patch.object(
+            automation,
+            "execute_claimed_browser_capture_job",
+            return_value={"status": "completed"},
+        ) as execute:
+            result = automation.run_browser_capture_automation_iteration(
+                worker_id="worker-a",
+                analysis_version=ANALYSIS_VERSION,
+                scoring_version=SCORING_VERSION,
+                connection_factory=self.factory,
+                gemini_client_factory=lambda: object(),
+                gemini_generator=lambda **kwargs: {},
+                env_getter=self.enabled_env,
+                now_provider=lambda: 1000,
+            )
+        self.assertEqual(result["status"], "completed")
+        execute.assert_called_once()
 
     def test_lifecycle_registration_requires_app(self):
         with self.assertRaises(
@@ -749,11 +963,213 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "registered")
         self.assertEqual(
-            [event for event, _ in app.handlers],
+            [item[0] for item in app.handlers],
             ["startup", "shutdown"],
         )
 
-    def test_lifecycle_registered_once_in_composition(self):
+    def test_start_worker_disabled_does_not_spawn(self):
+        result = automation.start_browser_capture_automation_worker(
+            connection_factory=self.factory,
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            env_getter=self.disabled_env,
+        )
+        self.assertEqual(result["status"], "disabled")
+
+    def test_stop_worker_without_thread_is_safe(self):
+        result = automation.stop_browser_capture_automation_worker(
+            join_timeout_seconds=0.1
+        )
+        self.assertEqual(result["status"], "stopped")
+
+    def test_public_preview_enqueues_after_successful_store(self):
+        calls = []
+
+        def enqueue(**kwargs):
+            calls.append(kwargs)
+            return {"status": "enqueued"}
+
+        result = inbox.preview_and_maybe_store_browser_capture(
+            raw_capture=web_capture(),
+            short_video_threshold_seconds=180.0,
+            connection_factory=self.factory,
+            env_getter=self.enabled_env,
+            automation_enqueue=enqueue,
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+        )
+        self.assertTrue(result["capture_persisted"])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(
+            calls[0]["capture_record_id"],
+            result["capture_record_id"],
+        )
+        self.assertEqual(
+            calls[0]["analysis_version"],
+            ANALYSIS_VERSION,
+        )
+        self.assertEqual(
+            calls[0]["scoring_version"],
+            SCORING_VERSION,
+        )
+
+    def test_public_preview_queue_failure_is_fail_open(self):
+        def enqueue(**kwargs):
+            raise RuntimeError("queue unavailable")
+
+        result = inbox.preview_and_maybe_store_browser_capture(
+            raw_capture=web_capture(),
+            short_video_threshold_seconds=180.0,
+            connection_factory=self.factory,
+            env_getter=self.enabled_env,
+            automation_enqueue=enqueue,
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+        )
+        self.assertTrue(result["capture_persisted"])
+        self.assertEqual(
+            result["capture_inbox_status"],
+            "stored",
+        )
+
+    def test_disabled_inbox_never_calls_enqueue(self):
+        calls = []
+        result = inbox.preview_and_maybe_store_browser_capture(
+            raw_capture=web_capture(),
+            short_video_threshold_seconds=180.0,
+            connection_factory=self.factory,
+            env_getter=(
+                lambda key, default=None:
+                "0"
+                if key == inbox.BROWSER_CAPTURE_INBOX_FLAG
+                else default
+            ),
+            automation_enqueue=lambda **kwargs: calls.append(kwargs),
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+        )
+        self.assertFalse(result["capture_persisted"])
+        self.assertEqual(calls, [])
+
+    def test_replayed_capture_reuses_same_job(self):
+        first = inbox.preview_and_maybe_store_browser_capture(
+            raw_capture=web_capture(),
+            short_video_threshold_seconds=180.0,
+            connection_factory=self.factory,
+            env_getter=self.enabled_env,
+            automation_enqueue=automation.enqueue_browser_capture_job,
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+        )
+        second = inbox.preview_and_maybe_store_browser_capture(
+            raw_capture=web_capture(),
+            short_video_threshold_seconds=180.0,
+            connection_factory=self.factory,
+            env_getter=self.enabled_env,
+            automation_enqueue=automation.enqueue_browser_capture_job,
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+        )
+        self.assertEqual(
+            first["capture_record_id"],
+            second["capture_record_id"],
+        )
+        self.assertEqual(
+            self.count("browser_capture_automation_jobs"),
+            1,
+        )
+
+    def test_execute_http_forwards_automation_dependencies(self):
+        request = BrowserCaptureRequest(
+            capture=web_capture()
+        )
+        calls = []
+
+        def enqueue(**kwargs):
+            calls.append(kwargs)
+            return {"status": "enqueued"}
+
+        with mock.patch.object(
+            inbox,
+            "inbox_enabled",
+            return_value=True,
+        ):
+            response = inbox.execute_browser_capture_http(
+                req=request,
+                connection_factory=self.factory,
+                response_model=BrowserCaptureResponse,
+                automation_enqueue=enqueue,
+                analysis_version=ANALYSIS_VERSION,
+                scoring_version=SCORING_VERSION,
+            )
+        self.assertTrue(response.capture_persisted)
+        self.assertEqual(len(calls), 1)
+
+    def test_queue_table_references_only_neutral_capture_record(self):
+        schema = SCHEMA
+        start = schema.find(
+            "CREATE TABLE IF NOT EXISTS browser_capture_automation_jobs"
+        )
+        end = schema.find(
+            ");",
+            start,
+        )
+        block = schema[start:end + 2]
+        self.assertIn("browser_capture_inbox", block)
+        for forbidden in (
+            "claim_id",
+            "evidence_id",
+            "source_id",
+            "subject_key",
+            "merit_score",
+            "intelligence_claims",
+        ):
+            self.assertNotIn(forbidden, block)
+
+    def test_queue_schema_has_status_check(self):
+        self.assertIn(
+            "browser_capture_automation_jobs",
+            SCHEMA,
+        )
+        self.assertIn(
+            "lease_expires_at_epoch",
+            SCHEMA,
+        )
+        self.assertIn(
+            "max_attempts",
+            SCHEMA,
+        )
+
+    def test_queue_writes_do_not_create_intelligence_records(self):
+        stored = self.store_web()
+        self.enqueue(stored["capture_record_id"])
+        for table in (
+            "canonical_entities",
+            "intelligence_sources",
+            "media_items",
+            "intelligence_claims",
+            "source_observations",
+            "evidence_records",
+        ):
+            with self.subTest(table=table):
+                self.assertEqual(self.count(table), 0)
+
+    def test_main_public_capture_wires_automation_enqueue(self):
+        source = Path(main.__file__).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "browser_capture_automation",
+            source,
+        )
+        self.assertIn(
+            ".enqueue_browser_capture_job",
+            source,
+        )
+
+    def test_application_composition_registers_worker_lifecycle(self):
         source = (
             BACKEND_DIR
             / "app"
@@ -773,12 +1189,13 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
         main_source = Path(main.__file__).read_text(
             encoding="utf-8"
         )
-        startup_handlers = tuple(
-            getattr(
-                main.app.state,
-                "_sportabase_startup_handlers",
-                (),
-            )
+        composition_source = (
+            BACKEND_DIR
+            / "app"
+            / "application"
+            / "composition.py"
+        ).read_text(
+            encoding="utf-8"
         )
 
         self.assertIn(
@@ -789,8 +1206,11 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             main_source,
         )
         self.assertIn(
-            main.init_db,
-            startup_handlers,
+            'app.add_event_handler(\n'
+            '        "startup",\n'
+            '        handler,\n'
+            '    )',
+            composition_source,
         )
 
     def test_service_does_not_call_live_merit_release(self):
@@ -816,6 +1236,89 @@ class BrowserCaptureAutomationTests(unittest.TestCase):
             '"affects_live_merit": False',
             source,
         )
+
+    def test_worker_uses_persisted_history_auto_shadow_runner(self):
+        source = Path(automation.__file__).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "execute_multimodal_inbox_history_auto_shadow",
+            source,
+        )
+
+    def test_worker_reconciliation_recovers_missed_enqueue(self):
+        stored = self.store_web(slug="missed")
+        self.assertEqual(
+            self.count("browser_capture_automation_jobs"),
+            0,
+        )
+        automation.reconcile_browser_capture_jobs(
+            analysis_version=ANALYSIS_VERSION,
+            scoring_version=SCORING_VERSION,
+            connection_factory=self.factory,
+            env_getter=self.enabled_env,
+            now_provider=lambda: 1000,
+        )
+        row = self.one(
+            "SELECT * FROM browser_capture_automation_jobs WHERE capture_record_id = ?",
+            (stored["capture_record_id"],),
+        )
+        self.assertIsNotNone(row)
+        self.assertEqual(row["status"], "pending")
+
+    def test_worker_job_versions_are_server_scoped(self):
+        stored = self.store_web()
+        self.enqueue(stored["capture_record_id"])
+        row = self.one(
+            "SELECT analysis_version, scoring_version FROM browser_capture_automation_jobs"
+        )
+        self.assertEqual(
+            row["analysis_version"],
+            ANALYSIS_VERSION,
+        )
+        self.assertEqual(
+            row["scoring_version"],
+            SCORING_VERSION,
+        )
+
+    def test_job_result_never_marks_live_merit_effect(self):
+        job = self.claimed()
+        result = automation.execute_claimed_browser_capture_job(
+            job=job,
+            worker_id="worker-a",
+            connection_factory=self.factory,
+            gemini_client_factory=lambda: object(),
+            gemini_generator=lambda **kwargs: {},
+            now_provider=lambda: 1000,
+            runner=lambda **kwargs: safe_shadow_result(
+                kwargs["anchor_capture_record_id"]
+            ),
+        )
+        self.assertFalse(
+            result["result"]["policy"]["affects_live_merit"]
+        )
+
+    def test_worker_does_not_accept_caller_subject_or_candidate(self):
+        parameters = (
+            automation.execute_claimed_browser_capture_job
+            .__code__
+            .co_varnames
+        )
+        self.assertNotIn(
+            "subject_entity_id",
+            parameters,
+        )
+        self.assertNotIn(
+            "candidate_capture_record_id",
+            parameters,
+        )
+
+    def test_automation_has_no_extension_dependency(self):
+        source = Path(automation.__file__).read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("extension/", source)
+        self.assertNotIn("x-sportabase-admin-key", source)
 
 
 if __name__ == "__main__":
