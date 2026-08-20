@@ -71,7 +71,10 @@ def verify_control_room_origin_provenance(
             "Control Room origin provenance verification failed."
         )
 
-    if not compare_digest(provided[0], expected):
+    if not compare_digest(
+        provided[0].encode("utf-8"),
+        expected.encode("utf-8"),
+    ):
         raise ControlRoomAccessDenied(
             "Control Room origin provenance verification failed."
         )
