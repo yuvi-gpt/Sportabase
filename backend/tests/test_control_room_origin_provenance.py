@@ -59,13 +59,16 @@ class ControlRoomOriginProvenanceTests(unittest.TestCase):
         )
 
     def test_missing_or_short_expected_secret_fails_closed(self):
+        expected_message = (
+            "Control Room origin provenance secret is not configured securely."
+        )
         for value in ("", "short"):
             with self.subTest(value=value):
                 with self.assertRaises(
                     ControlRoomSecurityMisconfigured
                 ) as caught:
                     validate_origin_provenance_secret(value)
-                self.assertNotIn(value, str(caught.exception))
+                self.assertEqual(str(caught.exception), expected_message)
 
     def test_exact_single_header_is_required(self):
         verify_control_room_origin_provenance(
