@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any, Callable
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from app.ai.quota import provider_usage_day
 from app.application.config import (
-    DB_PATH,
-    GLOBAL_DAILY_GEMINI_CALL_CAP,
+    CONTROL_ROOM_UPSTREAM_ADMIN_API_KEY,
+    CONTROL_ROOM_UPSTREAM_API_ORIGIN,
+    CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS,
 )
-from app.operations.control_room_ai_usage import (
-    build_control_room_ai_usage_snapshot,
+from app.operations.control_room_usage_bridge import (
+    ControlRoomUsageBridgeMisconfigured,
+    ControlRoomUsageBridgeUnavailable,
+    fetch_control_room_upstream_usage,
 )
 from app.security.control_room import (
     ControlRoomAccessDenied,
@@ -33,11 +34,12 @@ def _unconfigured_control_room_guard(
     )
 
 
-def _default_ai_usage_handler(provider_day: str) -> dict[str, Any]:
-    return build_control_room_ai_usage_snapshot(
-        db_path=DB_PATH,
-        provider_day=provider_day,
-        global_daily_call_cap=GLOBAL_DAILY_GEMINI_CALL_CAP,
+def _default_ai_usage_handler(days: int) -> dict[str, Any]:
+    return fetch_control_room_upstream_usage(
+        api_origin=CONTROL_ROOM_UPSTREAM_API_ORIGIN,
+        admin_api_key=CONTROL_ROOM_UPSTREAM_ADMIN_API_KEY,
+        days=days,
+        timeout_seconds=CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS,
     )
 
 
@@ -68,33 +70,32 @@ def _authorized_principal(
     return principal
 
 
-def _normalized_provider_day(raw_value: str) -> str:
+def _normalized_days(raw_value: str) -> int:
     normalized = str(raw_value or "").strip()
     if not normalized:
-        return provider_usage_day()
+        return 7
 
     try:
-        parsed = date.fromisoformat(normalized)
-    except ValueError as error:
+        days = int(normalized)
+    except (TypeError, ValueError) as error:
         raise HTTPException(
             status_code=400,
-            detail="provider_day must use YYYY-MM-DD.",
+            detail="days must be an integer between 1 and 30.",
         ) from error
 
-    canonical = parsed.isoformat()
-    if canonical != normalized:
+    if days < 1 or days > 30 or str(days) != normalized:
         raise HTTPException(
             status_code=400,
-            detail="provider_day must use YYYY-MM-DD.",
+            detail="days must be an integer between 1 and 30.",
         )
 
-    return canonical
+    return days
 
 
 def build_router(
     *,
     require_control_room: Callable[[Request], ControlRoomPrincipal] | None = None,
-    ai_usage_handler: Callable[[str], dict[str, Any]] | None = None,
+    ai_usage_handler: Callable[[int], dict[str, Any]] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     guard = (
@@ -126,15 +127,27 @@ def build_router(
     @router.get("/admin/control-room/ai-usage")
     def control_room_ai_usage(
         request: Request,
-        provider_day: str = Query(default=""),
+        days: str = Query(default="7"),
     ):
         _authorized_principal(
             guard=guard,
             request=request,
         )
 
-        effective_day = _normalized_provider_day(provider_day)
-        return usage_handler(effective_day)
+        effective_days = _normalized_days(days)
+
+        try:
+            return usage_handler(effective_days)
+        except ControlRoomUsageBridgeMisconfigured as error:
+            raise HTTPException(
+                status_code=503,
+                detail="Control Room upstream usage bridge is not configured.",
+            ) from error
+        except ControlRoomUsageBridgeUnavailable as error:
+            raise HTTPException(
+                status_code=502,
+                detail="Control Room upstream usage service is unavailable.",
+            ) from error
 
     return router
 
