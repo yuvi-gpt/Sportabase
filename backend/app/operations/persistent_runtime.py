@@ -6,6 +6,7 @@ from typing import Any
 from app.operations.persistent_store import (
     PersistentOperationsStoreUnavailable,
     initialize_persistent_operations_store,
+    record_operational_event,
 )
 
 
@@ -53,8 +54,58 @@ def build_persistent_operations_startup_handler(
     return startup
 
 
+def build_persistent_operations_event_recorder(
+    *,
+    app: Any,
+    database_url: str,
+    service_name: str,
+    timeout_seconds: int | float,
+    recorder: Callable[..., str | None] = record_operational_event,
+) -> Callable[..., str | None]:
+    """Build a request-time recorder guarded by runtime store state.
+
+    Writes occur only after startup marked the store ready. If a later database
+    outage occurs, the first failed write marks the store unavailable and the
+    remaining request path continues without operational telemetry. Subsequent
+    writes are skipped until the service restarts and startup probes the store
+    again, preventing a dead telemetry database from adding repeated latency to
+    product requests.
+    """
+
+    def record(**event: Any) -> str | None:
+        status = str(
+            getattr(
+                app.state,
+                PERSISTENT_OPERATIONS_STATE_ATTRIBUTE,
+                "disabled",
+            )
+            or "disabled"
+        ).strip().casefold()
+
+        if status != "ready":
+            return None
+
+        try:
+            return recorder(
+                database_url=database_url,
+                service_name=service_name,
+                timeout_seconds=timeout_seconds,
+                **event,
+            )
+        except PersistentOperationsStoreUnavailable:
+            setattr(
+                app.state,
+                PERSISTENT_OPERATIONS_STATE_ATTRIBUTE,
+                "unavailable",
+            )
+            return None
+
+    return record
+
+
 __all__ = [
     "PERSISTENT_OPERATIONS_RUNTIME_VERSION",
     "PERSISTENT_OPERATIONS_STATE_ATTRIBUTE",
     "build_persistent_operations_startup_handler",
+    "build_persistent_operations_event_recorder",
 ]
