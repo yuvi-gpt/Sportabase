@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from app.operations.persistent_runtime import (
     PERSISTENT_OPERATIONS_STATE_ATTRIBUTE,
+    build_persistent_operations_event_recorder,
     build_persistent_operations_startup_handler,
 )
 from app.operations.persistent_store import (
@@ -93,6 +94,110 @@ class PersistentOperationsRuntimeTests(unittest.TestCase):
         self.assertFalse(
             hasattr(app.state, PERSISTENT_OPERATIONS_STATE_ATTRIBUTE)
         )
+
+    def test_ready_runtime_recorder_forwards_store_configuration(self):
+        app = self._app()
+        setattr(
+            app.state,
+            PERSISTENT_OPERATIONS_STATE_ATTRIBUTE,
+            "ready",
+        )
+        calls = []
+
+        recorder = build_persistent_operations_event_recorder(
+            app=app,
+            database_url="postgresql://example.com/sportabase",
+            service_name="sportabase-api",
+            timeout_seconds=4,
+            recorder=lambda **kwargs: calls.append(kwargs) or "event-1",
+        )
+
+        event_id = recorder(
+            component="content_pipeline",
+            event_type="analysis.completed",
+            status="success",
+            mode="article",
+        )
+
+        self.assertEqual(event_id, "event-1")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(
+            calls[0]["database_url"],
+            "postgresql://example.com/sportabase",
+        )
+        self.assertEqual(calls[0]["service_name"], "sportabase-api")
+        self.assertEqual(calls[0]["timeout_seconds"], 4)
+        self.assertEqual(calls[0]["component"], "content_pipeline")
+
+    def test_disabled_or_unavailable_runtime_skips_event_writes(self):
+        for state in ("disabled", "unavailable"):
+            app = self._app()
+            setattr(
+                app.state,
+                PERSISTENT_OPERATIONS_STATE_ATTRIBUTE,
+                state,
+            )
+            calls = []
+            recorder = build_persistent_operations_event_recorder(
+                app=app,
+                database_url="postgresql://example.com/sportabase",
+                service_name="sportabase-api",
+                timeout_seconds=4,
+                recorder=lambda **kwargs: calls.append(kwargs),
+            )
+
+            with self.subTest(state=state):
+                self.assertIsNone(
+                    recorder(
+                        component="content_pipeline",
+                        event_type="analysis.completed",
+                        status="success",
+                    )
+                )
+                self.assertEqual(calls, [])
+
+    def test_runtime_write_outage_trips_fail_open_state(self):
+        app = self._app()
+        setattr(
+            app.state,
+            PERSISTENT_OPERATIONS_STATE_ATTRIBUTE,
+            "ready",
+        )
+        calls = []
+
+        def unavailable(**kwargs):
+            calls.append(kwargs)
+            raise PersistentOperationsStoreUnavailable("temporary outage")
+
+        recorder = build_persistent_operations_event_recorder(
+            app=app,
+            database_url="postgresql://example.com/sportabase",
+            service_name="sportabase-api",
+            timeout_seconds=4,
+            recorder=unavailable,
+        )
+
+        self.assertIsNone(
+            recorder(
+                component="content_pipeline",
+                event_type="analysis.completed",
+                status="success",
+            )
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(
+            getattr(app.state, PERSISTENT_OPERATIONS_STATE_ATTRIBUTE),
+            "unavailable",
+        )
+
+        self.assertIsNone(
+            recorder(
+                component="content_pipeline",
+                event_type="analysis.completed",
+                status="success",
+            )
+        )
+        self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":
