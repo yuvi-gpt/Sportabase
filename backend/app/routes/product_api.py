@@ -19,6 +19,9 @@ from app.models.api import (
 from app.operations.analysis_runtime import (
     execute_analysis_with_operational_telemetry,
 )
+from app.operations.pipeline_runtime import (
+    execute_browser_capture_with_operational_telemetry,
+)
 
 
 def build_router(
@@ -76,7 +79,11 @@ def build_router(
     def browser_capture_preview(
         req: BrowserCaptureRequest,
     ):
-        return browser_capture_handler(req)
+        return execute_browser_capture_with_operational_telemetry(
+            handler=browser_capture_handler,
+            req=req,
+            event_recorder=operational_event_recorder,
+        )
 
     @router.post(
         "/analyze/video",
