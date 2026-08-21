@@ -13,6 +13,16 @@ def _clean(value: Any, maximum: int = 128) -> str:
     return " ".join(str(value or "").split())[:maximum]
 
 
+def _safe_nonnegative_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return 0
+
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
 def _emit_quietly(
     event_recorder: Callable[..., Any] | None,
     **event: Any,
@@ -56,8 +66,10 @@ def record_browser_capture_job_enqueued(
         "platform": _clean(platform, 64).casefold(),
         "platform_surface": _clean(platform_surface, 64).casefold(),
         "job_status": _clean(result.get("job_status"), 64).casefold(),
-        "attempts": max(0, int(result.get("attempts") or 0)),
-        "max_attempts": max(0, int(result.get("max_attempts") or 0)),
+        "attempts": _safe_nonnegative_int(result.get("attempts")),
+        "max_attempts": _safe_nonnegative_int(
+            result.get("max_attempts")
+        ),
     }
 
     return _emit_quietly(
@@ -102,8 +114,8 @@ def record_browser_capture_job_result(
     details: dict[str, Any] = {
         "telemetry_version": JOB_OPERATIONAL_TELEMETRY_VERSION,
         "job_status": _clean(job.get("status"), 64).casefold(),
-        "attempts": max(0, int(job.get("attempts") or 0)),
-        "max_attempts": max(0, int(job.get("max_attempts") or 0)),
+        "attempts": _safe_nonnegative_int(job.get("attempts")),
+        "max_attempts": _safe_nonnegative_int(job.get("max_attempts")),
         "last_outcome": _clean(job.get("last_outcome"), 160),
     }
 
@@ -115,7 +127,9 @@ def record_browser_capture_job_result(
         retry_delay,
         bool,
     ):
-        details["retry_delay_seconds"] = max(0, int(retry_delay))
+        details["retry_delay_seconds"] = _safe_nonnegative_int(
+            retry_delay
+        )
 
     error_type = _clean(job.get("error_type"), 128)
     if error_type:
