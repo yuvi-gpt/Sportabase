@@ -10,8 +10,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.application.config import (
     PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS,
     PERSISTENT_OPERATIONS_DATABASE_URL,
+    PERSISTENT_OPERATIONS_SERVICE_NAME,
 )
 from app.operations.persistent_runtime import (
+    build_persistent_operations_event_recorder,
     build_persistent_operations_startup_handler,
 )
 from app.routes import (
@@ -229,6 +231,17 @@ def compose_application(
         else build_default_control_room_guard()
     )
 
+    persistent_event_recorder = (
+        build_persistent_operations_event_recorder(
+            app=app,
+            database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
+            service_name=PERSISTENT_OPERATIONS_SERVICE_NAME,
+            timeout_seconds=(
+                PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS
+            ),
+        )
+    )
+
     app.include_router(
         product_api.build_router(
             health_handler=health_handler,
@@ -244,6 +257,9 @@ def compose_application(
                 analyze_video_handler
             ),
             analyze_handler=analyze_handler,
+            operational_event_recorder=(
+                persistent_event_recorder
+            ),
         )
     )
 
