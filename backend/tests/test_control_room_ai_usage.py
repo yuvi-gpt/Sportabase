@@ -10,6 +10,10 @@ from app.operations.control_room_ai_usage import (
     CONTROL_ROOM_AI_USAGE_VERSION,
     build_control_room_ai_usage_snapshot,
 )
+from app.operations.control_room_usage_bridge import (
+    ControlRoomUsageBridgeMisconfigured,
+    ControlRoomUsageBridgeUnavailable,
+)
 from app.routes.control_room_admin import build_router
 from app.security.control_room import (
     CONTROL_ROOM_SECURITY_VERSION,
@@ -145,7 +149,7 @@ class ControlRoomAiUsageSnapshotTests(unittest.TestCase):
 
 
 class ControlRoomAiUsageRouteTests(unittest.TestCase):
-    def test_authorized_owner_can_read_explicit_provider_day(self):
+    def test_authorized_owner_can_request_explicit_window(self):
         guard_calls = []
         usage_calls = []
 
@@ -153,11 +157,11 @@ class ControlRoomAiUsageRouteTests(unittest.TestCase):
             guard_calls.append(request.url.path)
             return _principal()
 
-        def usage_handler(provider_day):
-            usage_calls.append(provider_day)
+        def usage_handler(days):
+            usage_calls.append(days)
             return {
-                "version": CONTROL_ROOM_AI_USAGE_VERSION,
-                "provider_day": provider_day,
+                "source": "sportabase-api",
+                "window": {"requested_days": days},
             }
 
         response = _client(
@@ -165,7 +169,7 @@ class ControlRoomAiUsageRouteTests(unittest.TestCase):
             usage_handler=usage_handler,
         ).get(
             "/admin/control-room/ai-usage",
-            params={"provider_day": "2026-08-21"},
+            params={"days": "14"},
         )
 
         self.assertEqual(response.status_code, 200)
@@ -173,39 +177,36 @@ class ControlRoomAiUsageRouteTests(unittest.TestCase):
             guard_calls,
             ["/admin/control-room/ai-usage"],
         )
-        self.assertEqual(usage_calls, ["2026-08-21"])
-        self.assertEqual(response.json()["provider_day"], "2026-08-21")
-
-    def test_missing_provider_day_uses_provider_timezone_day(self):
-        usage_calls = []
-
-        def usage_handler(provider_day):
-            usage_calls.append(provider_day)
-            return {"provider_day": provider_day}
-
-        client = _client(
-            guard=lambda request: _principal(),
-            usage_handler=usage_handler,
+        self.assertEqual(usage_calls, [14])
+        self.assertEqual(
+            response.json()["window"]["requested_days"],
+            14,
         )
 
-        with patch(
-            "app.routes.control_room_admin.provider_usage_day",
-            return_value="2026-08-20",
-        ):
-            response = client.get("/admin/control-room/ai-usage")
+    def test_missing_days_defaults_to_seven(self):
+        usage_calls = []
+
+        def usage_handler(days):
+            usage_calls.append(days)
+            return {"days": days}
+
+        response = _client(
+            guard=lambda request: _principal(),
+            usage_handler=usage_handler,
+        ).get("/admin/control-room/ai-usage")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(usage_calls, ["2026-08-20"])
+        self.assertEqual(usage_calls, [7])
 
-    def test_guard_denial_happens_before_provider_day_validation_or_usage_read(self):
+    def test_guard_denial_happens_before_days_validation_or_usage_read(self):
         usage_calls = []
 
         def denied_guard(request):
             del request
             raise ControlRoomAccessDenied("blocked")
 
-        def usage_handler(provider_day):
-            usage_calls.append(provider_day)
+        def usage_handler(days):
+            usage_calls.append(days)
             return {}
 
         response = _client(
@@ -213,33 +214,82 @@ class ControlRoomAiUsageRouteTests(unittest.TestCase):
             usage_handler=usage_handler,
         ).get(
             "/admin/control-room/ai-usage",
-            params={"provider_day": "not-a-date"},
+            params={"days": "not-an-integer"},
         )
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(usage_calls, [])
 
-    def test_invalid_provider_day_is_rejected_after_authorization(self):
+    def test_invalid_days_is_rejected_after_authorization(self):
         usage_calls = []
 
-        def usage_handler(provider_day):
-            usage_calls.append(provider_day)
+        def usage_handler(days):
+            usage_calls.append(days)
             return {}
+
+        for value in ("0", "31", "01", "nope"):
+            with self.subTest(value=value):
+                response = _client(
+                    guard=lambda request: _principal(),
+                    usage_handler=usage_handler,
+                ).get(
+                    "/admin/control-room/ai-usage",
+                    params={"days": value},
+                )
+
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(
+                    response.json(),
+                    {
+                        "detail": (
+                            "days must be an integer between 1 and 30."
+                        )
+                    },
+                )
+
+        self.assertEqual(usage_calls, [])
+
+    def test_bridge_misconfiguration_becomes_generic_503(self):
+        def usage_handler(days):
+            del days
+            raise ControlRoomUsageBridgeMisconfigured("secret detail")
 
         response = _client(
             guard=lambda request: _principal(),
             usage_handler=usage_handler,
-        ).get(
-            "/admin/control-room/ai-usage",
-            params={"provider_day": "21-08-2026"},
-        )
+        ).get("/admin/control-room/ai-usage")
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
-            {"detail": "provider_day must use YYYY-MM-DD."},
+            {
+                "detail": (
+                    "Control Room upstream usage bridge is not configured."
+                )
+            },
         )
-        self.assertEqual(usage_calls, [])
+        self.assertNotIn("secret detail", response.text)
+
+    def test_upstream_unavailable_becomes_generic_502(self):
+        def usage_handler(days):
+            del days
+            raise ControlRoomUsageBridgeUnavailable("upstream detail")
+
+        response = _client(
+            guard=lambda request: _principal(),
+            usage_handler=usage_handler,
+        ).get("/admin/control-room/ai-usage")
+
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(
+            response.json(),
+            {
+                "detail": (
+                    "Control Room upstream usage service is unavailable."
+                )
+            },
+        )
+        self.assertNotIn("upstream detail", response.text)
 
 
 if __name__ == "__main__":
