@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.application.config import (
     PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS,
     PERSISTENT_OPERATIONS_DATABASE_URL,
+    PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
     PERSISTENT_OPERATIONS_SERVICE_NAME,
 )
 from app.operations.persistent_runtime import (
@@ -237,7 +238,7 @@ def compose_application(
             database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
             service_name=PERSISTENT_OPERATIONS_SERVICE_NAME,
             timeout_seconds=(
-                PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS
+                PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS
             ),
         )
     )
