@@ -59,7 +59,9 @@ class BrowserCaptureInboxNotFoundError(
 
 def _clean(value: Any) -> str:
     return " ".join(
-        str(value or "").split()
+        str(
+            value or ""
+        ).split()
     )
 
 
@@ -823,6 +825,7 @@ def execute_browser_capture_http(
     automation_enqueue=None,
     analysis_version: str = "",
     scoring_version: str = "",
+    env_getter=os.getenv,
 ):
     try:
         payload = (
@@ -834,6 +837,7 @@ def execute_browser_capture_http(
                 connection_factory=(
                     connection_factory
                 ),
+                env_getter=env_getter,
                 automation_enqueue=(
                     automation_enqueue
                 ),
