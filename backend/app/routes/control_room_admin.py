@@ -9,6 +9,9 @@ from app.application.config import (
     CONTROL_ROOM_UPSTREAM_API_ORIGIN,
     CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS,
 )
+from app.operations.control_room_cold_start import (
+    fetch_with_cold_start_resilience,
+)
 from app.operations.control_room_pipeline import (
     build_control_room_pipeline_snapshot,
 )
@@ -38,11 +41,19 @@ def _unconfigured_control_room_guard(
 
 
 def _fetch_upstream_usage(days: int) -> dict[str, Any]:
-    return fetch_control_room_upstream_usage(
-        api_origin=CONTROL_ROOM_UPSTREAM_API_ORIGIN,
-        admin_api_key=CONTROL_ROOM_UPSTREAM_ADMIN_API_KEY,
-        days=days,
-        timeout_seconds=CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS,
+    def _fetch_once(timeout_seconds: float) -> dict[str, Any]:
+        return fetch_control_room_upstream_usage(
+            api_origin=CONTROL_ROOM_UPSTREAM_API_ORIGIN,
+            admin_api_key=CONTROL_ROOM_UPSTREAM_ADMIN_API_KEY,
+            days=days,
+            timeout_seconds=timeout_seconds,
+        )
+
+    return fetch_with_cold_start_resilience(
+        usage_fetcher=_fetch_once,
+        primary_timeout_seconds=(
+            CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS
+        ),
     )
 
 
