@@ -22,6 +22,26 @@ load_dotenv(DOTENV_PATH)
 DB_PATH = DATA_DIR / "sportabase.db"
 SOURCES_PATH = DATA_DIR / "sources.json"
 
+PERSISTENT_OPERATIONS_DATABASE_URL = os.getenv(
+    "SPORTABASE_OPERATIONS_DATABASE_URL",
+    "",
+).strip()
+
+PERSISTENT_OPERATIONS_SERVICE_NAME = (
+    os.getenv(
+        "SPORTABASE_SERVICE_NAME",
+        "sportabase-api",
+    ).strip()
+    or "sportabase-api"
+)
+
+PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS = float(
+    os.getenv(
+        "SPORTABASE_OPERATIONS_CONNECT_TIMEOUT_SECONDS",
+        "10",
+    )
+)
+
 # Keep extension scans fast. Most sports articles can be summarized/scored well
 # without sending the full extracted page body to Gemini.
 MAX_ANALYZE_CHARS = int(
