@@ -23,6 +23,22 @@ _WORKER_THREAD = None
 _WORKER_ID = ""
 
 
+def _automation_wake_event():
+    candidate = getattr(
+        browser_capture_automation,
+        "_WORKER_WAKE",
+        None,
+    )
+    if (
+        candidate is not None
+        and callable(getattr(candidate, "wait", None))
+        and callable(getattr(candidate, "set", None))
+        and callable(getattr(candidate, "clear", None))
+    ):
+        return candidate
+    return _WORKER_WAKE
+
+
 def _emit_reconcile_event(
     event_recorder,
     result: Mapping[str, Any] | None,
@@ -107,8 +123,9 @@ def _worker_loop(config: Mapping[str, Any]) -> None:
         }:
             continue
 
-        _WORKER_WAKE.wait(timeout=poll_seconds)
-        _WORKER_WAKE.clear()
+        wake_event = _automation_wake_event()
+        wake_event.wait(timeout=poll_seconds)
+        wake_event.clear()
 
 
 def start_persistent_job_worker(
@@ -141,6 +158,21 @@ def start_persistent_job_worker(
             "Automation worker database access is required."
         )
 
+    version_resolver = getattr(
+        browser_capture_automation,
+        "_versions",
+        None,
+    )
+    if not callable(version_resolver):
+        raise browser_capture_automation.BrowserCaptureAutomationInputError(
+            "Automation version validator is unavailable."
+        )
+
+    analysis, scoring = version_resolver(
+        analysis_version,
+        scoring_version,
+    )
+
     with _WORKER_LOCK:
         if (
             _WORKER_THREAD is not None
@@ -154,12 +186,13 @@ def start_persistent_job_worker(
 
         _WORKER_STOP.clear()
         _WORKER_WAKE.clear()
+        _automation_wake_event().clear()
         _WORKER_ID = "bcaw_ops_" + uuid.uuid4().hex
 
         config = {
             "worker_id": _WORKER_ID,
-            "analysis_version": analysis_version,
-            "scoring_version": scoring_version,
+            "analysis_version": analysis,
+            "scoring_version": scoring,
             "connection_factory": connection_factory,
             "gemini_client_factory": gemini_client_factory,
             "gemini_generator": gemini_generator,
@@ -189,6 +222,7 @@ def start_persistent_job_worker(
             "persistent_queue": True,
             "lease_based_claim": True,
             "restart_recoverable": True,
+            "queue_wake_signal_reused": True,
             "operational_events_fail_open": True,
             "public_request_does_not_wait_for_gemini": True,
             "live_merit_shadow_only": True,
@@ -214,6 +248,7 @@ def stop_persistent_job_worker(
 
         _WORKER_STOP.set()
         _WORKER_WAKE.set()
+        _automation_wake_event().set()
 
     if thread.is_alive():
         thread.join(timeout=max(0.0, float(join_timeout_seconds)))
