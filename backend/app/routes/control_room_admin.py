@@ -9,6 +9,9 @@ from app.application.config import (
     CONTROL_ROOM_UPSTREAM_API_ORIGIN,
     CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS,
 )
+from app.operations.control_room_pipeline import (
+    build_control_room_pipeline_snapshot,
+)
 from app.operations.control_room_usage_bridge import (
     ControlRoomUsageBridgeMisconfigured,
     ControlRoomUsageBridgeUnavailable,
@@ -34,12 +37,22 @@ def _unconfigured_control_room_guard(
     )
 
 
-def _default_ai_usage_handler(days: int) -> dict[str, Any]:
+def _fetch_upstream_usage(days: int) -> dict[str, Any]:
     return fetch_control_room_upstream_usage(
         api_origin=CONTROL_ROOM_UPSTREAM_API_ORIGIN,
         admin_api_key=CONTROL_ROOM_UPSTREAM_ADMIN_API_KEY,
         days=days,
         timeout_seconds=CONTROL_ROOM_UPSTREAM_REQUEST_TIMEOUT_SECONDS,
+    )
+
+
+def _default_ai_usage_handler(days: int) -> dict[str, Any]:
+    return _fetch_upstream_usage(days)
+
+
+def _default_pipeline_handler(days: int) -> dict[str, Any]:
+    return build_control_room_pipeline_snapshot(
+        _fetch_upstream_usage(days)
     )
 
 
@@ -92,10 +105,24 @@ def _normalized_days(raw_value: str) -> int:
     return days
 
 
+def _bridge_error_response(error: Exception) -> HTTPException:
+    if isinstance(error, ControlRoomUsageBridgeMisconfigured):
+        return HTTPException(
+            status_code=503,
+            detail="Control Room upstream usage bridge is not configured.",
+        )
+
+    return HTTPException(
+        status_code=502,
+        detail="Control Room upstream usage service is unavailable.",
+    )
+
+
 def build_router(
     *,
     require_control_room: Callable[[Request], ControlRoomPrincipal] | None = None,
     ai_usage_handler: Callable[[int], dict[str, Any]] | None = None,
+    pipeline_handler: Callable[[int], dict[str, Any]] | None = None,
 ) -> APIRouter:
     router = APIRouter()
     guard = (
@@ -107,6 +134,11 @@ def build_router(
         ai_usage_handler
         if callable(ai_usage_handler)
         else _default_ai_usage_handler
+    )
+    content_pipeline_handler = (
+        pipeline_handler
+        if callable(pipeline_handler)
+        else _default_pipeline_handler
     )
 
     @router.get("/admin/control-room/session")
@@ -138,16 +170,31 @@ def build_router(
 
         try:
             return usage_handler(effective_days)
-        except ControlRoomUsageBridgeMisconfigured as error:
-            raise HTTPException(
-                status_code=503,
-                detail="Control Room upstream usage bridge is not configured.",
-            ) from error
-        except ControlRoomUsageBridgeUnavailable as error:
-            raise HTTPException(
-                status_code=502,
-                detail="Control Room upstream usage service is unavailable.",
-            ) from error
+        except (
+            ControlRoomUsageBridgeMisconfigured,
+            ControlRoomUsageBridgeUnavailable,
+        ) as error:
+            raise _bridge_error_response(error) from error
+
+    @router.get("/admin/control-room/pipeline")
+    def control_room_pipeline(
+        request: Request,
+        days: str = Query(default="7"),
+    ):
+        _authorized_principal(
+            guard=guard,
+            request=request,
+        )
+
+        effective_days = _normalized_days(days)
+
+        try:
+            return content_pipeline_handler(effective_days)
+        except (
+            ControlRoomUsageBridgeMisconfigured,
+            ControlRoomUsageBridgeUnavailable,
+        ) as error:
+            raise _bridge_error_response(error) from error
 
     return router
 
