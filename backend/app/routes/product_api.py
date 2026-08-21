@@ -16,6 +16,9 @@ from app.models.api import (
     VideoAnalyzeRequest,
     VideoAnalyzeResponse,
 )
+from app.operations.analysis_runtime import (
+    execute_analysis_with_operational_telemetry,
+)
 
 
 def build_router(
@@ -27,6 +30,7 @@ def build_router(
     browser_capture_handler,
     analyze_video_handler,
     analyze_handler,
+    operational_event_recorder=None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -82,9 +86,12 @@ def build_router(
         req: VideoAnalyzeRequest,
         request: Request,
     ):
-        return analyze_video_handler(
-            req,
-            request,
+        return execute_analysis_with_operational_telemetry(
+            handler=analyze_video_handler,
+            req=req,
+            request=request,
+            mode="video",
+            event_recorder=operational_event_recorder,
         )
 
     @router.post(
@@ -95,9 +102,12 @@ def build_router(
         req: AnalyzeRequest,
         request: Request,
     ):
-        return analyze_handler(
-            req,
-            request,
+        return execute_analysis_with_operational_telemetry(
+            handler=analyze_handler,
+            req=req,
+            request=request,
+            mode="article",
+            event_recorder=operational_event_recorder,
         )
 
     return router
