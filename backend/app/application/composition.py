@@ -13,6 +13,9 @@ from app.application.config import (
     PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
     PERSISTENT_OPERATIONS_SERVICE_NAME,
 )
+from app.operations.job_worker_runtime import (
+    register_persistent_job_worker_lifecycle,
+)
 from app.operations.persistent_runtime import (
     build_persistent_operations_event_recorder,
     build_persistent_operations_startup_handler,
@@ -26,7 +29,6 @@ from app.routes import (
 from app.security.control_room_runtime import (
     build_default_control_room_guard,
 )
-from app.workflows import browser_capture_automation
 
 
 APP_TITLE = "Sportabase API (RSS-first)"
@@ -304,7 +306,7 @@ def compose_application(
         ),
     )
 
-    browser_capture_automation.register_browser_capture_automation_lifecycle(
+    register_persistent_job_worker_lifecycle(
         app=app,
         connection_factory=connection_factory,
         analysis_version=analysis_version,
@@ -313,4 +315,7 @@ def compose_application(
             gemini_client_factory
         ),
         gemini_generator=gemini_generator,
+        operational_event_recorder=(
+            persistent_event_recorder
+        ),
     )
