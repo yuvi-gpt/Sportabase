@@ -13,9 +13,7 @@ from app.application.config import (
     PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
     PERSISTENT_OPERATIONS_SERVICE_NAME,
 )
-from app.operations.job_worker_runtime import (
-    register_persistent_job_worker_lifecycle as register_browser_capture_automation_lifecycle,
-)
+from app.operations import job_worker_runtime as browser_capture_automation
 from app.operations.persistent_runtime import (
     build_persistent_operations_event_recorder,
     build_persistent_operations_startup_handler,
@@ -283,7 +281,7 @@ def compose_application(
         ),
     )
 
-    register_browser_capture_automation_lifecycle(
+    browser_capture_automation.register_browser_capture_automation_lifecycle(
         app=app,
         connection_factory=connection_factory,
         analysis_version=analysis_version,
