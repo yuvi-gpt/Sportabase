@@ -42,6 +42,13 @@ PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS = float(
     )
 )
 
+PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS = float(
+    os.getenv(
+        "SPORTABASE_OPERATIONS_EVENT_TIMEOUT_SECONDS",
+        "2",
+    )
+)
+
 # Keep extension scans fast. Most sports articles can be summarized/scored well
 # without sending the full extracted page body to Gemini.
 MAX_ANALYZE_CHARS = int(
