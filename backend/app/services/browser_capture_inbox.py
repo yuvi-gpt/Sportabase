@@ -6,8 +6,6 @@ import importlib as _importlib
 import os
 from collections.abc import Mapping
 
-from fastapi import HTTPException
-
 from app.operations.job_runtime import (
     record_browser_capture_job_enqueued,
 )
@@ -77,25 +75,15 @@ def execute_browser_capture_http(
             )
             return result
 
-    try:
-        payload = _implementation.preview_and_maybe_store_browser_capture(
-            raw_capture=req.capture,
-            short_video_threshold_seconds=(
-                req.short_video_threshold_seconds
-            ),
-            connection_factory=connection_factory,
-            env_getter=_compat_env_getter,
-            automation_enqueue=wrapped_enqueue,
-            analysis_version=analysis_version,
-            scoring_version=scoring_version,
-        )
-    except _implementation.BrowserCaptureInboxInputError as error:
-        raise HTTPException(
-            status_code=422,
-            detail=str(error),
-        ) from error
-
-    return response_model(**payload)
+    return _implementation.execute_browser_capture_http(
+        req=req,
+        connection_factory=connection_factory,
+        response_model=response_model,
+        automation_enqueue=wrapped_enqueue,
+        analysis_version=analysis_version,
+        scoring_version=scoring_version,
+        env_getter=_compat_env_getter,
+    )
 
 
 def __getattr__(name):
