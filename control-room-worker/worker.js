@@ -52,15 +52,9 @@ function buildOriginRequest(request, pathname, search, context) {
   originUrl.search = search;
 
   const headers = new Headers(request.headers);
-
-  // Never trust provenance supplied by the browser.
   headers.delete(PROVENANCE_HEADER);
   headers.set(PROVENANCE_HEADER, context.originSecret);
-
-  // Preserve the Access assertion for authoritative backend validation.
   headers.set("Cf-Access-Jwt-Assertion", context.accessJwt);
-
-  // The backend does not use browser session cookies.
   headers.delete("Cookie");
 
   return {
@@ -92,18 +86,20 @@ async function fetchOrigin(request, pathname, search, context) {
   }
 }
 
+function isoFromEpoch(value) {
+  return Number.isFinite(value)
+    ? new Date(value * 1000).toISOString()
+    : "Unavailable";
+}
+
 function renderDashboard(session) {
   const principal = session?.principal ?? {};
   const methods = Array.isArray(principal.auth_methods)
-    ? principal.auth_methods.join(" · ")
+    ? principal.auth_methods.join(", ")
     : "Unavailable";
 
-  const authenticatedAt = Number.isFinite(principal.authenticated_at)
-    ? new Date(principal.authenticated_at * 1000).toISOString()
-    : "Unavailable";
-  const expiresAt = Number.isFinite(principal.expires_at)
-    ? new Date(principal.expires_at * 1000).toISOString()
-    : "Unavailable";
+  const authenticatedAt = isoFromEpoch(principal.authenticated_at_epoch);
+  const expiresAt = isoFromEpoch(principal.expires_at_epoch);
 
   const html = `<!doctype html>
 <html lang="en">
@@ -115,108 +111,165 @@ function renderDashboard(session) {
     :root {
       color-scheme: dark;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #07090d;
-      color: #f4f7fb;
+      background: #090b0f;
+      color: #e7ebf2;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at 10% 0%, rgba(75, 102, 255, .16), transparent 32rem),
-        radial-gradient(circle at 100% 20%, rgba(43, 205, 173, .08), transparent 28rem),
-        #07090d;
+    body { margin: 0; min-height: 100vh; background: #090b0f; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: 220px 1fr; }
+    .sidebar {
+      border-right: 1px solid #222733;
+      background: #0c0f14;
+      padding: 18px 14px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
     }
-    .shell { max-width: 1180px; margin: 0 auto; padding: 34px 24px 54px; }
-    .topbar { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 36px; }
-    .brand { display: flex; align-items: center; gap: 14px; }
-    .mark {
-      width: 42px; height: 42px; display: grid; place-items: center;
-      border: 1px solid rgba(255,255,255,.12); border-radius: 13px;
-      background: rgba(255,255,255,.05); font-weight: 800; letter-spacing: -.04em;
+    .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; border-bottom: 1px solid #202530; }
+    .mark { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid #343b49; font-size: 12px; font-weight: 800; }
+    .brand strong { font-size: 13px; letter-spacing: .01em; }
+    .brand small { display: block; margin-top: 2px; color: #747e8e; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; }
+    nav { margin-top: 18px; }
+    .nav-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 10px; margin: 2px 0; color: #8f98a7; font-size: 12px; border-left: 2px solid transparent; }
+    .nav-item.active { color: #eef2f7; background: #151a22; border-left-color: #69d9ad; }
+    .nav-item .pending { color: #555f6f; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .side-footer { position: absolute; left: 14px; right: 14px; bottom: 18px; border-top: 1px solid #202530; padding: 14px 8px 0; color: #626d7d; font-size: 10px; line-height: 1.5; }
+    .main { min-width: 0; }
+    .topbar { min-height: 62px; border-bottom: 1px solid #222733; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; background: #0b0e13; }
+    .title { font-size: 14px; font-weight: 700; }
+    .subtle { color: #747e8e; font-size: 11px; }
+    .status-line { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #9aa4b2; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #54d9a5; }
+    .content { padding: 22px 24px 36px; max-width: 1280px; }
+    .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 12px; }
+    .section-heading h1, .section-heading h2 { margin: 0; font-size: 15px; letter-spacing: .01em; }
+    .section-heading p { margin: 4px 0 0; color: #707a89; font-size: 11px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border: 1px solid #242a35; background: #0d1117; margin-bottom: 22px; }
+    .metric { min-height: 104px; padding: 15px; border-right: 1px solid #242a35; }
+    .metric:last-child { border-right: 0; }
+    .metric-label { color: #6f7988; font-size: 9px; text-transform: uppercase; letter-spacing: .11em; }
+    .metric-value { margin-top: 14px; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+    .metric-meta { margin-top: 6px; color: #687281; font-size: 10px; line-height: 1.5; }
+    .ok { color: #78e3b7; }
+    .panel { border: 1px solid #242a35; background: #0d1117; margin-bottom: 22px; }
+    .panel-head { padding: 12px 14px; border-bottom: 1px solid #242a35; display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+    .panel-head strong { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; }
+    .panel-head span { color: #687281; font-size: 10px; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table td { padding: 11px 14px; border-bottom: 1px solid #1e232c; font-size: 11px; vertical-align: top; }
+    .table tr:last-child td { border-bottom: 0; }
+    .table td:first-child { width: 190px; color: #747e8e; }
+    .placeholder-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-top: 1px solid #242a35; border-left: 1px solid #242a35; }
+    .placeholder { min-height: 120px; padding: 14px; border-right: 1px solid #242a35; border-bottom: 1px solid #242a35; background: #0d1117; }
+    .placeholder strong { font-size: 11px; }
+    .placeholder p { margin: 8px 0 0; color: #687281; font-size: 10px; line-height: 1.5; }
+    .tag { display: inline-block; margin-top: 14px; color: #788292; border: 1px solid #2a303b; padding: 3px 6px; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    code { color: #b7c0ce; }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid #222733; }
+      nav { display: none; }
+      .side-footer { display: none; }
+      .metrics { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .metric:nth-child(2) { border-right: 0; }
+      .metric:nth-child(-n+2) { border-bottom: 1px solid #242a35; }
+      .placeholder-grid { grid-template-columns: 1fr; }
     }
-    h1 { margin: 0; font-size: 20px; letter-spacing: -.025em; }
-    .eyebrow { margin: 0 0 3px; color: #828a99; font-size: 12px; text-transform: uppercase; letter-spacing: .14em; }
-    .status {
-      display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(84, 223, 166, .22);
-      background: rgba(84, 223, 166, .07); color: #9df1ce; padding: 8px 11px; border-radius: 999px; font-size: 12px;
-    }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: #57dda8; box-shadow: 0 0 18px rgba(87,221,168,.75); }
-    .hero { margin: 58px 0 34px; }
-    .hero h2 { margin: 0; max-width: 780px; font-size: clamp(38px, 6vw, 72px); line-height: .98; letter-spacing: -.055em; }
-    .hero p { margin: 20px 0 0; max-width: 650px; color: #9aa3b2; font-size: 16px; line-height: 1.65; }
-    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
-    .card {
-      grid-column: span 4; min-height: 176px; padding: 20px;
-      border: 1px solid rgba(255,255,255,.09); border-radius: 18px;
-      background: rgba(18,21,28,.72); backdrop-filter: blur(16px);
-    }
-    .card.wide { grid-column: span 8; }
-    .label { color: #7f8897; font-size: 11px; text-transform: uppercase; letter-spacing: .13em; }
-    .value { margin-top: 15px; font-size: 20px; font-weight: 650; letter-spacing: -.025em; overflow-wrap: anywhere; }
-    .meta { margin-top: 9px; color: #8f98a7; font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
-    .secure { color: #9df1ce; }
-    .footer { margin-top: 24px; color: #646d7b; font-size: 12px; }
-    code { color: #cdd5e2; }
-    @media (max-width: 760px) {
-      .topbar { align-items: flex-start; flex-direction: column; }
-      .hero { margin-top: 40px; }
-      .card, .card.wide { grid-column: 1 / -1; }
+    @media (max-width: 560px) {
+      .topbar { align-items: flex-start; flex-direction: column; padding: 14px 16px; }
+      .content { padding: 18px 16px 28px; }
+      .metrics { grid-template-columns: 1fr; }
+      .metric { border-right: 0; border-bottom: 1px solid #242a35; }
+      .metric:last-child { border-bottom: 0; }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
+  <div class="app">
+    <aside class="sidebar">
       <div class="brand">
         <div class="mark">SB</div>
-        <div>
-          <p class="eyebrow">Owner console</p>
-          <h1>Sportabase Control Room</h1>
-        </div>
+        <div><strong>Sportabase</strong><small>Control Room</small></div>
       </div>
-      <div class="status"><span class="dot"></span> Secure session active</div>
-    </header>
+      <nav aria-label="Control Room sections">
+        <div class="nav-item active"><span>Overview</span></div>
+        <div class="nav-item"><span>Pipeline</span><span class="pending">Later</span></div>
+        <div class="nav-item"><span>AI &amp; Quota</span><span class="pending">Next</span></div>
+        <div class="nav-item"><span>Sources</span><span class="pending">Later</span></div>
+        <div class="nav-item"><span>Jobs</span><span class="pending">Later</span></div>
+        <div class="nav-item"><span>Intelligence</span><span class="pending">Later</span></div>
+        <div class="nav-item"><span>Errors</span><span class="pending">Later</span></div>
+        <div class="nav-item"><span>Security</span><span class="pending">Later</span></div>
+        <div class="nav-item"><span>Releases</span><span class="pending">Later</span></div>
+      </nav>
+      <div class="side-footer">Owner-only surface<br><code>${SESSION_PATH}</code></div>
+    </aside>
 
-    <section class="hero">
-      <h2>System intelligence, without the noise.</h2>
-      <p>The private operating surface for Sportabase. Authentication, origin provenance, and backend authorization are all active before this page is rendered.</p>
-    </section>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="title">Overview</div>
+          <div class="subtle">Operational status and secured session</div>
+        </div>
+        <div class="status-line"><span class="dot"></span> Access verified</div>
+      </header>
 
-    <section class="grid">
-      <article class="card wide">
-        <div class="label">Authenticated owner</div>
-        <div class="value">${escapeHtml(principal.email || "Verified principal")}</div>
-        <div class="meta">Identity verified by Cloudflare Access and revalidated by the Render backend.</div>
-      </article>
+      <div class="content">
+        <section>
+          <div class="section-heading">
+            <div><h1>System status</h1><p>Only live, verified signals are shown as healthy.</p></div>
+          </div>
+          <div class="metrics">
+            <div class="metric">
+              <div class="metric-label">Control Room</div>
+              <div class="metric-value ok">Healthy</div>
+              <div class="metric-meta">Session endpoint returned an authenticated principal.</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Origin gateway</div>
+              <div class="metric-value ok">Verified</div>
+              <div class="metric-meta">Worker -> Render provenance accepted.</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Access posture</div>
+              <div class="metric-value ok">${escapeHtml(principal.auth_strength || "Verified")}</div>
+              <div class="metric-meta">${escapeHtml(methods)}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Owner</div>
+              <div class="metric-value">${escapeHtml(principal.email || "Verified principal")}</div>
+              <div class="metric-meta">Exact allowlisted identity.</div>
+            </div>
+          </div>
+        </section>
 
-      <article class="card">
-        <div class="label">Security posture</div>
-        <div class="value secure">${escapeHtml(principal.auth_strength || "Verified")}</div>
-        <div class="meta">${escapeHtml(methods)}</div>
-      </article>
+        <section class="panel">
+          <div class="panel-head"><strong>Security session</strong><span>Backend attested</span></div>
+          <table class="table">
+            <tr><td>Authenticated at</td><td>${escapeHtml(authenticatedAt)}</td></tr>
+            <tr><td>Expires at</td><td>${escapeHtml(expiresAt)}</td></tr>
+            <tr><td>Authentication methods</td><td>${escapeHtml(methods)}</td></tr>
+            <tr><td>Gateway provenance</td><td class="ok">Worker -> Render verified</td></tr>
+            <tr><td>Direct-origin bypass</td><td class="ok">Blocked</td></tr>
+          </table>
+        </section>
 
-      <article class="card">
-        <div class="label">Session issued</div>
-        <div class="value">${escapeHtml(authenticatedAt)}</div>
-        <div class="meta">Backend-attested authentication time.</div>
-      </article>
-
-      <article class="card">
-        <div class="label">Session expires</div>
-        <div class="value">${escapeHtml(expiresAt)}</div>
-        <div class="meta">Short-lived owner session; re-authentication is required after expiry.</div>
-      </article>
-
-      <article class="card">
-        <div class="label">Gateway</div>
-        <div class="value secure">Worker → Render verified</div>
-        <div class="meta">Private provenance header accepted. Direct-origin bypass remains blocked.</div>
-      </article>
-    </section>
-
-    <div class="footer">Sportabase Control Room · session diagnostics remain available at <code>${SESSION_PATH}</code></div>
-  </main>
+        <section>
+          <div class="section-heading">
+            <div><h2>Instrumentation</h2><p>These modules stay empty until their backend data contracts are ready.</p></div>
+          </div>
+          <div class="placeholder-grid">
+            <div class="placeholder"><strong>AI &amp; Quota</strong><p>Provider calls, quota remaining, token usage, failures and latency.</p><span class="tag">Next instrumentation target</span></div>
+            <div class="placeholder"><strong>Content Pipeline</strong><p>Ingestion, extraction, browser capture and media processing health.</p><span class="tag">Not instrumented</span></div>
+            <div class="placeholder"><strong>Sources</strong><p>Source freshness, failures, blocks and evidence availability.</p><span class="tag">Not instrumented</span></div>
+            <div class="placeholder"><strong>Jobs</strong><p>Pending, running, retried and failed background operations.</p><span class="tag">Not instrumented</span></div>
+            <div class="placeholder"><strong>Intelligence</strong><p>Claims, stories, entity resolution and verification pipeline state.</p><span class="tag">Not instrumented</span></div>
+            <div class="placeholder"><strong>Errors &amp; Releases</strong><p>Recent exceptions, provider errors, deployed commit and feature flags.</p><span class="tag">Not instrumented</span></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
 </body>
 </html>`;
 
@@ -229,7 +282,7 @@ function renderDashboard(session) {
   });
 }
 
-async function handleDashboard(request, incomingUrl, context) {
+async function handleDashboard(request, context) {
   const sessionResponse = await fetchOrigin(
     request,
     SESSION_PATH,
@@ -242,7 +295,10 @@ async function handleDashboard(request, incomingUrl, context) {
   }
 
   if (!sessionResponse.ok) {
-    return textResponse("Control Room session verification failed", sessionResponse.status);
+    return textResponse(
+      "Control Room session verification failed",
+      sessionResponse.status,
+    );
   }
 
   let session;
@@ -310,7 +366,7 @@ export default {
       incomingUrl.pathname === CONTROL_ROOM_PREFIX &&
       request.method === "GET"
     ) {
-      return handleDashboard(request, incomingUrl, context);
+      return handleDashboard(request, context);
     }
 
     return proxyControlRoomRequest(request, incomingUrl, context);
