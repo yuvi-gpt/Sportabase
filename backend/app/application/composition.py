@@ -14,7 +14,7 @@ from app.application.config import (
     PERSISTENT_OPERATIONS_SERVICE_NAME,
 )
 from app.operations.job_worker_runtime import (
-    register_persistent_job_worker_lifecycle,
+    register_persistent_job_worker_lifecycle as register_browser_capture_automation_lifecycle,
 )
 from app.operations.persistent_runtime import (
     build_persistent_operations_event_recorder,
@@ -306,7 +306,7 @@ def compose_application(
         ),
     )
 
-    register_persistent_job_worker_lifecycle(
+    register_browser_capture_automation_lifecycle(
         app=app,
         connection_factory=connection_factory,
         analysis_version=analysis_version,
