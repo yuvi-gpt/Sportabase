@@ -7,6 +7,13 @@ from typing import Any, Callable
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.application.config import (
+    PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS,
+    PERSISTENT_OPERATIONS_DATABASE_URL,
+)
+from app.operations.persistent_runtime import (
+    build_persistent_operations_startup_handler,
+)
 from app.routes import (
     control_room_admin,
     multimodal_admin,
@@ -267,6 +274,17 @@ def compose_application(
             analysis_version,
             scoring_version,
         )
+    )
+
+    register_startup_handler(
+        app,
+        build_persistent_operations_startup_handler(
+            app=app,
+            database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
+            timeout_seconds=(
+                PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS
+            ),
+        ),
     )
 
     browser_capture_automation.register_browser_capture_automation_lifecycle(
