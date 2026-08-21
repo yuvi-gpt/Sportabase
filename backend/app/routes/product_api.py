@@ -22,6 +22,9 @@ from app.operations.analysis_runtime import (
 from app.operations.pipeline_runtime import (
     execute_browser_capture_with_operational_telemetry,
 )
+from app.operations.telemetry_context import (
+    invoke_with_operational_event_recorder,
+)
 
 
 def build_router(
@@ -79,8 +82,15 @@ def build_router(
     def browser_capture_preview(
         req: BrowserCaptureRequest,
     ):
+        def invoke_handler(value):
+            return invoke_with_operational_event_recorder(
+                handler=browser_capture_handler,
+                recorder=operational_event_recorder,
+                args=(value,),
+            )
+
         return execute_browser_capture_with_operational_telemetry(
-            handler=browser_capture_handler,
+            handler=invoke_handler,
             req=req,
             event_recorder=operational_event_recorder,
         )
