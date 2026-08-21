@@ -63,6 +63,22 @@ class PersistentJobTelemetryTests(unittest.TestCase):
 
         self.assertEqual(events, [])
 
+    def test_malformed_enqueue_counters_cannot_break_product_path(self):
+        events = []
+
+        record_browser_capture_job_enqueued(
+            event_recorder=lambda **event: events.append(event),
+            result={
+                "status": "enqueued",
+                "job_status": "pending",
+                "attempts": "not-an-int",
+                "max_attempts": object(),
+            },
+        )
+
+        self.assertEqual(events[0]["details"]["attempts"], 0)
+        self.assertEqual(events[0]["details"]["max_attempts"], 0)
+
     def test_retry_result_records_retry_without_error_detail(self):
         events = []
 
