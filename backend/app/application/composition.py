@@ -23,6 +23,7 @@ from app.operations.persistent_runtime import (
 from app.routes import (
     control_room_admin,
     multimodal_admin,
+    operations_admin,
     product_api,
     usage_admin,
 )
@@ -148,13 +149,7 @@ def register_shutdown_handler(
 
 
 def _install_event_handler_compatibility(app: FastAPI) -> None:
-    """Bridge legacy internal registrars onto the supported lifespan API.
-
-    Starlette 1.0 removed ``add_event_handler``. Some existing Sportabase
-    modules still register startup/shutdown callbacks through that interface.
-    This instance-local bridge keeps those modules working while FastAPI itself
-    runs exclusively through the lifespan context above.
-    """
+    """Bridge legacy internal registrars onto the supported lifespan API."""
 
     def add_event_handler(
         event_type: str,
@@ -181,19 +176,9 @@ def create_application() -> FastAPI:
         lifespan=_application_lifespan,
     )
 
-    setattr(
-        app.state,
-        _LIFESPAN_MANAGED_STATE,
-        True,
-    )
-    _managed_lifespan_handlers(
-        app,
-        _STARTUP_HANDLERS_STATE,
-    )
-    _managed_lifespan_handlers(
-        app,
-        _SHUTDOWN_HANDLERS_STATE,
-    )
+    setattr(app.state, _LIFESPAN_MANAGED_STATE, True)
+    _managed_lifespan_handlers(app, _STARTUP_HANDLERS_STATE)
+    _managed_lifespan_handlers(app, _SHUTDOWN_HANDLERS_STATE)
     _install_event_handler_compatibility(app)
 
     app.add_middleware(
@@ -239,9 +224,7 @@ def compose_application(
             app=app,
             database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
             service_name=PERSISTENT_OPERATIONS_SERVICE_NAME,
-            timeout_seconds=(
-                PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS
-            ),
+            timeout_seconds=PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
         )
     )
 
@@ -250,35 +233,31 @@ def compose_application(
             health_handler=health_handler,
             ingest_handler=ingest_handler,
             stories_handler=stories_handler,
-            resolve_content_handler=(
-                resolve_content_handler
-            ),
-            browser_capture_handler=(
-                browser_capture_handler
-            ),
-            analyze_video_handler=(
-                analyze_video_handler
-            ),
+            resolve_content_handler=resolve_content_handler,
+            browser_capture_handler=browser_capture_handler,
+            analyze_video_handler=analyze_video_handler,
             analyze_handler=analyze_handler,
-            operational_event_recorder=(
-                persistent_event_recorder
-            ),
+            operational_event_recorder=persistent_event_recorder,
         )
     )
 
     app.include_router(
         usage_admin.build_router(
-            usage_summary_handler=(
-                usage_summary_handler
-            ),
+            usage_summary_handler=usage_summary_handler,
+        )
+    )
+
+    app.include_router(
+        operations_admin.build_router(
+            require_admin=require_admin,
+            database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
+            timeout_seconds=PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
         )
     )
 
     app.include_router(
         control_room_admin.build_router(
-            require_control_room=(
-                effective_control_room_guard
-            ),
+            require_control_room=effective_control_room_guard,
         )
     )
 
@@ -300,9 +279,7 @@ def compose_application(
         build_persistent_operations_startup_handler(
             app=app,
             database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
-            timeout_seconds=(
-                PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS
-            ),
+            timeout_seconds=PERSISTENT_OPERATIONS_CONNECT_TIMEOUT_SECONDS,
         ),
     )
 
@@ -311,11 +288,7 @@ def compose_application(
         connection_factory=connection_factory,
         analysis_version=analysis_version,
         scoring_version=scoring_version,
-        gemini_client_factory=(
-            gemini_client_factory
-        ),
+        gemini_client_factory=gemini_client_factory,
         gemini_generator=gemini_generator,
-        operational_event_recorder=(
-            persistent_event_recorder
-        ),
+        operational_event_recorder=persistent_event_recorder,
     )
