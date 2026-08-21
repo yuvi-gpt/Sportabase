@@ -2,6 +2,7 @@ const RENDER_ORIGIN = "https://sportabase-control-room-origin.onrender.com";
 const CONTROL_ROOM_PREFIX = "/admin/control-room";
 const SESSION_PATH = `${CONTROL_ROOM_PREFIX}/session`;
 const AI_USAGE_PATH = `${CONTROL_ROOM_PREFIX}/ai-usage?days=7`;
+const PIPELINE_PATH = `${CONTROL_ROOM_PREFIX}/pipeline?days=7`;
 const PROVENANCE_HEADER = "X-Sportabase-Origin-Provenance";
 
 function noStoreHeaders(extra = {}) {
@@ -118,6 +119,14 @@ function metricStateClass(value, dangerWhenPositive = false) {
   return "ok";
 }
 
+function statusLabel(value) {
+  const normalized = String(value || "unknown").trim().replaceAll("_", " ");
+  if (!normalized) {
+    return "Unknown";
+  }
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function renderFailureRows(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return '<tr><td colspan="4" class="empty">No provider failures recorded in the current usage day.</td></tr>';
@@ -153,7 +162,51 @@ function renderBreakdownRows(rows) {
     .join("");
 }
 
-function renderDashboard(session, usage, usageError = "") {
+function renderPipelineModeRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '<tr><td colspan="8" class="empty">No mode activity recorded in the current usage day.</td></tr>';
+  }
+
+  return rows
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row?.mode || "unknown")}</td>
+        <td>${formatInt(row?.total_records)}</td>
+        <td>${formatInt(row?.provider_attempts)}</td>
+        <td>${formatInt(row?.successful_calls)}</td>
+        <td>${formatInt(row?.failed_calls)}</td>
+        <td>${formatInt(row?.cache_hits)}</td>
+        <td>${formatInt(row?.inflight_joins)}</td>
+        <td>${formatPercent(row?.success_rate_percent)}</td>
+      </tr>`)
+    .join("");
+}
+
+function renderRecentPipelineRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return '<tr><td colspan="6" class="empty">No pipeline activity recorded in the selected window.</td></tr>';
+  }
+
+  return rows
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row?.usage_day || "Unavailable")}</td>
+        <td>${formatInt(row?.total_records)}</td>
+        <td>${formatInt(row?.provider_attempts)}</td>
+        <td>${formatInt(row?.successful_calls)}</td>
+        <td>${formatInt(row?.failed_calls)}</td>
+        <td>${formatInt(row?.cache_hits)}</td>
+      </tr>`)
+    .join("");
+}
+
+function renderDashboard(
+  session,
+  usage,
+  usageError = "",
+  pipeline,
+  pipelineError = "",
+) {
   const principal = session?.principal ?? {};
   const methods = Array.isArray(principal.auth_methods)
     ? principal.auth_methods.join(", ")
@@ -188,6 +241,22 @@ function renderDashboard(session, usage, usageError = "") {
   const requestWindow = Number.isFinite(Number(windowInfo.requested_days))
     ? `${formatInt(windowInfo.requested_days)} days`
     : "Unavailable";
+
+  const pipelineHealthy = Boolean(pipeline && !pipelineError);
+  const pipelineState = pipeline?.state ?? {};
+  const pipelineToday = pipeline?.today ?? {};
+  const pipelineInstrumentation = pipeline?.instrumentation ?? {};
+  const pipelineWindow = pipeline?.window ?? {};
+  const pipelineCoverage = pipelineHealthy
+    ? statusLabel(pipelineState.coverage || "partial")
+    : "Unavailable";
+  const pipelineOutcomeText = statusLabel(
+    pipelineState.outcomes || "unknown",
+  );
+  const pipelineActivityText = statusLabel(
+    pipelineState.activity || "unknown",
+  );
+  const pipelineHasFailures = numericValue(pipelineToday.failed_calls) > 0;
 
   const usageBanner = usageHealthy
     ? `<div class="status-line"><span class="dot"></span> Access verified · AI telemetry live</div>`
@@ -284,6 +353,99 @@ function renderDashboard(session, usage, usageError = "") {
           </section>
         </section>`;
 
+  const pipelineBody = pipelineHealthy
+    ? `
+        <section id="pipeline">
+          <div class="section-heading">
+            <div><h2>Content Pipeline</h2><p>Observed analysis activity and explicit instrumentation boundaries from the operational API.</p></div>
+            <span class="partial-badge">${escapeHtml(pipelineCoverage)} coverage</span>
+          </div>
+
+          <div class="metrics">
+            <div class="metric">
+              <div class="metric-label">Analysis records</div>
+              <div class="metric-value">${formatInt(pipelineToday.total_records)}</div>
+              <div class="metric-meta">Usage day ${escapeHtml(pipeline?.usage_day_utc || "Unavailable")}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Article records</div>
+              <div class="metric-value">${formatInt(pipelineToday.article_records)}</div>
+              <div class="metric-meta">Observed article-mode activity only.</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Video records</div>
+              <div class="metric-value">${formatInt(pipelineToday.video_records)}</div>
+              <div class="metric-meta">Observed video-mode activity only.</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Pipeline outcomes</div>
+              <div class="metric-value ${pipelineHasFailures ? "warn" : "ok"}">${escapeHtml(pipelineOutcomeText)}</div>
+              <div class="metric-meta">Activity: ${escapeHtml(pipelineActivityText)}</div>
+            </div>
+          </div>
+
+          <div class="two-col">
+            <section class="panel">
+              <div class="panel-head"><strong>Observed signals</strong><span>Live contract</span></div>
+              <table class="table">
+                <tr><td>Analysis activity</td><td class="ok">${escapeHtml(statusLabel(pipelineInstrumentation.analysis_activity))}</td></tr>
+                <tr><td>Cache activity</td><td class="ok">${escapeHtml(statusLabel(pipelineInstrumentation.cache_activity))}</td></tr>
+                <tr><td>Provider outcomes</td><td class="ok">${escapeHtml(statusLabel(pipelineInstrumentation.provider_outcomes))}</td></tr>
+                <tr><td>Mode breakdown</td><td class="ok">${escapeHtml(statusLabel(pipelineInstrumentation.mode_breakdown))}</td></tr>
+                <tr><td>Average latency</td><td>${formatInt(pipelineToday.average_latency_ms)} ms</td></tr>
+                <tr><td>Cache hit rate</td><td>${formatPercent(pipelineToday.cache_hit_rate_percent)}</td></tr>
+              </table>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head"><strong>Coverage boundaries</strong><span>Not inferred</span></div>
+              <table class="table boundary-table">
+                <tr><td>Browser capture ingestion</td><td><span class="boundary-tag">${escapeHtml(statusLabel(pipelineInstrumentation.browser_capture_ingestion))}</span></td></tr>
+                <tr><td>Extraction stage</td><td><span class="boundary-tag">${escapeHtml(statusLabel(pipelineInstrumentation.extraction_stage))}</span></td></tr>
+                <tr><td>Automation jobs</td><td><span class="boundary-tag">${escapeHtml(statusLabel(pipelineInstrumentation.automation_jobs))}</span></td></tr>
+                <tr><td>Window</td><td>${formatInt(pipelineWindow.requested_days)} days</td></tr>
+                <tr><td>Window start</td><td>${escapeHtml(pipelineWindow.start_day_utc || "Unavailable")}</td></tr>
+                <tr><td>Window end</td><td>${escapeHtml(pipelineWindow.end_day_utc || "Unavailable")}</td></tr>
+              </table>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><strong>Today by mode</strong><span>${formatInt(pipelineToday.total_records)} records</span></div>
+            <div class="table-scroll">
+              <table class="table data-table">
+                <thead>
+                  <tr><th>Mode</th><th>Records</th><th>Provider attempts</th><th>Success</th><th>Failures</th><th>Cache hits</th><th>In-flight</th><th>Success rate</th></tr>
+                </thead>
+                <tbody>${renderPipelineModeRows(pipeline?.by_mode)}</tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><strong>Recent pipeline days</strong><span>${formatInt(pipelineWindow.days_with_activity)} days with activity</span></div>
+            <div class="table-scroll">
+              <table class="table data-table">
+                <thead>
+                  <tr><th>UTC day</th><th>Records</th><th>Provider attempts</th><th>Success</th><th>Failures</th><th>Cache hits</th></tr>
+                </thead>
+                <tbody>${renderRecentPipelineRows(pipeline?.recent_days)}</tbody>
+              </table>
+            </div>
+          </section>
+        </section>`
+    : `
+        <section id="pipeline">
+          <div class="section-heading">
+            <div><h2>Content Pipeline</h2><p>Pipeline telemetry could not be loaded. No unverified stages are shown as healthy.</p></div>
+            <span class="degraded-badge">Unavailable</span>
+          </div>
+          <section class="panel degraded-panel">
+            <div class="panel-head"><strong>Pipeline telemetry</strong><span>Degraded</span></div>
+            <div class="degraded-copy">${escapeHtml(pipelineError || "Pipeline telemetry unavailable")}</div>
+          </section>
+        </section>`;
+
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -320,6 +482,7 @@ function renderDashboard(session, usage, usageError = "") {
     .nav-item.active { color: #eef2f7; background: #151a22; border-left-color: #69d9ad; }
     .nav-item .pending { color: #555f6f; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
     .nav-item .live { color: #78e3b7; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .nav-item .partial { color: #d7bb7a; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
     .side-footer { position: absolute; left: 14px; right: 14px; bottom: 18px; border-top: 1px solid #202530; padding: 14px 8px 0; color: #626d7d; font-size: 10px; line-height: 1.5; }
     .main { min-width: 0; }
     .topbar { min-height: 62px; border-bottom: 1px solid #222733; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 24px; background: #0b0e13; position: sticky; top: 0; z-index: 5; }
@@ -353,12 +516,16 @@ function renderDashboard(session, usage, usageError = "") {
     .empty { color: #626d7d !important; text-align: center !important; padding: 20px 14px !important; }
     .table-scroll { overflow-x: auto; }
     .two-col { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; }
-    .live-badge, .degraded-badge { border: 1px solid #2a303b; padding: 4px 7px; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+    .live-badge, .partial-badge, .degraded-badge { border: 1px solid #2a303b; padding: 4px 7px; font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
     .live-badge { color: #78e3b7; border-color: #315143; }
+    .partial-badge { color: #d7bb7a; border-color: #584a31; }
     .degraded-badge { color: #e2b96f; border-color: #584a31; }
     .degraded-panel { border-color: #584a31; }
     .degraded-copy { padding: 18px 14px; color: #a99470; font-size: 11px; }
-    #ai-quota { scroll-margin-top: 84px; margin-top: 2px; }
+    #pipeline, #ai-quota { scroll-margin-top: 84px; margin-top: 2px; }
+    #pipeline { margin-bottom: 4px; }
+    .boundary-tag { display: inline-block; color: #d7bb7a; border: 1px solid #584a31; padding: 3px 6px; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; line-height: 1.4; }
+    .boundary-table td:last-child { overflow-wrap: anywhere; }
     .placeholder-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-top: 1px solid #242a35; border-left: 1px solid #242a35; }
     .placeholder { min-height: 120px; padding: 14px; border-right: 1px solid #242a35; border-bottom: 1px solid #242a35; background: #0d1117; }
     .placeholder strong { font-size: 11px; }
@@ -394,7 +561,7 @@ function renderDashboard(session, usage, usageError = "") {
       </div>
       <nav aria-label="Control Room sections">
         <a class="nav-item active" href="#overview"><span>Overview</span></a>
-        <div class="nav-item"><span>Pipeline</span><span class="pending">Later</span></div>
+        <a class="nav-item" href="#pipeline"><span>Pipeline</span><span class="${pipelineHealthy ? "partial" : "pending"}">${pipelineHealthy ? "Partial" : "Degraded"}</span></a>
         <a class="nav-item" href="#ai-quota"><span>AI &amp; Quota</span><span class="${usageHealthy ? "live" : "pending"}">${usageHealthy ? "Live" : "Degraded"}</span></a>
         <div class="nav-item"><span>Sources</span><span class="pending">Later</span></div>
         <div class="nav-item"><span>Jobs</span><span class="pending">Later</span></div>
@@ -410,7 +577,7 @@ function renderDashboard(session, usage, usageError = "") {
       <header class="topbar">
         <div>
           <div class="title">Overview</div>
-          <div class="subtle">Operational status, secured session and live AI telemetry</div>
+          <div class="subtle">Operational status, secured session, pipeline coverage and live AI telemetry</div>
         </div>
         ${usageBanner}
       </header>
@@ -456,6 +623,7 @@ function renderDashboard(session, usage, usageError = "") {
           </table>
         </section>
 
+        ${pipelineBody}
         ${aiUsageBody}
 
         <section>
@@ -463,11 +631,11 @@ function renderDashboard(session, usage, usageError = "") {
             <div><h2>Remaining instrumentation</h2><p>Modules stay empty until their backend data contracts are ready.</p></div>
           </div>
           <div class="placeholder-grid">
-            <div class="placeholder"><strong>Content Pipeline</strong><p>Ingestion, extraction, browser capture and media processing health.</p><span class="tag">Not instrumented</span></div>
             <div class="placeholder"><strong>Sources</strong><p>Source freshness, failures, blocks and evidence availability.</p><span class="tag">Not instrumented</span></div>
             <div class="placeholder"><strong>Jobs</strong><p>Pending, running, retried and failed background operations.</p><span class="tag">Not instrumented</span></div>
             <div class="placeholder"><strong>Intelligence</strong><p>Claims, stories, entity resolution and verification pipeline state.</p><span class="tag">Not instrumented</span></div>
             <div class="placeholder"><strong>Errors</strong><p>Recent application, provider and pipeline failures.</p><span class="tag">Not instrumented</span></div>
+            <div class="placeholder"><strong>Security</strong><p>Expanded security observability beyond the attested session surface.</p><span class="tag">Not instrumented</span></div>
             <div class="placeholder"><strong>Releases</strong><p>Deployed commit, rollout state and feature flags.</p><span class="tag">Not instrumented</span></div>
           </div>
         </section>
@@ -484,6 +652,34 @@ function renderDashboard(session, usage, usageError = "") {
       "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     }),
   });
+}
+
+async function parseJsonTelemetry(response, label) {
+  if (!response) {
+    return {
+      payload: null,
+      error: `${label} origin request failed.`,
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      payload: null,
+      error: `${label} returned HTTP ${response.status}.`,
+    };
+  }
+
+  try {
+    return {
+      payload: await response.json(),
+      error: "",
+    };
+  } catch {
+    return {
+      payload: null,
+      error: `${label} response was invalid.`,
+    };
+  }
 }
 
 async function handleDashboard(request, context) {
@@ -516,33 +712,37 @@ async function handleDashboard(request, context) {
     return textResponse("Control Room session verification failed", 403);
   }
 
-  const usageResponse = await fetchOrigin(
-    request,
-    `${CONTROL_ROOM_PREFIX}/ai-usage`,
-    "?days=7",
-    context,
+  const [usageResponse, pipelineResponse] = await Promise.all([
+    fetchOrigin(
+      request,
+      `${CONTROL_ROOM_PREFIX}/ai-usage`,
+      "?days=7",
+      context,
+    ),
+    fetchOrigin(
+      request,
+      `${CONTROL_ROOM_PREFIX}/pipeline`,
+      "?days=7",
+      context,
+    ),
+  ]);
+
+  const usageResult = await parseJsonTelemetry(
+    usageResponse,
+    "Control Room AI telemetry",
+  );
+  const pipelineResult = await parseJsonTelemetry(
+    pipelineResponse,
+    "Control Room pipeline telemetry",
   );
 
-  if (!usageResponse) {
-    return renderDashboard(session, null, "Control Room AI telemetry origin request failed.");
-  }
-
-  if (!usageResponse.ok) {
-    return renderDashboard(
-      session,
-      null,
-      `Control Room AI telemetry returned HTTP ${usageResponse.status}.`,
-    );
-  }
-
-  let usage;
-  try {
-    usage = await usageResponse.json();
-  } catch {
-    return renderDashboard(session, null, "Control Room AI telemetry response was invalid.");
-  }
-
-  return renderDashboard(session, usage);
+  return renderDashboard(
+    session,
+    usageResult.payload,
+    usageResult.error,
+    pipelineResult.payload,
+    pipelineResult.error,
+  );
 }
 
 async function proxyControlRoomRequest(request, incomingUrl, context) {
