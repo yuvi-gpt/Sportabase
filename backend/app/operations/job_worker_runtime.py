@@ -46,7 +46,12 @@ def _emit_reconcile_event(
     if not callable(event_recorder) or not isinstance(result, Mapping):
         return
 
-    created = max(0, int(result.get("created") or 0))
+    try:
+        created = max(0, int(result.get("created") or 0))
+        examined = max(0, int(result.get("examined") or 0))
+    except (TypeError, ValueError):
+        return
+
     if created <= 0:
         return
 
@@ -59,7 +64,7 @@ def _emit_reconcile_event(
             details={
                 "telemetry_version": PERSISTENT_JOB_WORKER_RUNTIME_VERSION,
                 "created": created,
-                "examined": max(0, int(result.get("examined") or 0)),
+                "examined": examined,
             },
         )
     except Exception:
@@ -310,9 +315,15 @@ def register_persistent_job_worker_lifecycle(
     }
 
 
+def register_browser_capture_automation_lifecycle(**kwargs):
+    """Compatibility name for the instrumented browser-capture worker."""
+    return register_persistent_job_worker_lifecycle(**kwargs)
+
+
 __all__ = [
     "PERSISTENT_JOB_WORKER_RUNTIME_VERSION",
     "start_persistent_job_worker",
     "stop_persistent_job_worker",
     "register_persistent_job_worker_lifecycle",
+    "register_browser_capture_automation_lifecycle",
 ]
