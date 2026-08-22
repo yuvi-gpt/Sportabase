@@ -4,6 +4,9 @@ import copy
 from collections.abc import Mapping
 from typing import Any
 
+from app.intelligence.runtime_finalization import (
+    finalize_structured_claim_materialization,
+)
 from app.intelligence.structured_claim_ingestion import (
     build_structured_claim_allowlist,
     materialize_selected_structured_claim_safely,
@@ -119,6 +122,22 @@ def _materialization_summary(value: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _evolution_summary(value: Mapping[str, Any]) -> dict[str, Any]:
+    evolution = value.get("evolution")
+    evolution = dict(evolution) if isinstance(evolution, Mapping) else {}
+    return {
+        "version": _clean(value.get("version"), 128),
+        "status": _clean(value.get("status"), 64),
+        "reason": _clean(value.get("reason"), 128),
+        "canonical_claim_id": _clean(value.get("canonical_claim_id"), 128),
+        "evolution_status": _clean(evolution.get("status"), 64),
+        "family_key": _clean(evolution.get("family_key"), 256),
+        "family_claim_count": int(evolution.get("family_claim_count") or 0),
+        "links_written": int(evolution.get("links_written") or 0),
+        "policy": dict(value.get("policy") or {}),
+    }
+
+
 def execute_multimodal_shadow_api(
     *,
     request_payload: Mapping[str, Any],
@@ -222,10 +241,15 @@ def execute_multimodal_shadow_api(
         ),
         connection_factory=connection_factory,
     )
+    finalization = finalize_structured_claim_materialization(
+        materialization=materialization,
+        connection_factory=connection_factory,
+    )
 
     stages = result.get("stages")
     stages = copy.deepcopy(dict(stages)) if isinstance(stages, Mapping) else {}
     stages["canonical_claim_materialization"] = materialization
+    stages["claim_evolution_reconciliation"] = finalization
     result["stages"] = stages
 
     result["structured_claim_ingestion"] = {
@@ -247,12 +271,15 @@ def execute_multimodal_shadow_api(
             ),
         },
         "materialization": _materialization_summary(materialization),
+        "evolution": _evolution_summary(finalization),
         "policy": {
             "existing_multimodal_fusion_call_reused": True,
             "additional_provider_calls": 0,
             "structured_shadow_cannot_select_production_claim": True,
             "dual_full_identity_required_for_materialization": True,
             "materialization_failure_is_advisory": True,
+            "claim_evolution_runs_after_materialization": True,
+            "claim_evolution_failure_is_advisory": True,
             "affects_live_merit": False,
         },
     }
@@ -265,6 +292,8 @@ def execute_multimodal_shadow_api(
             "structured_claim_existing_fusion_call_reused": True,
             "structured_claim_additional_provider_calls": 0,
             "structured_claim_materialization_is_advisory": True,
+            "claim_evolution_reconciliation_enabled": True,
+            "claim_evolution_reconciliation_is_advisory": True,
             "canonical_identity_does_not_establish_truth": True,
         }
     )
@@ -279,6 +308,8 @@ def execute_multimodal_shadow_api(
                 "structured_claim_shadow_enabled": True,
                 "structured_claim_additional_provider_calls": 0,
                 "canonical_identity_materialization_advisory": True,
+                "claim_evolution_reconciliation_enabled": True,
+                "claim_evolution_reconciliation_advisory": True,
             }
         )
         output["policy"] = outer_policy
