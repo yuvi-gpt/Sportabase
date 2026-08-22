@@ -237,6 +237,7 @@ def compose_application(
             analyze_video_handler=analyze_video_handler,
             analyze_handler=analyze_handler,
             operational_event_recorder=persistent_event_recorder,
+            connection_factory=connection_factory,
         )
     )
 
