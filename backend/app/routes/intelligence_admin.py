@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.intelligence.claim_entity_context import (
     build_claim_entity_context,
+)
+from app.intelligence.claim_materialization import (
+    ClaimMaterializationConflictError,
+    route_and_materialize_claim_semantics,
 )
 from app.intelligence.claim_story_context import (
     build_claim_intelligence_context,
@@ -28,6 +35,23 @@ from app.intelligence.projection import (
 from app.intelligence.source_health import (
     build_source_evidence_health,
 )
+
+
+class ClaimSemanticMaterializationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_subject_key: str = Field(min_length=1, max_length=256)
+    claim_text: str = Field(default="", max_length=4000)
+    allowed_entity_keys: list[str] = Field(min_length=1, max_length=100)
+    router_output: dict[str, Any] | str
+    observed_at: str = Field(min_length=1, max_length=128)
+    relationship_type: str = Field(default="reports", min_length=1, max_length=64)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    source_observation_id: str | None = Field(default=None, max_length=128)
+    reporter_observation_id: str | None = Field(default=None, max_length=128)
+    evidence_id: str | None = Field(default=None, max_length=128)
+    stale_after_days: int = Field(default=30, ge=1, le=3650)
+    timeline_limit: int = Field(default=100, ge=1, le=500)
 
 
 def build_router(
@@ -101,6 +125,33 @@ def build_router(
             connection_factory=connection_factory,
             limit=limit,
         )
+
+    @router.post("/admin/intelligence/claims/materialize-semantic-router")
+    def intelligence_materialize_semantic_router(
+        body: ClaimSemanticMaterializationRequest,
+        request: Request,
+    ):
+        require_admin(request)
+        try:
+            return route_and_materialize_claim_semantics(
+                router_output=body.router_output,
+                expected_subject_key=body.expected_subject_key,
+                allowed_entity_keys=body.allowed_entity_keys,
+                claim_text=body.claim_text,
+                observed_at=body.observed_at,
+                connection_factory=connection_factory,
+                source_observation_id=body.source_observation_id,
+                reporter_observation_id=body.reporter_observation_id,
+                evidence_id=body.evidence_id,
+                relationship_type=body.relationship_type,
+                confidence=body.confidence,
+                stale_after_days=body.stale_after_days,
+                timeline_limit=body.timeline_limit,
+            )
+        except ClaimMaterializationConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/admin/intelligence/claims/{claim_id}/context")
     def intelligence_claim_context(
