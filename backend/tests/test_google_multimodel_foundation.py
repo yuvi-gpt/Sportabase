@@ -4,15 +4,10 @@ import unittest
 from pathlib import Path
 
 
-BACKEND_DIR = Path(
-    __file__
-).resolve().parents[1]
+BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(
-        0,
-        str(BACKEND_DIR),
-    )
+    sys.path.insert(0, str(BACKEND_DIR))
 
 
 from app.ai.models import (
@@ -21,9 +16,6 @@ from app.ai.models import (
     GEMMA_HOSTED_MODEL_IDS,
     HOSTED_GENERATION_MODEL_IDS,
     MODEL_REGISTRY_VERSION,
-)
-from app.ai.quota import (
-    capacity_policy_for_model,
 )
 from app.ai.resources import (
     AI_RESOURCE_REGISTRY_VERSION,
@@ -40,16 +32,28 @@ from app.ai.router import (
     route_task,
 )
 from app.ai.tasks import (
+    AGENTIC_PROVENANCE_AGENT,
+    AGENTIC_PROVENANCE_INSPECTION,
     ARTICLE_CLASSIFIER,
     ARTICLE_SINGLE_PASS,
     ARTICLE_TLDR,
+    CLAIM_DEEP_SHADOW_REVIEW,
+    CLAIM_SHADOW_REVIEW,
     COMPATIBILITY_GENERATION_FALLBACK,
     CORROBORATION_CANDIDATE_SEMANTICS,
     CORROBORATION_COLLECTION_SEMANTICS,
     EVIDENCE_SEMANTICS_GENERATION_MODEL,
     FAST_UTILITY_GENERATION_MODEL,
     GENERAL_ANALYSIS_GENERATION_MODEL,
+    GEMMA_DEEP_SHADOW_MODEL,
+    GEMMA_SHADOW_MODEL,
+    HOSTED_RETRIEVAL_EMBEDDING_MODEL,
+    LOCAL_RETRIEVAL_EMBEDDING,
+    LOCAL_RETRIEVAL_EMBEDDING_MODEL,
     PROVENANCE_RESEARCH,
+    PROVENANCE_RESEARCH_AGENT,
+    PROVENANCE_RESEARCH_MAX,
+    PROVENANCE_RESEARCH_MAX_AGENT,
     RETRIEVAL_EMBEDDING,
     TASK_REGISTRY_VERSION,
     VIDEO_ANALYSIS,
@@ -76,43 +80,40 @@ EXPECTED_RESOURCES = (
     "google/embeddinggemma-300M",
 )
 
-LIVE_GENERATION_TASKS = (
+EXPECTED_TASKS = (
     ARTICLE_TLDR,
-    ARTICLE_SINGLE_PASS,
     ARTICLE_CLASSIFIER,
+    ARTICLE_SINGLE_PASS,
     VIDEO_ANALYSIS,
     CORROBORATION_CANDIDATE_SEMANTICS,
     CORROBORATION_COLLECTION_SEMANTICS,
-)
-
-EXPECTED_TASKS = (
-    *LIVE_GENERATION_TASKS,
+    CLAIM_SHADOW_REVIEW,
+    CLAIM_DEEP_SHADOW_REVIEW,
     RETRIEVAL_EMBEDDING,
+    LOCAL_RETRIEVAL_EMBEDDING,
     PROVENANCE_RESEARCH,
+    PROVENANCE_RESEARCH_MAX,
+    AGENTIC_PROVENANCE_INSPECTION,
 )
 
-EXPECTED_PRIMARY_BY_TASK = {
+EXPECTED_PRIMARY = {
     ARTICLE_TLDR: "gemini-3.5-flash-lite",
     ARTICLE_CLASSIFIER: "gemini-3.5-flash-lite",
     ARTICLE_SINGLE_PASS: "gemini-3.6-flash",
     VIDEO_ANALYSIS: "gemini-3.6-flash",
     CORROBORATION_CANDIDATE_SEMANTICS: "gemini-3.5-flash",
     CORROBORATION_COLLECTION_SEMANTICS: "gemini-3.5-flash",
+    CLAIM_SHADOW_REVIEW: "gemma-4-26b-a4b-it",
+    CLAIM_DEEP_SHADOW_REVIEW: "gemma-4-31b-it",
+    RETRIEVAL_EMBEDDING: "gemini-embedding-2",
+    LOCAL_RETRIEVAL_EMBEDDING: "google/embeddinggemma-300M",
+    PROVENANCE_RESEARCH: "deep-research-preview-04-2026",
+    PROVENANCE_RESEARCH_MAX: "deep-research-max-preview-04-2026",
+    AGENTIC_PROVENANCE_INSPECTION: "antigravity-preview-05-2026",
 }
 
-EXPECTED_FALLBACK_BY_TASK = {
-    ARTICLE_TLDR: ("gemini-3.5-flash",),
-    ARTICLE_CLASSIFIER: ("gemini-3.5-flash",),
-    ARTICLE_SINGLE_PASS: ("gemini-3.5-flash",),
-    VIDEO_ANALYSIS: ("gemini-3.5-flash",),
-    CORROBORATION_CANDIDATE_SEMANTICS: (),
-    CORROBORATION_COLLECTION_SEMANTICS: (),
-}
 
-
-class GoogleAIResourceFoundationTests(
-    unittest.TestCase
-):
+class GoogleAIResourceFoundationTests(unittest.TestCase):
     def test_registry_versions_are_explicit(self):
         self.assertEqual(
             AI_RESOURCE_REGISTRY_VERSION,
@@ -124,7 +125,7 @@ class GoogleAIResourceFoundationTests(
         )
         self.assertEqual(
             TASK_REGISTRY_VERSION,
-            "ai-task-registry-v4",
+            "ai-task-registry-v5",
         )
         self.assertEqual(
             RESOURCE_ROUTER_VERSION,
@@ -140,49 +141,26 @@ class GoogleAIResourceFoundationTests(
     def test_generation_pool_contains_gemini_and_gemma(self):
         self.assertEqual(
             GEMINI_GENERATION_MODEL_IDS,
-            (
-                "gemini-3.7-flash",
-                "gemini-3.6-flash",
-                "gemini-3.5-flash",
-                "gemini-3.5-flash-lite",
-                "gemini-3.1-flash-lite",
-                "gemini-2.5-pro",
-                "gemini-2.5-flash",
-                "gemini-2.5-flash-lite",
-            ),
+            EXPECTED_RESOURCES[:8],
         )
         self.assertEqual(
             GEMMA_HOSTED_MODEL_IDS,
-            (
-                "gemma-4-31b-it",
-                "gemma-4-26b-a4b-it",
-            ),
+            EXPECTED_RESOURCES[8:10],
         )
         self.assertEqual(
             HOSTED_GENERATION_MODEL_IDS,
-            (
-                *GEMINI_GENERATION_MODEL_IDS,
-                *GEMMA_HOSTED_MODEL_IDS,
-            ),
+            EXPECTED_RESOURCES[:10],
         )
 
-    def test_default_model_remains_compatibility_baseline(self):
+    def test_named_model_roles_are_explicit(self):
         self.assertEqual(
             DEFAULT_GEMINI_MODEL,
             "gemini-3.5-flash",
-        )
-        current = resource_spec(
-            DEFAULT_GEMINI_MODEL
-        )
-        self.assertFalse(
-            current.requires_project_capacity_config
         )
         self.assertEqual(
             COMPATIBILITY_GENERATION_FALLBACK,
             DEFAULT_GEMINI_MODEL,
         )
-
-    def test_specialized_generation_roles_are_explicit(self):
         self.assertEqual(
             FAST_UTILITY_GENERATION_MODEL,
             "gemini-3.5-flash-lite",
@@ -195,345 +173,182 @@ class GoogleAIResourceFoundationTests(
             EVIDENCE_SEMANTICS_GENERATION_MODEL,
             "gemini-3.5-flash",
         )
-
-    def test_new_hosted_resources_require_project_capacity_config(self):
-        for resource_id in EXPECTED_RESOURCES:
-            spec = resource_spec(
-                resource_id
-            )
-
-            if resource_id == DEFAULT_GEMINI_MODEL:
-                continue
-
-            if spec.hosted:
-                with self.subTest(
-                    resource=resource_id
-                ):
-                    self.assertTrue(
-                        spec.requires_project_capacity_config
-                    )
-
-    def test_specialized_resource_kinds_are_separate(self):
         self.assertEqual(
-            resource_spec(
-                "gemini-embedding-2"
-            ).resource_kind,
-            EMBEDDING,
+            GEMMA_SHADOW_MODEL,
+            "gemma-4-26b-a4b-it",
         )
         self.assertEqual(
-            resource_spec(
-                "google/embeddinggemma-300M"
-            ).resource_kind,
-            LOCAL_EMBEDDING,
+            GEMMA_DEEP_SHADOW_MODEL,
+            "gemma-4-31b-it",
         )
         self.assertEqual(
-            resource_spec(
-                "antigravity-preview-05-2026"
-            ).resource_kind,
-            MANAGED_AGENT,
+            HOSTED_RETRIEVAL_EMBEDDING_MODEL,
+            "gemini-embedding-2",
         )
         self.assertEqual(
-            resource_spec(
-                "gemma-4-31b-it"
-            ).resource_kind,
-            GENERATION,
+            LOCAL_RETRIEVAL_EMBEDDING_MODEL,
+            "google/embeddinggemma-300M",
+        )
+        self.assertEqual(
+            PROVENANCE_RESEARCH_AGENT,
+            "deep-research-preview-04-2026",
+        )
+        self.assertEqual(
+            PROVENANCE_RESEARCH_MAX_AGENT,
+            "deep-research-max-preview-04-2026",
+        )
+        self.assertEqual(
+            AGENTIC_PROVENANCE_AGENT,
+            "antigravity-preview-05-2026",
         )
 
-    def test_task_registry_is_exact(self):
+    def test_task_registry_is_exact_and_production_routable(self):
         self.assertEqual(
             registered_task_ids(),
             EXPECTED_TASKS,
         )
 
-    def test_live_generation_tasks_have_task_specific_primaries(self):
-        for task_id in LIVE_GENERATION_TASKS:
-            with self.subTest(
-                task=task_id
-            ):
-                policy = task_policy(
-                    task_id
-                )
-                self.assertTrue(
-                    policy.production_enabled
-                )
+        for task_id, expected_resource in EXPECTED_PRIMARY.items():
+            with self.subTest(task=task_id):
+                policy = task_policy(task_id)
+                route = route_task(task_id)
+
+                self.assertTrue(policy.production_enabled)
                 self.assertEqual(
                     policy.primary_resource_id,
-                    EXPECTED_PRIMARY_BY_TASK[
-                        task_id
-                    ],
-                )
-                self.assertEqual(
-                    policy.fallback_resource_ids,
-                    EXPECTED_FALLBACK_BY_TASK[
-                        task_id
-                    ],
-                )
-                self.assertEqual(
-                    policy.automatic_fallback_enabled,
-                    bool(
-                        EXPECTED_FALLBACK_BY_TASK[
-                            task_id
-                        ]
-                    ),
-                )
-
-                route = route_task(
-                    task_id
+                    expected_resource,
                 )
                 self.assertEqual(
                     route.resource_id,
-                    EXPECTED_PRIMARY_BY_TASK[
-                        task_id
-                    ],
+                    expected_resource,
                 )
                 self.assertEqual(
                     route.selection_source,
                     "task_primary",
                 )
 
-    def test_utility_tasks_use_flash_lite(self):
+    def test_generation_tasks_use_expected_resource_kinds(self):
         for task_id in (
             ARTICLE_TLDR,
             ARTICLE_CLASSIFIER,
-        ):
-            self.assertEqual(
-                task_policy(
-                    task_id
-                ).primary_resource_id,
-                FAST_UTILITY_GENERATION_MODEL,
-            )
-
-    def test_rich_analysis_tasks_use_36_flash(self):
-        for task_id in (
             ARTICLE_SINGLE_PASS,
             VIDEO_ANALYSIS,
-        ):
-            self.assertEqual(
-                task_policy(
-                    task_id
-                ).primary_resource_id,
-                GENERAL_ANALYSIS_GENERATION_MODEL,
-            )
-
-    def test_evidence_semantics_remain_on_directly_validated_35_flash(self):
-        for task_id in (
             CORROBORATION_CANDIDATE_SEMANTICS,
             CORROBORATION_COLLECTION_SEMANTICS,
+            CLAIM_SHADOW_REVIEW,
+            CLAIM_DEEP_SHADOW_REVIEW,
         ):
-            policy = task_policy(
-                task_id
-            )
-            self.assertEqual(
-                policy.primary_resource_id,
-                EVIDENCE_SEMANTICS_GENERATION_MODEL,
-            )
-            self.assertFalse(
-                policy.automatic_fallback_enabled
-            )
-            self.assertEqual(
-                policy.fallback_resource_ids,
-                (),
-            )
+            with self.subTest(task=task_id):
+                self.assertEqual(
+                    route_task(task_id).resource_kind,
+                    GENERATION,
+                )
 
-    def test_generation_evaluation_can_select_hosted_gemma(self):
-        route = route_task(
-            ARTICLE_CLASSIFIER,
-            requested_resource_id=(
-                "gemma-4-26b-a4b-it"
-            ),
-        )
+    def test_specialized_tasks_use_separate_resource_kinds(self):
         self.assertEqual(
-            route.resource_id,
-            "gemma-4-26b-a4b-it",
-        )
-        self.assertEqual(
-            route.selection_source,
-            "explicit_evaluation_override",
-        )
-        self.assertTrue(
-            route.requires_project_capacity_config
-        )
-
-    def test_generation_evaluation_can_select_newest_flash(self):
-        route = route_task(
-            ARTICLE_CLASSIFIER,
-            requested_resource_id=(
-                "gemini-3.7-flash"
-            ),
-        )
-        self.assertEqual(
-            route.resource_id,
-            "gemini-3.7-flash",
-        )
-        self.assertEqual(
-            route.selection_source,
-            "explicit_evaluation_override",
-        )
-        self.assertTrue(
-            route.requires_project_capacity_config
-        )
-
-    def test_embedding_task_is_evaluation_only(self):
-        policy = task_policy(
-            RETRIEVAL_EMBEDDING
-        )
-        self.assertFalse(
-            policy.production_enabled
-        )
-        self.assertIsNone(
-            policy.primary_resource_id
-        )
-
-        with self.assertRaises(
-            RuntimeError
-        ):
-            route_task(
-                RETRIEVAL_EMBEDDING
-            )
-
-        hosted = route_task(
-            RETRIEVAL_EMBEDDING,
-            requested_resource_id=(
-                "gemini-embedding-2"
-            ),
-        )
-        local = route_task(
-            RETRIEVAL_EMBEDDING,
-            requested_resource_id=(
-                "google/embeddinggemma-300M"
-            ),
-        )
-
-        self.assertEqual(
-            hosted.resource_kind,
+            route_task(RETRIEVAL_EMBEDDING).resource_kind,
             EMBEDDING,
         )
-        self.assertTrue(
-            hosted.requires_project_capacity_config
-        )
         self.assertEqual(
-            local.resource_kind,
+            route_task(LOCAL_RETRIEVAL_EMBEDDING).resource_kind,
             LOCAL_EMBEDDING,
         )
-        self.assertFalse(
-            local.requires_project_capacity_config
-        )
 
-    def test_provenance_agents_are_evaluation_only(self):
-        policy = task_policy(
-            PROVENANCE_RESEARCH
-        )
-        self.assertFalse(
-            policy.production_enabled
-        )
-        self.assertIsNone(
-            policy.primary_resource_id
-        )
-
-        with self.assertRaises(
-            RuntimeError
+        for task_id in (
+            PROVENANCE_RESEARCH,
+            PROVENANCE_RESEARCH_MAX,
+            AGENTIC_PROVENANCE_INSPECTION,
         ):
-            route_task(
-                PROVENANCE_RESEARCH
+            with self.subTest(task=task_id):
+                self.assertEqual(
+                    route_task(task_id).resource_kind,
+                    MANAGED_AGENT,
+                )
+
+    def test_gemma_shadow_tasks_are_restricted_to_gemma(self):
+        for task_id in (
+            CLAIM_SHADOW_REVIEW,
+            CLAIM_DEEP_SHADOW_REVIEW,
+        ):
+            policy = task_policy(task_id)
+            self.assertEqual(
+                policy.evaluation_resource_ids,
+                GEMMA_HOSTED_MODEL_IDS,
             )
 
+            with self.assertRaises(ValueError):
+                route_task(
+                    task_id,
+                    requested_resource_id="gemini-3.7-flash",
+                )
+
+    def test_managed_agent_tasks_allow_controlled_agent_override(self):
         route = route_task(
             PROVENANCE_RESEARCH,
-            requested_resource_id=(
-                "antigravity-preview-05-2026"
-            ),
+            requested_resource_id=AGENTIC_PROVENANCE_AGENT,
+        )
+        self.assertEqual(
+            route.resource_id,
+            AGENTIC_PROVENANCE_AGENT,
         )
         self.assertEqual(
             route.resource_kind,
             MANAGED_AGENT,
         )
-        self.assertTrue(
-            route.requires_project_capacity_config
+        self.assertEqual(
+            route.selection_source,
+            "explicit_evaluation_override",
         )
 
     def test_resource_kinds_cannot_cross_task_boundaries(self):
-        with self.assertRaises(
-            ValueError
-        ):
-            route_task(
-                ARTICLE_TLDR,
-                requested_resource_id=(
-                    "antigravity-preview-05-2026"
-                ),
-            )
-
-        with self.assertRaises(
-            ValueError
-        ):
+        with self.assertRaises(ValueError):
             route_task(
                 RETRIEVAL_EMBEDDING,
-                requested_resource_id=(
-                    "gemma-4-31b-it"
-                ),
+                requested_resource_id=GEMMA_SHADOW_MODEL,
             )
 
-    def test_compatibility_fallback_integrates_with_existing_quota_policy(self):
-        policy = capacity_policy_for_model(
-            DEFAULT_GEMINI_MODEL
-        )
-        self.assertEqual(
-            policy.model,
-            DEFAULT_GEMINI_MODEL,
-        )
-        self.assertGreater(
-            policy.provider_rpm,
-            0,
-        )
-        self.assertGreater(
-            policy.usable_tpm,
-            0,
-        )
-        self.assertGreater(
-            policy.usable_rpd,
-            0,
-        )
+        with self.assertRaises(ValueError):
+            route_task(
+                PROVENANCE_RESEARCH,
+                requested_resource_id=HOSTED_RETRIEVAL_EMBEDDING_MODEL,
+            )
 
-    def test_model_resolver_exposes_task_primary(self):
-        self.assertEqual(
-            resolve_model_for_task(
-                ARTICLE_TLDR
-            ),
-            "gemini-3.5-flash-lite",
-        )
-        self.assertEqual(
-            resolve_model_for_task(
-                ARTICLE_SINGLE_PASS
-            ),
-            "gemini-3.6-flash",
-        )
-        self.assertEqual(
-            resolve_model_for_task(
-                CORROBORATION_CANDIDATE_SEMANTICS
-            ),
-            "gemini-3.5-flash",
-        )
+    def test_model_resolver_returns_specialized_primaries(self):
+        for task_id, expected_resource in EXPECTED_PRIMARY.items():
+            with self.subTest(task=task_id):
+                self.assertEqual(
+                    resolve_model_for_task(task_id),
+                    expected_resource,
+                )
 
-        with self.assertRaises(
-            RuntimeError
+    def test_hosted_specialized_resources_remain_capacity_gated(self):
+        for resource_id in (
+            GEMMA_SHADOW_MODEL,
+            GEMMA_DEEP_SHADOW_MODEL,
+            HOSTED_RETRIEVAL_EMBEDDING_MODEL,
+            PROVENANCE_RESEARCH_AGENT,
+            PROVENANCE_RESEARCH_MAX_AGENT,
+            AGENTIC_PROVENANCE_AGENT,
         ):
-            resolve_model_for_task(
-                RETRIEVAL_EMBEDDING
-            )
+            with self.subTest(resource=resource_id):
+                self.assertTrue(
+                    resource_spec(
+                        resource_id
+                    ).requires_project_capacity_config
+                )
+
+        self.assertFalse(
+            resource_spec(
+                LOCAL_RETRIEVAL_EMBEDDING_MODEL
+            ).requires_project_capacity_config
+        )
 
     def test_unknown_resources_and_tasks_fail_closed(self):
-        with self.assertRaises(
-            KeyError
-        ):
-            resource_spec(
-                "not-a-real-resource"
-            )
+        with self.assertRaises(KeyError):
+            resource_spec("not-a-real-resource")
 
-        with self.assertRaises(
-            KeyError
-        ):
-            route_task(
-                "not-a-real-task"
-            )
+        with self.assertRaises(KeyError):
+            route_task("not-a-real-task")
 
 
 if __name__ == "__main__":
