@@ -6,6 +6,9 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
+from app.intelligence.background_multimodel_runtime import (
+    plan_completed_job_specialized_ai,
+)
 from app.intelligence.background_pipeline_runtime import (
     BACKGROUND_INTELLIGENCE_REFRESH_VERSION,
     refresh_completed_job_intelligence,
@@ -193,6 +196,14 @@ def _worker_loop(config: Mapping[str, Any]) -> None:
             if isinstance(refreshed, Mapping):
                 result = dict(refreshed)
 
+            planned = plan_completed_job_specialized_ai(
+                result=result,
+                connection_factory=config["connection_factory"],
+                env_getter=config["env_getter"],
+            )
+            if isinstance(planned, Mapping):
+                result = dict(planned)
+
             _emit_intelligence_refresh_event(
                 config.get("operational_event_recorder"),
                 result,
@@ -315,6 +326,8 @@ def start_persistent_job_worker(
             "background_intelligence_refresh_enabled": True,
             "background_refresh_provider_free": True,
             "background_refresh_does_not_mutate_snapshots": True,
+            "background_multimodel_planning_enabled": True,
+            "background_multimodel_planning_provider_free": True,
             "live_merit_shadow_only": True,
             "affects_live_merit": False,
         },
@@ -396,6 +409,8 @@ def register_persistent_job_worker_lifecycle(
             "operational_events_fail_open": True,
             "background_intelligence_refresh_enabled": True,
             "background_refresh_provider_free": True,
+            "background_multimodel_planning_enabled": True,
+            "background_multimodel_planning_provider_free": True,
             "live_merit_shadow_only": True,
             "affects_live_merit": False,
         },
