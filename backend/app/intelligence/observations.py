@@ -10,6 +10,9 @@ from __future__ import annotations
 import importlib as _importlib
 from typing import Any, Dict, Optional
 
+from app.intelligence.claim_entity_context import (
+    build_claim_entity_context,
+)
 from app.intelligence.entity_resolution_runtime import (
     resolve_entity_mentions,
 )
@@ -27,6 +30,7 @@ ENTITY_OBSERVATION_INTEGRATION_VERSION = (
 
 def _entity_resolution_metadata(
     *,
+    subject_key: str,
     observation_type: str,
     claim_summary: str,
     metadata: Optional[Dict[str, Any]],
@@ -64,6 +68,21 @@ def _entity_resolution_metadata(
         ),
     }
 
+    try:
+        claim_context = build_claim_entity_context(
+            claim_text=claim_summary,
+            subject_key=subject_key,
+            connection_factory=connection_factory,
+        )
+    except Exception:
+        return payload
+
+    if claim_context.get("status") in {
+        "ready",
+        "partial_ambiguity",
+    }:
+        payload["claim_entity_context"] = claim_context
+
     return payload
 
 
@@ -85,6 +104,7 @@ def record_source_observation(
     connection_factory=None,
 ):
     enriched_metadata = _entity_resolution_metadata(
+        subject_key=subject_key,
         observation_type=observation_type,
         claim_summary=claim_summary,
         metadata=metadata,
