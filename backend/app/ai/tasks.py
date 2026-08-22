@@ -6,17 +6,19 @@ from typing import Mapping
 
 from app.ai.models import (
     DEFAULT_GEMINI_MODEL,
+    GEMMA_HOSTED_MODEL_IDS,
     HOSTED_GENERATION_MODEL_IDS,
 )
 from app.ai.resources import (
     EMBEDDING,
+    GENERATION,
     LOCAL_EMBEDDING,
     MANAGED_AGENT,
     resource_spec,
 )
 
 
-TASK_REGISTRY_VERSION = "ai-task-registry-v4"
+TASK_REGISTRY_VERSION = "ai-task-registry-v5"
 
 ARTICLE_TLDR = "article_tldr"
 ARTICLE_SINGLE_PASS = "article_single_pass"
@@ -28,22 +30,27 @@ CORROBORATION_CANDIDATE_SEMANTICS = (
 CORROBORATION_COLLECTION_SEMANTICS = (
     "corroboration_collection_semantics"
 )
+CLAIM_SHADOW_REVIEW = "claim_shadow_review"
+CLAIM_DEEP_SHADOW_REVIEW = "claim_deep_shadow_review"
 RETRIEVAL_EMBEDDING = "retrieval_embedding"
+LOCAL_RETRIEVAL_EMBEDDING = "local_retrieval_embedding"
 PROVENANCE_RESEARCH = "provenance_research"
+PROVENANCE_RESEARCH_MAX = "provenance_research_max"
+AGENTIC_PROVENANCE_INSPECTION = "agentic_provenance_inspection"
 
-# Task-specific production routing follows the Sportabase principle of using
-# the minimum required capability first, then considering cost and latency.
-#
-# Gemini 3.5 Flash-Lite is reserved for bounded utility work such as concise
-# summarization/localization and content classification. Gemini 3.6 Flash is
-# the preferred general analysis model for the richer article/video passes.
-# The already-live Gemini 3.5 Flash remains the conservative model for
-# evidence/corroboration semantics, where Sportabase has direct protocol
-# validation and where model output must never establish truth or authority.
+# Production role map. These constants are intentionally explicit so model
+# changes are reviewable configuration, not incidental caller behavior.
 FAST_UTILITY_GENERATION_MODEL = "gemini-3.5-flash-lite"
 GENERAL_ANALYSIS_GENERATION_MODEL = "gemini-3.6-flash"
 EVIDENCE_SEMANTICS_GENERATION_MODEL = DEFAULT_GEMINI_MODEL
 COMPATIBILITY_GENERATION_FALLBACK = DEFAULT_GEMINI_MODEL
+GEMMA_SHADOW_MODEL = "gemma-4-26b-a4b-it"
+GEMMA_DEEP_SHADOW_MODEL = "gemma-4-31b-it"
+HOSTED_RETRIEVAL_EMBEDDING_MODEL = "gemini-embedding-2"
+LOCAL_RETRIEVAL_EMBEDDING_MODEL = "google/embeddinggemma-300M"
+PROVENANCE_RESEARCH_AGENT = "deep-research-preview-04-2026"
+PROVENANCE_RESEARCH_MAX_AGENT = "deep-research-max-preview-04-2026"
+AGENTIC_PROVENANCE_AGENT = "antigravity-preview-05-2026"
 
 
 @dataclass(frozen=True)
@@ -136,10 +143,12 @@ def _validate_policy(
     return policy
 
 
-def _generation_policy(
+def _resource_policy(
     *,
     task_id: str,
     primary_resource_id: str,
+    evaluation_resource_ids: tuple[str, ...],
+    allowed_resource_kinds: tuple[str, ...],
     fallback_resource_ids: tuple[str, ...] = (),
 ) -> TaskPolicy:
     return _validate_policy(
@@ -148,10 +157,10 @@ def _generation_policy(
             production_enabled=True,
             primary_resource_id=primary_resource_id,
             evaluation_resource_ids=(
-                HOSTED_GENERATION_MODEL_IDS
+                evaluation_resource_ids
             ),
             allowed_resource_kinds=(
-                "generation",
+                allowed_resource_kinds
             ),
             automatic_fallback_enabled=bool(
                 fallback_resource_ids
@@ -160,6 +169,30 @@ def _generation_policy(
                 fallback_resource_ids
             ),
         )
+    )
+
+
+def _generation_policy(
+    *,
+    task_id: str,
+    primary_resource_id: str,
+    fallback_resource_ids: tuple[str, ...] = (),
+    evaluation_resource_ids: tuple[str, ...] = (
+        HOSTED_GENERATION_MODEL_IDS
+    ),
+) -> TaskPolicy:
+    return _resource_policy(
+        task_id=task_id,
+        primary_resource_id=primary_resource_id,
+        evaluation_resource_ids=(
+            evaluation_resource_ids
+        ),
+        allowed_resource_kinds=(
+            GENERATION,
+        ),
+        fallback_resource_ids=(
+            fallback_resource_ids
+        ),
     )
 
 
@@ -216,46 +249,91 @@ _TASK_POLICIES = [
             EVIDENCE_SEMANTICS_GENERATION_MODEL
         ),
     ),
+    _generation_policy(
+        task_id=CLAIM_SHADOW_REVIEW,
+        primary_resource_id=(
+            GEMMA_SHADOW_MODEL
+        ),
+        evaluation_resource_ids=(
+            GEMMA_HOSTED_MODEL_IDS
+        ),
+    ),
+    _generation_policy(
+        task_id=CLAIM_DEEP_SHADOW_REVIEW,
+        primary_resource_id=(
+            GEMMA_DEEP_SHADOW_MODEL
+        ),
+        evaluation_resource_ids=(
+            GEMMA_HOSTED_MODEL_IDS
+        ),
+    ),
+    _resource_policy(
+        task_id=RETRIEVAL_EMBEDDING,
+        primary_resource_id=(
+            HOSTED_RETRIEVAL_EMBEDDING_MODEL
+        ),
+        evaluation_resource_ids=(
+            HOSTED_RETRIEVAL_EMBEDDING_MODEL,
+        ),
+        allowed_resource_kinds=(
+            EMBEDDING,
+        ),
+    ),
+    _resource_policy(
+        task_id=LOCAL_RETRIEVAL_EMBEDDING,
+        primary_resource_id=(
+            LOCAL_RETRIEVAL_EMBEDDING_MODEL
+        ),
+        evaluation_resource_ids=(
+            LOCAL_RETRIEVAL_EMBEDDING_MODEL,
+        ),
+        allowed_resource_kinds=(
+            LOCAL_EMBEDDING,
+        ),
+    ),
+    _resource_policy(
+        task_id=PROVENANCE_RESEARCH,
+        primary_resource_id=(
+            PROVENANCE_RESEARCH_AGENT
+        ),
+        evaluation_resource_ids=(
+            PROVENANCE_RESEARCH_AGENT,
+            PROVENANCE_RESEARCH_MAX_AGENT,
+            AGENTIC_PROVENANCE_AGENT,
+        ),
+        allowed_resource_kinds=(
+            MANAGED_AGENT,
+        ),
+    ),
+    _resource_policy(
+        task_id=PROVENANCE_RESEARCH_MAX,
+        primary_resource_id=(
+            PROVENANCE_RESEARCH_MAX_AGENT
+        ),
+        evaluation_resource_ids=(
+            PROVENANCE_RESEARCH_AGENT,
+            PROVENANCE_RESEARCH_MAX_AGENT,
+            AGENTIC_PROVENANCE_AGENT,
+        ),
+        allowed_resource_kinds=(
+            MANAGED_AGENT,
+        ),
+    ),
+    _resource_policy(
+        task_id=AGENTIC_PROVENANCE_INSPECTION,
+        primary_resource_id=(
+            AGENTIC_PROVENANCE_AGENT
+        ),
+        evaluation_resource_ids=(
+            AGENTIC_PROVENANCE_AGENT,
+            PROVENANCE_RESEARCH_AGENT,
+            PROVENANCE_RESEARCH_MAX_AGENT,
+        ),
+        allowed_resource_kinds=(
+            MANAGED_AGENT,
+        ),
+    ),
 ]
-
-_TASK_POLICIES.extend(
-    (
-        _validate_policy(
-            TaskPolicy(
-                task_id=RETRIEVAL_EMBEDDING,
-                production_enabled=False,
-                primary_resource_id=None,
-                evaluation_resource_ids=(
-                    "gemini-embedding-2",
-                    "google/embeddinggemma-300M",
-                ),
-                allowed_resource_kinds=(
-                    EMBEDDING,
-                    LOCAL_EMBEDDING,
-                ),
-                automatic_fallback_enabled=False,
-                fallback_resource_ids=(),
-            )
-        ),
-        _validate_policy(
-            TaskPolicy(
-                task_id=PROVENANCE_RESEARCH,
-                production_enabled=False,
-                primary_resource_id=None,
-                evaluation_resource_ids=(
-                    "antigravity-preview-05-2026",
-                    "deep-research-preview-04-2026",
-                    "deep-research-max-preview-04-2026",
-                ),
-                allowed_resource_kinds=(
-                    MANAGED_AGENT,
-                ),
-                automatic_fallback_enabled=False,
-                fallback_resource_ids=(),
-            )
-        ),
-    )
-)
 
 _TASK_REGISTRY: Mapping[
     str,
