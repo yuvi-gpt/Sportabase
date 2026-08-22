@@ -5,7 +5,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 
-AI_RESOURCE_REGISTRY_VERSION = "google-ai-resource-registry-v2"
+AI_RESOURCE_REGISTRY_VERSION = "google-ai-resource-registry-v3"
 
 GENERATION = "generation"
 EMBEDDING = "embedding"
@@ -218,7 +218,7 @@ _RESOURCE_SPECS = (
         requires_project_capacity_config=True,
     ),
     AIResourceSpec(
-        resource_id="google/embeddinggemma-300M",
+        resource_id="google/embeddinggemma-300m",
         provider="google",
         family="embeddinggemma",
         resource_kind=LOCAL_EMBEDDING,
