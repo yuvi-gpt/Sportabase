@@ -21,6 +21,7 @@ from app.operations.persistent_runtime import (
 from app.routes import (
     control_room_admin,
     intelligence_admin,
+    intelligence_runtime_admin,
     multimodal_admin,
     operations_admin,
     product_api,
@@ -257,6 +258,13 @@ def compose_application(
 
     app.include_router(
         intelligence_admin.build_router(
+            require_admin=require_admin,
+            connection_factory=connection_factory,
+        )
+    )
+
+    app.include_router(
+        intelligence_runtime_admin.build_router(
             require_admin=require_admin,
             connection_factory=connection_factory,
         )
