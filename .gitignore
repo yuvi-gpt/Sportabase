@@ -12,6 +12,7 @@ venv/
 backend/data/*.db
 backend/data/*.db-wal
 backend/data/*.db-shm
+backend/data/*.db.*.bak
 
 # OS / editor
 .DS_Store
