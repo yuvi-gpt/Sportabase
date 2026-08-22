@@ -13,6 +13,10 @@ from app.intelligence.claim_support_graph import (
     build_claim_support_graph,
     build_story_support_overview,
 )
+from app.intelligence.claim_state import (
+    build_claim_state,
+    build_story_claim_state_overview,
+)
 from app.intelligence.entity_resolution_runtime import (
     resolve_entity_mentions,
 )
@@ -108,6 +112,20 @@ def build_router(
             raise HTTPException(status_code=404, detail="Claim not found.")
         return result
 
+    @router.get("/admin/intelligence/claims/{claim_id}/state")
+    def intelligence_claim_state(
+        claim_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        result = build_claim_state(
+            claim_id=claim_id,
+            connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Claim not found.")
+        return result
+
     @router.get("/admin/intelligence/stories/{story_id}/context")
     def intelligence_story_context(
         story_id: str,
@@ -129,6 +147,20 @@ def build_router(
     ):
         require_admin(request)
         result = build_story_support_overview(
+            story_id=story_id,
+            connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Story not found.")
+        return result
+
+    @router.get("/admin/intelligence/stories/{story_id}/claim-state-overview")
+    def intelligence_story_claim_state_overview(
+        story_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        result = build_story_claim_state_overview(
             story_id=story_id,
             connection_factory=connection_factory,
         )
