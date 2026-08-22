@@ -32,7 +32,7 @@ class ClaimEvolutionMigrationTests(unittest.TestCase):
                 """
             ).fetchone()
             indexes = {
-                row[0]
+                str(row["name"])
                 for row in conn.execute(
                     "PRAGMA index_list(claim_evolution_links)"
                 ).fetchall()
