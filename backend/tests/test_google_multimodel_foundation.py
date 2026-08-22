@@ -77,7 +77,7 @@ EXPECTED_RESOURCES = (
     "antigravity-preview-05-2026",
     "deep-research-preview-04-2026",
     "deep-research-max-preview-04-2026",
-    "google/embeddinggemma-300M",
+    "google/embeddinggemma-300m",
 )
 
 EXPECTED_TASKS = (
@@ -106,7 +106,7 @@ EXPECTED_PRIMARY = {
     CLAIM_SHADOW_REVIEW: "gemma-4-26b-a4b-it",
     CLAIM_DEEP_SHADOW_REVIEW: "gemma-4-31b-it",
     RETRIEVAL_EMBEDDING: "gemini-embedding-2",
-    LOCAL_RETRIEVAL_EMBEDDING: "google/embeddinggemma-300M",
+    LOCAL_RETRIEVAL_EMBEDDING: "google/embeddinggemma-300m",
     PROVENANCE_RESEARCH: "deep-research-preview-04-2026",
     PROVENANCE_RESEARCH_MAX: "deep-research-max-preview-04-2026",
     AGENTIC_PROVENANCE_INSPECTION: "antigravity-preview-05-2026",
@@ -117,7 +117,7 @@ class GoogleAIResourceFoundationTests(unittest.TestCase):
     def test_registry_versions_are_explicit(self):
         self.assertEqual(
             AI_RESOURCE_REGISTRY_VERSION,
-            "google-ai-resource-registry-v2",
+            "google-ai-resource-registry-v3",
         )
         self.assertEqual(
             MODEL_REGISTRY_VERSION,
@@ -187,7 +187,7 @@ class GoogleAIResourceFoundationTests(unittest.TestCase):
         )
         self.assertEqual(
             LOCAL_RETRIEVAL_EMBEDDING_MODEL,
-            "google/embeddinggemma-300M",
+            "google/embeddinggemma-300m",
         )
         self.assertEqual(
             PROVENANCE_RESEARCH_AGENT,
