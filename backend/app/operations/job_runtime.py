@@ -82,6 +82,31 @@ def record_browser_capture_job_enqueued(
     )
 
 
+def _append_intelligence_refresh_details(
+    details: dict[str, Any],
+    result: Mapping[str, Any],
+) -> None:
+    raw_refresh = result.get("intelligence_refresh")
+    if not isinstance(raw_refresh, Mapping):
+        return
+
+    refresh_status = _clean(raw_refresh.get("status"), 64).casefold()
+    if refresh_status:
+        details["intelligence_refresh_status"] = refresh_status
+
+    raw_counts = raw_refresh.get("counts")
+    counts = raw_counts if isinstance(raw_counts, Mapping) else {}
+    for source_key, output_key in (
+        ("claims", "intelligence_claims"),
+        ("stories", "intelligence_stories"),
+        ("structured_claims", "intelligence_structured_claims"),
+        ("projection_failures", "intelligence_projection_failures"),
+    ):
+        value = _safe_nonnegative_int(counts.get(source_key))
+        if value:
+            details[output_key] = value
+
+
 def record_browser_capture_job_result(
     *,
     event_recorder: Callable[..., Any] | None,
@@ -134,6 +159,8 @@ def record_browser_capture_job_result(
     error_type = _clean(job.get("error_type"), 128)
     if error_type:
         details["error_type"] = error_type
+
+    _append_intelligence_refresh_details(details, result)
 
     event_type, status = selected
     return _emit_quietly(
