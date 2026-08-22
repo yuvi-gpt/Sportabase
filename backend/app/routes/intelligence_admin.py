@@ -38,6 +38,9 @@ from app.intelligence.projection import (
 from app.intelligence.source_health import (
     build_source_evidence_health,
 )
+from app.intelligence.structured_claim_ingestion import (
+    load_claim_identity_mapping,
+)
 
 
 class ClaimSemanticMaterializationRequest(BaseModel):
@@ -169,6 +172,23 @@ def build_router(
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @router.get("/admin/intelligence/claims/{claim_id}/identity-mapping")
+    def intelligence_claim_identity_mapping(
+        claim_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        result = load_claim_identity_mapping(
+            production_claim_id=claim_id,
+            connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(
+                status_code=404,
+                detail="Claim identity mapping not found.",
+            )
+        return result
 
     @router.get("/admin/intelligence/claims/{claim_id}/context")
     def intelligence_claim_context(
