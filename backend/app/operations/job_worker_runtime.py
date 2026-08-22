@@ -6,6 +6,10 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
+from app.intelligence.background_pipeline_runtime import (
+    BACKGROUND_INTELLIGENCE_REFRESH_VERSION,
+    refresh_completed_job_intelligence,
+)
 from app.operations.job_runtime import (
     record_browser_capture_job_result,
 )
@@ -71,6 +75,71 @@ def _emit_reconcile_event(
         pass
 
 
+def _emit_intelligence_refresh_event(
+    event_recorder,
+    result: Mapping[str, Any] | None,
+) -> None:
+    if not callable(event_recorder) or not isinstance(result, Mapping):
+        return
+
+    raw_refresh = result.get("intelligence_refresh")
+    if not isinstance(raw_refresh, Mapping):
+        return
+
+    refresh_status = str(raw_refresh.get("status") or "").strip().casefold()
+    if refresh_status not in {"ready", "partial", "unavailable"}:
+        return
+
+    raw_counts = raw_refresh.get("counts")
+    counts = raw_counts if isinstance(raw_counts, Mapping) else {}
+
+    def safe_count(name: str) -> int:
+        try:
+            value = int(counts.get(name) or 0)
+        except (TypeError, ValueError, OverflowError):
+            return 0
+        return max(0, value)
+
+    execution_mode = str(
+        result.get("execution_mode")
+        or raw_refresh.get("execution_mode")
+        or ""
+    ).strip().casefold()
+    mode = "unknown"
+    if execution_mode == "article_history_merit":
+        mode = "article"
+    elif execution_mode == "non_article_no_merit":
+        mode = "non_article"
+
+    try:
+        event_recorder(
+            component="intelligence_pipeline",
+            event_type=(
+                "intelligence.background_refreshed"
+                if refresh_status == "ready"
+                else "intelligence.background_degraded"
+            ),
+            status=(
+                "success"
+                if refresh_status == "ready"
+                else "degraded"
+            ),
+            mode=mode,
+            details={
+                "telemetry_version": BACKGROUND_INTELLIGENCE_REFRESH_VERSION,
+                "refresh_status": refresh_status,
+                "claims": safe_count("claims"),
+                "stories": safe_count("stories"),
+                "structured_claims": safe_count("structured_claims"),
+                "stale_claims": safe_count("stale_claims"),
+                "conflict_claims": safe_count("conflict_claims"),
+                "projection_failures": safe_count("projection_failures"),
+            },
+        )
+    except Exception:
+        pass
+
+
 def _worker_loop(config: Mapping[str, Any]) -> None:
     poll_seconds = float(config["poll_seconds"])
     last_reconcile = 0.0
@@ -115,6 +184,19 @@ def _worker_loop(config: Mapping[str, Any]) -> None:
             result = {
                 "status": "worker_error",
             }
+
+        if result.get("status") == "completed":
+            refreshed = refresh_completed_job_intelligence(
+                result=result,
+                connection_factory=config["connection_factory"],
+            )
+            if isinstance(refreshed, Mapping):
+                result = dict(refreshed)
+
+            _emit_intelligence_refresh_event(
+                config.get("operational_event_recorder"),
+                result,
+            )
 
         record_browser_capture_job_result(
             event_recorder=config.get("operational_event_recorder"),
@@ -230,6 +312,9 @@ def start_persistent_job_worker(
             "queue_wake_signal_reused": True,
             "operational_events_fail_open": True,
             "public_request_does_not_wait_for_gemini": True,
+            "background_intelligence_refresh_enabled": True,
+            "background_refresh_provider_free": True,
+            "background_refresh_does_not_mutate_snapshots": True,
             "live_merit_shadow_only": True,
             "affects_live_merit": False,
         },
@@ -309,6 +394,8 @@ def register_persistent_job_worker_lifecycle(
         "policy": {
             "automation_flag_required": True,
             "operational_events_fail_open": True,
+            "background_intelligence_refresh_enabled": True,
+            "background_refresh_provider_free": True,
             "live_merit_shadow_only": True,
             "affects_live_merit": False,
         },
