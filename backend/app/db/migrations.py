@@ -34,6 +34,51 @@ idx_claim_identity_mappings_subject
 ON claim_identity_mappings(subject_key);
 """
 
+_CLAIM_EVOLUTION_SCHEMA = """
+CREATE TABLE IF NOT EXISTS claim_evolution_links (
+  id TEXT PRIMARY KEY,
+  predecessor_claim_id TEXT NOT NULL,
+  successor_claim_id TEXT NOT NULL,
+  subject_key TEXT NOT NULL,
+  family_key TEXT NOT NULL,
+  relationship_type TEXT NOT NULL,
+  observed_at TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  CHECK (
+    relationship_type IN (
+      'progresses_to',
+      'resolves_to',
+      'contradicts'
+    )
+  ),
+  CHECK (predecessor_claim_id <> successor_claim_id),
+  UNIQUE (
+    predecessor_claim_id,
+    successor_claim_id,
+    relationship_type
+  ),
+  FOREIGN KEY(predecessor_claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE,
+  FOREIGN KEY(successor_claim_id)
+    REFERENCES intelligence_claims(id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_claim_evolution_predecessor
+ON claim_evolution_links(predecessor_claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_evolution_successor
+ON claim_evolution_links(successor_claim_id);
+
+CREATE INDEX IF NOT EXISTS idx_claim_evolution_family
+ON claim_evolution_links(family_key, observed_at);
+
+CREATE INDEX IF NOT EXISTS idx_claim_evolution_subject
+ON claim_evolution_links(subject_key, observed_at);
+"""
+
 
 def _provider_day_for_created_at(
     value,
@@ -72,6 +117,8 @@ def initialize_database(
             schema
             + "\n"
             + _CLAIM_IDENTITY_MAPPING_SCHEMA
+            + "\n"
+            + _CLAIM_EVOLUTION_SCHEMA
         )
 
         existing_columns = {
@@ -220,9 +267,11 @@ def initialize_database(
             """
         )
 
-        # Retain an idempotent migration guard for existing installations.
+        # Retain idempotent migration guards for existing installations.
         conn.executescript(
             _CLAIM_IDENTITY_MAPPING_SCHEMA
+            + "\n"
+            + _CLAIM_EVOLUTION_SCHEMA
         )
 
         conn.commit()
