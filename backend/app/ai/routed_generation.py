@@ -8,12 +8,15 @@ from typing import Any
 
 from app.ai import generation as _generation
 from app.ai.models import DEFAULT_GEMINI_MODEL
-from app.ai.resources import GENERATION
+from app.ai.resources import (
+    GENERATION,
+    resource_spec,
+)
 from app.ai.router import route_task
 from app.ai.tasks import task_policy
 
 
-ROUTED_GENERATION_VERSION = "google-model-router-wiring-v1"
+ROUTED_GENERATION_VERSION = "google-model-router-wiring-v2"
 
 _REQUIRED_MODEL_CAPACITY_KEYS = (
     "PROVIDER_RPM",
@@ -95,6 +98,38 @@ def project_capacity_configured(
     )
 
 
+def _resource_capacity_ready(
+    resource_id: str,
+) -> bool:
+    spec = resource_spec(
+        resource_id
+    )
+
+    return bool(
+        not spec.requires_project_capacity_config
+        or project_capacity_configured(
+            spec.resource_id
+        )
+    )
+
+
+def _missing_capacity_keys(
+    resource_id: str,
+) -> list[str]:
+    return [
+        key
+        for key in model_capacity_env_keys(
+            resource_id
+        )
+        if not str(
+            os.getenv(
+                key,
+                "",
+            )
+        ).strip()
+    ]
+
+
 def resolve_routed_generation_model(
     *,
     mode: str,
@@ -113,13 +148,15 @@ def resolve_routed_generation_model(
         model
     )
 
+    uses_task_primary = bool(
+        not requested
+        or requested
+        == DEFAULT_GEMINI_MODEL
+    )
+
     requested_resource_id = (
         None
-        if (
-            not requested
-            or requested
-            == DEFAULT_GEMINI_MODEL
-        )
+        if uses_task_primary
         else requested
     )
 
@@ -136,36 +173,48 @@ def resolve_routed_generation_model(
             + route.task_id
         )
 
-    if (
-        route.requires_project_capacity_config
-        and not project_capacity_configured(
-            route.resource_id
-        )
+    if _resource_capacity_ready(
+        route.resource_id
     ):
-        missing_keys = [
-            key
-            for key in model_capacity_env_keys(
-                route.resource_id
-            )
-            if not str(
-                os.getenv(
-                    key,
-                    "",
-                )
-            ).strip()
-        ]
+        return route.resource_id
 
-        raise AIResourceCapacityConfigurationError(
-            "AI resource requires explicit project capacity "
-            "configuration before execution: "
-            + route.resource_id
-            + ". Missing: "
-            + ", ".join(
-                missing_keys
+    # A task's compatibility fallback is used only when the caller requested
+    # the task primary implicitly and the preferred production model lacks an
+    # explicit project-capacity envelope. This is not a provider-error retry,
+    # quota spillover, or silent downgrade after a 429/503. Explicit model
+    # overrides always fail closed when their capacity configuration is absent.
+    if (
+        uses_task_primary
+        and route.automatic_fallback_enabled
+    ):
+        for fallback_resource_id in (
+            route.fallback_resource_ids
+        ):
+            fallback = resource_spec(
+                fallback_resource_id
             )
+
+            if fallback.resource_kind != GENERATION:
+                continue
+
+            if _resource_capacity_ready(
+                fallback.resource_id
+            ):
+                return fallback.resource_id
+
+    missing_keys = _missing_capacity_keys(
+        route.resource_id
+    )
+
+    raise AIResourceCapacityConfigurationError(
+        "AI resource requires explicit project capacity "
+        "configuration before execution: "
+        + route.resource_id
+        + ". Missing: "
+        + ", ".join(
+            missing_keys
         )
-
-    return route.resource_id
+    )
 
 
 # Preserve the existing execution-platform public surface. Only generation
