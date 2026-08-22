@@ -5,6 +5,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.intelligence.background_pipeline_runtime import (
+    load_background_intelligence_job,
+)
 from app.intelligence.claim_entity_context import (
     build_claim_entity_context,
 )
@@ -71,6 +74,20 @@ def build_router(
             connection_factory=connection_factory,
             days=days,
         )
+
+    @router.get("/admin/intelligence/background-jobs/{job_id}")
+    def intelligence_background_job(
+        job_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        result = load_background_intelligence_job(
+            job_id=job_id,
+            connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Background job not found.")
+        return result
 
     @router.get("/admin/intelligence/entities/resolve")
     def intelligence_entity_resolution(
