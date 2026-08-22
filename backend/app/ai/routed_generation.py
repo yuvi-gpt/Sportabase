@@ -178,14 +178,17 @@ def resolve_routed_generation_model(
     ):
         return route.resource_id
 
-    # A task's compatibility fallback is used only when the caller requested
-    # the task primary implicitly and the preferred production model lacks an
-    # explicit project-capacity envelope. This is not a provider-error retry,
-    # quota spillover, or silent downgrade after a 429/503. Explicit model
-    # overrides always fail closed when their capacity configuration is absent.
+    # Runtime compatibility fallback is intentionally different from model
+    # evaluation fallback. Evaluation plans must keep automatic fallback off
+    # so every benchmark arm is explicit and reproducible. During normal
+    # product execution, however, an implicitly selected task primary may use
+    # its declared compatibility resource when the preferred model has not yet
+    # been provisioned with a project-capacity envelope. Explicit model
+    # overrides still fail closed. This path is never triggered by a provider
+    # 429/503 and therefore is not quota spillover or provider-error retry.
     if (
         uses_task_primary
-        and route.automatic_fallback_enabled
+        and route.fallback_resource_ids
     ):
         for fallback_resource_id in (
             route.fallback_resource_ids
