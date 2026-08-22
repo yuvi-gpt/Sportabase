@@ -16,7 +16,7 @@ from app.ai.resources import (
 )
 
 
-TASK_REGISTRY_VERSION = "ai-task-registry-v3"
+TASK_REGISTRY_VERSION = "ai-task-registry-v4"
 
 ARTICLE_TLDR = "article_tldr"
 ARTICLE_SINGLE_PASS = "article_single_pass"
@@ -30,6 +30,20 @@ CORROBORATION_COLLECTION_SEMANTICS = (
 )
 RETRIEVAL_EMBEDDING = "retrieval_embedding"
 PROVENANCE_RESEARCH = "provenance_research"
+
+# Task-specific production routing follows the Sportabase principle of using
+# the minimum required capability first, then considering cost and latency.
+#
+# Gemini 3.5 Flash-Lite is reserved for bounded utility work such as concise
+# summarization/localization and content classification. Gemini 3.6 Flash is
+# the preferred general analysis model for the richer article/video passes.
+# The already-live Gemini 3.5 Flash remains the conservative model for
+# evidence/corroboration semantics, where Sportabase has direct protocol
+# validation and where model output must never establish truth or authority.
+FAST_UTILITY_GENERATION_MODEL = "gemini-3.5-flash-lite"
+GENERAL_ANALYSIS_GENERATION_MODEL = "gemini-3.6-flash"
+EVIDENCE_SEMANTICS_GENERATION_MODEL = DEFAULT_GEMINI_MODEL
+COMPATIBILITY_GENERATION_FALLBACK = DEFAULT_GEMINI_MODEL
 
 
 @dataclass(frozen=True)
@@ -122,34 +136,86 @@ def _validate_policy(
     return policy
 
 
-_LIVE_GENERATION_TASKS = (
-    ARTICLE_TLDR,
-    ARTICLE_SINGLE_PASS,
-    ARTICLE_CLASSIFIER,
-    VIDEO_ANALYSIS,
-    CORROBORATION_CANDIDATE_SEMANTICS,
-    CORROBORATION_COLLECTION_SEMANTICS,
-)
-
-_TASK_POLICIES = [
-    _validate_policy(
+def _generation_policy(
+    *,
+    task_id: str,
+    primary_resource_id: str,
+    fallback_resource_ids: tuple[str, ...] = (),
+) -> TaskPolicy:
+    return _validate_policy(
         TaskPolicy(
             task_id=task_id,
             production_enabled=True,
-            primary_resource_id=(
-                DEFAULT_GEMINI_MODEL
-            ),
+            primary_resource_id=primary_resource_id,
             evaluation_resource_ids=(
                 HOSTED_GENERATION_MODEL_IDS
             ),
             allowed_resource_kinds=(
                 "generation",
             ),
-            automatic_fallback_enabled=False,
-            fallback_resource_ids=(),
+            automatic_fallback_enabled=bool(
+                fallback_resource_ids
+            ),
+            fallback_resource_ids=(
+                fallback_resource_ids
+            ),
         )
     )
-    for task_id in _LIVE_GENERATION_TASKS
+
+
+_TASK_POLICIES = [
+    _generation_policy(
+        task_id=ARTICLE_TLDR,
+        primary_resource_id=(
+            FAST_UTILITY_GENERATION_MODEL
+        ),
+        fallback_resource_ids=(
+            COMPATIBILITY_GENERATION_FALLBACK,
+        ),
+    ),
+    _generation_policy(
+        task_id=ARTICLE_CLASSIFIER,
+        primary_resource_id=(
+            FAST_UTILITY_GENERATION_MODEL
+        ),
+        fallback_resource_ids=(
+            COMPATIBILITY_GENERATION_FALLBACK,
+        ),
+    ),
+    _generation_policy(
+        task_id=ARTICLE_SINGLE_PASS,
+        primary_resource_id=(
+            GENERAL_ANALYSIS_GENERATION_MODEL
+        ),
+        fallback_resource_ids=(
+            COMPATIBILITY_GENERATION_FALLBACK,
+        ),
+    ),
+    _generation_policy(
+        task_id=VIDEO_ANALYSIS,
+        primary_resource_id=(
+            GENERAL_ANALYSIS_GENERATION_MODEL
+        ),
+        fallback_resource_ids=(
+            COMPATIBILITY_GENERATION_FALLBACK,
+        ),
+    ),
+    _generation_policy(
+        task_id=(
+            CORROBORATION_CANDIDATE_SEMANTICS
+        ),
+        primary_resource_id=(
+            EVIDENCE_SEMANTICS_GENERATION_MODEL
+        ),
+    ),
+    _generation_policy(
+        task_id=(
+            CORROBORATION_COLLECTION_SEMANTICS
+        ),
+        primary_resource_id=(
+            EVIDENCE_SEMANTICS_GENERATION_MODEL
+        ),
+    ),
 ]
 
 _TASK_POLICIES.extend(
