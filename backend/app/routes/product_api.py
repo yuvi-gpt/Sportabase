@@ -4,6 +4,10 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Query, Request
 
+from app.intelligence.article_product_runtime import (
+    attach_article_product_intelligence,
+    build_article_product_intelligence,
+)
 from app.models.api import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -37,6 +41,7 @@ def build_router(
     analyze_video_handler,
     analyze_handler,
     operational_event_recorder=None,
+    connection_factory=None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -95,6 +100,17 @@ def build_router(
             event_recorder=operational_event_recorder,
         )
 
+    @router.get("/intelligence/article-context")
+    def article_intelligence_context(
+        url: str = Query(..., min_length=8, max_length=2048),
+        stale_after_days: int = Query(30, ge=1, le=3650),
+    ):
+        return build_article_product_intelligence(
+            url=url,
+            connection_factory=connection_factory,
+            stale_after_days=stale_after_days,
+        )
+
     @router.post(
         "/analyze/video",
         response_model=VideoAnalyzeResponse,
@@ -119,12 +135,18 @@ def build_router(
         req: AnalyzeRequest,
         request: Request,
     ):
-        return execute_analysis_with_operational_telemetry(
+        response = execute_analysis_with_operational_telemetry(
             handler=analyze_handler,
             req=req,
             request=request,
             mode="article",
             event_recorder=operational_event_recorder,
+        )
+
+        return attach_article_product_intelligence(
+            response=response,
+            url=req.url,
+            connection_factory=connection_factory,
         )
 
     return router
