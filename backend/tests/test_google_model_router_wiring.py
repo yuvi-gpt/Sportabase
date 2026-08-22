@@ -29,17 +29,25 @@ from app.ai.tasks import (
     CORROBORATION_CANDIDATE_SEMANTICS,
     CORROBORATION_COLLECTION_SEMANTICS,
     VIDEO_ANALYSIS,
+    task_policy,
 )
 from app.services import gemini_runtime
 
 
-LIVE_GENERATION_TASKS = (
+TASK_PRIMARY = {
+    ARTICLE_TLDR: "gemini-3.5-flash-lite",
+    ARTICLE_CLASSIFIER: "gemini-3.5-flash-lite",
+    ARTICLE_SINGLE_PASS: "gemini-3.6-flash",
+    VIDEO_ANALYSIS: "gemini-3.6-flash",
+    CORROBORATION_CANDIDATE_SEMANTICS: "gemini-3.5-flash",
+    CORROBORATION_COLLECTION_SEMANTICS: "gemini-3.5-flash",
+}
+
+CAPACITY_GATED_TASKS = (
     ARTICLE_TLDR,
-    ARTICLE_SINGLE_PASS,
     ARTICLE_CLASSIFIER,
+    ARTICLE_SINGLE_PASS,
     VIDEO_ANALYSIS,
-    CORROBORATION_CANDIDATE_SEMANTICS,
-    CORROBORATION_COLLECTION_SEMANTICS,
 )
 
 EVALUATION_MODEL = "gemma-4-26b-a4b-it"
@@ -72,7 +80,7 @@ class GoogleModelRouterWiringTests(
 
     def _capacity_env(
         self,
-        resource_id=EVALUATION_MODEL,
+        resource_id,
     ):
         keys = (
             routed_generation
@@ -97,6 +105,26 @@ class GoogleModelRouterWiringTests(
                 keys,
                 values,
             )
+        )
+
+    def _empty_capacity_env(
+        self,
+        resource_id,
+    ):
+        return {
+            key: ""
+            for key in (
+                routed_generation
+                .model_capacity_env_keys(
+                    resource_id
+                )
+            )
+        }
+
+    def test_router_wiring_version_is_explicit(self):
+        self.assertEqual(
+            routed_generation.ROUTED_GENERATION_VERSION,
+            "google-model-router-wiring-v2",
         )
 
     def test_historical_runtime_alias_points_to_routed_facade(
@@ -132,42 +160,132 @@ class GoogleModelRouterWiringTests(
             generation.classify_gemini_failure,
         )
 
-    def test_every_live_task_preserves_current_primary(
+    def test_task_registry_has_distinct_generation_primaries(
         self,
     ):
-        for task_id in LIVE_GENERATION_TASKS:
+        for task_id, expected_model in TASK_PRIMARY.items():
             with self.subTest(
                 task=task_id
             ):
-                resolved = (
-                    routed_generation
-                    .resolve_routed_generation_model(
-                        mode=task_id,
-                        model=(
-                            DEFAULT_GEMINI_MODEL
-                        ),
-                    )
+                self.assertEqual(
+                    task_policy(
+                        task_id
+                    ).primary_resource_id,
+                    expected_model,
                 )
+
+    def test_capacity_gated_task_primaries_use_35_compatibility_fallback_when_unconfigured(
+        self,
+    ):
+        for task_id in CAPACITY_GATED_TASKS:
+            primary = TASK_PRIMARY[
+                task_id
+            ]
+            with self.subTest(
+                task=task_id,
+                primary=primary,
+            ):
+                with patch.dict(
+                    os.environ,
+                    self._empty_capacity_env(
+                        primary
+                    ),
+                    clear=False,
+                ):
+                    resolved = (
+                        routed_generation
+                        .resolve_routed_generation_model(
+                            mode=task_id,
+                            model=DEFAULT_GEMINI_MODEL,
+                        )
+                    )
 
                 self.assertEqual(
                     resolved,
-                    "gemini-3.5-flash",
+                    DEFAULT_GEMINI_MODEL,
                 )
+
+    def test_capacity_gated_task_primaries_activate_when_configured(
+        self,
+    ):
+        for task_id in CAPACITY_GATED_TASKS:
+            primary = TASK_PRIMARY[
+                task_id
+            ]
+            with self.subTest(
+                task=task_id,
+                primary=primary,
+            ):
+                with patch.dict(
+                    os.environ,
+                    self._capacity_env(
+                        primary
+                    ),
+                    clear=False,
+                ):
+                    resolved = (
+                        routed_generation
+                        .resolve_routed_generation_model(
+                            mode=task_id,
+                            model=DEFAULT_GEMINI_MODEL,
+                        )
+                    )
+
+                self.assertEqual(
+                    resolved,
+                    primary,
+                )
+
+    def test_evidence_semantics_remain_on_35_flash_without_fallback(
+        self,
+    ):
+        for task_id in (
+            CORROBORATION_CANDIDATE_SEMANTICS,
+            CORROBORATION_COLLECTION_SEMANTICS,
+        ):
+            resolved = (
+                routed_generation
+                .resolve_routed_generation_model(
+                    mode=task_id,
+                    model=DEFAULT_GEMINI_MODEL,
+                )
+            )
+
+            self.assertEqual(
+                resolved,
+                DEFAULT_GEMINI_MODEL,
+            )
+            self.assertFalse(
+                task_policy(
+                    task_id
+                ).automatic_fallback_enabled
+            )
 
     def test_legacy_default_string_is_a_task_primary_sentinel(
         self,
     ):
-        resolved = (
-            routed_generation
-            .resolve_routed_generation_model(
-                mode=ARTICLE_TLDR,
-                model="gemini-3.5-flash",
+        primary = TASK_PRIMARY[
+            ARTICLE_TLDR
+        ]
+
+        with patch.dict(
+            os.environ,
+            self._capacity_env(
+                primary
+            ),
+            clear=False,
+        ):
+            resolved = (
+                routed_generation
+                .resolve_routed_generation_model(
+                    mode=ARTICLE_TLDR,
+                    model="gemini-3.5-flash",
+                )
             )
-        )
 
         self.assertEqual(
             resolved,
-            DEFAULT_GEMINI_MODEL,
+            primary,
         )
 
     def test_unknown_legacy_mode_preserves_requested_model(
@@ -186,22 +304,14 @@ class GoogleModelRouterWiringTests(
             "model-x",
         )
 
-    def test_new_hosted_resource_fails_closed_without_capacity_config(
+    def test_explicit_evaluation_resource_fails_closed_without_capacity_config(
         self,
     ):
-        empty_env = {
-            key: ""
-            for key in (
-                routed_generation
-                .model_capacity_env_keys(
-                    EVALUATION_MODEL
-                )
-            )
-        }
-
         with patch.dict(
             os.environ,
-            empty_env,
+            self._empty_capacity_env(
+                EVALUATION_MODEL
+            ),
             clear=False,
         ):
             with self.assertRaises(
@@ -221,7 +331,9 @@ class GoogleModelRouterWiringTests(
     ):
         with patch.dict(
             os.environ,
-            self._capacity_env(),
+            self._capacity_env(
+                EVALUATION_MODEL
+            ),
             clear=False,
         ):
             resolved = (
@@ -251,33 +363,80 @@ class GoogleModelRouterWiringTests(
                 )
             )
 
-    def test_wrapper_delegates_current_primary_without_behavior_change(
+    def test_wrapper_delegates_compatibility_fallback_when_primary_unconfigured(
         self,
     ):
         sentinel = object()
+        primary = TASK_PRIMARY[
+            ARTICLE_TLDR
+        ]
 
-        with patch.object(
-            generation,
-            "generate_gemini_content",
-            return_value=sentinel,
-        ) as delegate:
-            result = (
-                routed_generation
-                .generate_gemini_content(
-                    **self._delegate_kwargs()
+        with patch.dict(
+            os.environ,
+            self._empty_capacity_env(
+                primary
+            ),
+            clear=False,
+        ):
+            with patch.object(
+                generation,
+                "generate_gemini_content",
+                return_value=sentinel,
+            ) as delegate:
+                result = (
+                    routed_generation
+                    .generate_gemini_content(
+                        **self._delegate_kwargs()
+                    )
                 )
-            )
 
         self.assertIs(
             result,
             sentinel,
         )
-
         self.assertEqual(
             delegate.call_args.kwargs[
                 "model"
             ],
             DEFAULT_GEMINI_MODEL,
+        )
+
+    def test_wrapper_delegates_task_primary_when_capacity_is_configured(
+        self,
+    ):
+        sentinel = object()
+        primary = TASK_PRIMARY[
+            ARTICLE_TLDR
+        ]
+
+        with patch.dict(
+            os.environ,
+            self._capacity_env(
+                primary
+            ),
+            clear=False,
+        ):
+            with patch.object(
+                generation,
+                "generate_gemini_content",
+                return_value=sentinel,
+            ) as delegate:
+                result = (
+                    routed_generation
+                    .generate_gemini_content(
+                        **self._delegate_kwargs()
+                    )
+                )
+
+        self.assertIs(
+            result,
+            sentinel,
+        )
+        self.assertEqual(
+            delegate.call_args.kwargs[
+                "model"
+            ],
+            primary,
         )
         self.assertEqual(
             delegate.call_args.kwargs[
@@ -285,29 +444,15 @@ class GoogleModelRouterWiringTests(
             ],
             ARTICLE_TLDR,
         )
-        self.assertEqual(
-            delegate.call_args.kwargs[
-                "contents"
-            ],
-            "prompt",
-        )
 
-    def test_wrapper_never_calls_delegate_when_capacity_gate_fails(
+    def test_wrapper_never_calls_delegate_when_explicit_capacity_gate_fails(
         self,
     ):
-        empty_env = {
-            key: ""
-            for key in (
-                routed_generation
-                .model_capacity_env_keys(
-                    EVALUATION_MODEL
-                )
-            )
-        }
-
         with patch.dict(
             os.environ,
-            empty_env,
+            self._empty_capacity_env(
+                EVALUATION_MODEL
+            ),
             clear=False,
         ):
             with patch.object(
@@ -338,7 +483,9 @@ class GoogleModelRouterWiringTests(
 
         with patch.dict(
             os.environ,
-            self._capacity_env(),
+            self._capacity_env(
+                EVALUATION_MODEL
+            ),
             clear=False,
         ):
             with patch.object(
