@@ -19,7 +19,15 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 DOTENV_PATH = BACKEND_DIR / ".env"
 load_dotenv(DOTENV_PATH)
 
-DB_PATH = DATA_DIR / "sportabase.db"
+_DB_PATH_OVERRIDE = os.getenv(
+    "SPORTABASE_DB_PATH",
+    "",
+).strip()
+DB_PATH = (
+    Path(_DB_PATH_OVERRIDE).expanduser()
+    if _DB_PATH_OVERRIDE
+    else DATA_DIR / "sportabase.db"
+)
 SOURCES_PATH = DATA_DIR / "sources.json"
 
 PERSISTENT_OPERATIONS_DATABASE_URL = os.getenv(
