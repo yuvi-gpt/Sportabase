@@ -1,7 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
+from app.intelligence.claim_entity_context import (
+    build_claim_entity_context,
+)
+from app.intelligence.claim_story_context import (
+    build_claim_intelligence_context,
+    build_story_intelligence_context,
+)
 from app.intelligence.entity_resolution_runtime import (
     resolve_entity_mentions,
 )
@@ -51,5 +58,50 @@ def build_router(
             sport_key=sport_key,
             max_entities=max_entities,
         )
+
+    @router.get("/admin/intelligence/claim-entity-context")
+    def intelligence_claim_entity_context(
+        request: Request,
+        text: str = Query(..., min_length=1, max_length=512),
+        subject_key: str = Query(..., min_length=1, max_length=256),
+        sport_key: str = Query("", max_length=64),
+        max_entities: int = Query(24, ge=1, le=100),
+    ):
+        require_admin(request)
+        return build_claim_entity_context(
+            claim_text=text,
+            subject_key=subject_key,
+            connection_factory=connection_factory,
+            sport_key=sport_key,
+            max_entities=max_entities,
+        )
+
+    @router.get("/admin/intelligence/claims/{claim_id}/context")
+    def intelligence_claim_context(
+        claim_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        result = build_claim_intelligence_context(
+            claim_id=claim_id,
+            connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Claim not found.")
+        return result
+
+    @router.get("/admin/intelligence/stories/{story_id}/context")
+    def intelligence_story_context(
+        story_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        result = build_story_intelligence_context(
+            story_id=story_id,
+            connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Story not found.")
+        return result
 
     return router
