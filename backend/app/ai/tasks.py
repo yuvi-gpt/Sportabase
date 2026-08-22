@@ -162,9 +162,12 @@ def _resource_policy(
             allowed_resource_kinds=(
                 allowed_resource_kinds
             ),
-            automatic_fallback_enabled=bool(
-                fallback_resource_ids
-            ),
+            # Evaluation campaigns require automatic fallback to stay off so
+            # every selected model remains an explicit, auditable benchmark
+            # arm. fallback_resource_ids below are only compatibility choices
+            # for normal runtime startup when a preferred model has not yet
+            # been given its project-capacity envelope.
+            automatic_fallback_enabled=False,
             fallback_resource_ids=(
                 fallback_resource_ids
             ),
