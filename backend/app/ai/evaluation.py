@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import time
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Callable, Mapping, Sequence
 
+from app.ai.models import DEFAULT_GEMINI_MODEL
 from app.ai.quota import estimate_prompt_tokens
 from app.ai.resources import GENERATION
 from app.ai.router import ResourceRoute, route_task
 from app.ai.routed_generation import project_capacity_configured
+from app.ai.tasks import task_policy
 
 
 MODEL_EVALUATION_VERSION = "google-model-evaluation-v1"
 DEFAULT_EVALUATION_MAX_PROVIDER_CALLS = 8
 DEFAULT_EVALUATION_MAX_ESTIMATED_INPUT_TOKENS = 100_000
+GENERATION_EVALUATION_BASELINE_RESOURCE_ID = DEFAULT_GEMINI_MODEL
 
 
 class EvaluationError(RuntimeError):
@@ -233,14 +236,55 @@ class EvaluationRun:
         }
 
 
+def _evaluation_primary_route(
+    task_id: str,
+) -> ResourceRoute:
+    """Return the stable benchmark baseline for a generation task.
+
+    Production task primaries are now specialized by workload. Historical
+    model-evaluation campaigns, however, intentionally compare challengers
+    against the already-validated Gemini 3.5 Flash baseline. Keeping those two
+    concepts separate prevents a production routing change from silently
+    changing benchmark call counts, budgets, ordering, or the control arm.
+    """
+    policy = task_policy(task_id)
+
+    if (
+        GENERATION_EVALUATION_BASELINE_RESOURCE_ID
+        in policy.evaluation_resource_ids
+    ):
+        route = route_task(
+            task_id,
+            requested_resource_id=(
+                GENERATION_EVALUATION_BASELINE_RESOURCE_ID
+            ),
+        )
+
+        return replace(
+            route,
+            selection_source="task_primary",
+            automatic_fallback_enabled=False,
+            fallback_resource_ids=(),
+        )
+
+    return route_task(
+        task_id,
+        requested_resource_id=None,
+    )
+
+
 def _generation_route(
     *,
     task_id: str,
     requested_resource_id: str | None,
 ) -> ResourceRoute:
-    route = route_task(
-        task_id,
-        requested_resource_id=requested_resource_id,
+    route = (
+        _evaluation_primary_route(task_id)
+        if requested_resource_id is None
+        else route_task(
+            task_id,
+            requested_resource_id=requested_resource_id,
+        )
     )
 
     if route.resource_kind != GENERATION:
@@ -518,6 +562,7 @@ __all__ = [
     "MODEL_EVALUATION_VERSION",
     "DEFAULT_EVALUATION_MAX_PROVIDER_CALLS",
     "DEFAULT_EVALUATION_MAX_ESTIMATED_INPUT_TOKENS",
+    "GENERATION_EVALUATION_BASELINE_RESOURCE_ID",
     "EvaluationError",
     "EvaluationBudgetExceeded",
     "EvaluationExecutionDisabled",
