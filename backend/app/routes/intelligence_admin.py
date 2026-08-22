@@ -20,6 +20,11 @@ from app.intelligence.claim_state import (
 from app.intelligence.entity_resolution_runtime import (
     resolve_entity_mentions,
 )
+from app.intelligence.projection import (
+    build_claim_projection,
+    build_story_projection,
+    build_subject_timeline,
+)
 from app.intelligence.source_health import (
     build_source_evidence_health,
 )
@@ -84,6 +89,19 @@ def build_router(
             max_entities=max_entities,
         )
 
+    @router.get("/admin/intelligence/subjects/timeline")
+    def intelligence_subject_timeline(
+        request: Request,
+        subject_key: str = Query(..., min_length=1, max_length=256),
+        limit: int = Query(100, ge=1, le=500),
+    ):
+        require_admin(request)
+        return build_subject_timeline(
+            subject_key=subject_key,
+            connection_factory=connection_factory,
+            limit=limit,
+        )
+
     @router.get("/admin/intelligence/claims/{claim_id}/context")
     def intelligence_claim_context(
         claim_id: str,
@@ -126,6 +144,22 @@ def build_router(
             raise HTTPException(status_code=404, detail="Claim not found.")
         return result
 
+    @router.get("/admin/intelligence/claims/{claim_id}/projection")
+    def intelligence_claim_projection(
+        claim_id: str,
+        request: Request,
+        stale_after_days: int = Query(30, ge=1, le=3650),
+    ):
+        require_admin(request)
+        result = build_claim_projection(
+            claim_id=claim_id,
+            connection_factory=connection_factory,
+            stale_after_days=stale_after_days,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Claim not found.")
+        return result
+
     @router.get("/admin/intelligence/stories/{story_id}/context")
     def intelligence_story_context(
         story_id: str,
@@ -163,6 +197,22 @@ def build_router(
         result = build_story_claim_state_overview(
             story_id=story_id,
             connection_factory=connection_factory,
+        )
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Story not found.")
+        return result
+
+    @router.get("/admin/intelligence/stories/{story_id}/projection")
+    def intelligence_story_projection(
+        story_id: str,
+        request: Request,
+        stale_after_days: int = Query(30, ge=1, le=3650),
+    ):
+        require_admin(request)
+        result = build_story_projection(
+            story_id=story_id,
+            connection_factory=connection_factory,
+            stale_after_days=stale_after_days,
         )
         if result.get("status") == "not_found":
             raise HTTPException(status_code=404, detail="Story not found.")
