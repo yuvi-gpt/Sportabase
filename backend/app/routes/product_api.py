@@ -6,7 +6,6 @@ from fastapi import APIRouter, Query, Request
 
 from app.intelligence.article_product_runtime import (
     attach_article_product_intelligence,
-    build_article_product_intelligence,
 )
 from app.models.api import (
     AnalyzeRequest,
@@ -98,17 +97,6 @@ def build_router(
             handler=invoke_handler,
             req=req,
             event_recorder=operational_event_recorder,
-        )
-
-    @router.get("/intelligence/article-context")
-    def article_intelligence_context(
-        url: str = Query(..., min_length=8, max_length=2048),
-        stale_after_days: int = Query(30, ge=1, le=3650),
-    ):
-        return build_article_product_intelligence(
-            url=url,
-            connection_factory=connection_factory,
-            stale_after_days=stale_after_days,
         )
 
     @router.post(
