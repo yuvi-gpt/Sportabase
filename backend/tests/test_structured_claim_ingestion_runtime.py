@@ -40,9 +40,9 @@ class StructuredClaimIngestionRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tempdir.name) / "sportabase.sqlite3"
+        initialize_database(self.factory, SCHEMA)
         conn = self.factory()
         try:
-            conn.executescript(SCHEMA)
             self._seed_entities(conn)
             self._seed_legacy_claim_scope(conn)
             conn.commit()
