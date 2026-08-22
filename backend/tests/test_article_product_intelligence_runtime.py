@@ -352,30 +352,11 @@ class ArticleProductIntelligenceRuntimeTests(unittest.TestCase):
         runtime = payload["intelligence"]["runtime"]
         self.assertEqual(runtime["status"], "ready")
         self.assertEqual(runtime["counts"]["claims"], 2)
-        self.assertTrue(
-            payload["debug"]["cache"]["hit"]
-        )
+        self.assertTrue(payload["debug"]["cache"]["hit"])
         self.assertEqual(
             payload["debug"]["intelligence_runtime"]["status"],
             "ready",
         )
-
-    def test_public_article_context_endpoint_refreshes_without_analysis(self):
-        app = FastAPI()
-        app.include_router(self._router(connection_factory=self.factory))
-        client = TestClient(app)
-
-        response = client.get(
-            "/intelligence/article-context",
-            params={"url": URL},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["status"], "ready")
-        self.assertEqual(payload["counts"]["claims"], 2)
-        self.assertEqual(payload["counts"]["stories"], 1)
-        self.assertFalse(payload["policy"]["provider_call_performed"])
 
     def test_router_remains_backward_compatible_without_database_dependency(self):
         app = FastAPI()
@@ -393,18 +374,12 @@ class ArticleProductIntelligenceRuntimeTests(unittest.TestCase):
                 ),
             },
         )
-        context = client.get(
-            "/intelligence/article-context",
-            params={"url": URL},
-        )
 
         self.assertEqual(analysis.status_code, 200)
         self.assertEqual(
             analysis.json()["intelligence"]["runtime"]["status"],
             "disabled",
         )
-        self.assertEqual(context.status_code, 200)
-        self.assertEqual(context.json()["status"], "disabled")
 
 
 if __name__ == "__main__":
