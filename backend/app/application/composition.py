@@ -265,8 +265,10 @@ def compose_application(
 
     app.include_router(
         intelligence_runtime_admin.build_router(
+            app=app,
             require_admin=require_admin,
             connection_factory=connection_factory,
+            operations_database_url=PERSISTENT_OPERATIONS_DATABASE_URL,
         )
     )
 
