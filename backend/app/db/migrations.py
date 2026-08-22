@@ -185,6 +185,36 @@ def initialize_database(
             """
         )
 
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS claim_identity_mappings (
+              production_claim_id TEXT PRIMARY KEY,
+              canonical_claim_id TEXT NOT NULL,
+              subject_key TEXT NOT NULL,
+              mapping_status TEXT NOT NULL,
+              mapping_basis TEXT NOT NULL,
+              first_seen_at TEXT NOT NULL,
+              last_seen_at TEXT NOT NULL,
+              metadata_json TEXT NOT NULL DEFAULT '{}',
+              CHECK (mapping_status = 'verified_equivalent'),
+              FOREIGN KEY(production_claim_id)
+                REFERENCES intelligence_claims(id)
+                ON DELETE CASCADE,
+              FOREIGN KEY(canonical_claim_id)
+                REFERENCES intelligence_claims(id)
+                ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS
+            idx_claim_identity_mappings_canonical
+            ON claim_identity_mappings(canonical_claim_id);
+
+            CREATE INDEX IF NOT EXISTS
+            idx_claim_identity_mappings_subject
+            ON claim_identity_mappings(subject_key);
+            """
+        )
+
         conn.commit()
 
     finally:
