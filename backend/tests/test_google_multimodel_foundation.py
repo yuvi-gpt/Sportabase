@@ -43,8 +43,12 @@ from app.ai.tasks import (
     ARTICLE_CLASSIFIER,
     ARTICLE_SINGLE_PASS,
     ARTICLE_TLDR,
+    COMPATIBILITY_GENERATION_FALLBACK,
     CORROBORATION_CANDIDATE_SEMANTICS,
     CORROBORATION_COLLECTION_SEMANTICS,
+    EVIDENCE_SEMANTICS_GENERATION_MODEL,
+    FAST_UTILITY_GENERATION_MODEL,
+    GENERAL_ANALYSIS_GENERATION_MODEL,
     PROVENANCE_RESEARCH,
     RETRIEVAL_EMBEDDING,
     TASK_REGISTRY_VERSION,
@@ -87,6 +91,24 @@ EXPECTED_TASKS = (
     PROVENANCE_RESEARCH,
 )
 
+EXPECTED_PRIMARY_BY_TASK = {
+    ARTICLE_TLDR: "gemini-3.5-flash-lite",
+    ARTICLE_CLASSIFIER: "gemini-3.5-flash-lite",
+    ARTICLE_SINGLE_PASS: "gemini-3.6-flash",
+    VIDEO_ANALYSIS: "gemini-3.6-flash",
+    CORROBORATION_CANDIDATE_SEMANTICS: "gemini-3.5-flash",
+    CORROBORATION_COLLECTION_SEMANTICS: "gemini-3.5-flash",
+}
+
+EXPECTED_FALLBACK_BY_TASK = {
+    ARTICLE_TLDR: ("gemini-3.5-flash",),
+    ARTICLE_CLASSIFIER: ("gemini-3.5-flash",),
+    ARTICLE_SINGLE_PASS: ("gemini-3.5-flash",),
+    VIDEO_ANALYSIS: ("gemini-3.5-flash",),
+    CORROBORATION_CANDIDATE_SEMANTICS: (),
+    CORROBORATION_COLLECTION_SEMANTICS: (),
+}
+
 
 class GoogleAIResourceFoundationTests(
     unittest.TestCase
@@ -102,7 +124,7 @@ class GoogleAIResourceFoundationTests(
         )
         self.assertEqual(
             TASK_REGISTRY_VERSION,
-            "ai-task-registry-v3",
+            "ai-task-registry-v4",
         )
         self.assertEqual(
             RESOURCE_ROUTER_VERSION,
@@ -144,7 +166,7 @@ class GoogleAIResourceFoundationTests(
             ),
         )
 
-    def test_default_model_preserves_current_live_behavior(self):
+    def test_default_model_remains_compatibility_baseline(self):
         self.assertEqual(
             DEFAULT_GEMINI_MODEL,
             "gemini-3.5-flash",
@@ -154,6 +176,24 @@ class GoogleAIResourceFoundationTests(
         )
         self.assertFalse(
             current.requires_project_capacity_config
+        )
+        self.assertEqual(
+            COMPATIBILITY_GENERATION_FALLBACK,
+            DEFAULT_GEMINI_MODEL,
+        )
+
+    def test_specialized_generation_roles_are_explicit(self):
+        self.assertEqual(
+            FAST_UTILITY_GENERATION_MODEL,
+            "gemini-3.5-flash-lite",
+        )
+        self.assertEqual(
+            GENERAL_ANALYSIS_GENERATION_MODEL,
+            "gemini-3.6-flash",
+        )
+        self.assertEqual(
+            EVIDENCE_SEMANTICS_GENERATION_MODEL,
+            "gemini-3.5-flash",
         )
 
     def test_new_hosted_resources_require_project_capacity_config(self):
@@ -205,7 +245,7 @@ class GoogleAIResourceFoundationTests(
             EXPECTED_TASKS,
         )
 
-    def test_all_current_live_tasks_remain_on_35_flash(self):
+    def test_live_generation_tasks_have_task_specific_primaries(self):
         for task_id in LIVE_GENERATION_TASKS:
             with self.subTest(
                 task=task_id
@@ -218,14 +258,23 @@ class GoogleAIResourceFoundationTests(
                 )
                 self.assertEqual(
                     policy.primary_resource_id,
-                    DEFAULT_GEMINI_MODEL,
-                )
-                self.assertFalse(
-                    policy.automatic_fallback_enabled
+                    EXPECTED_PRIMARY_BY_TASK[
+                        task_id
+                    ],
                 )
                 self.assertEqual(
                     policy.fallback_resource_ids,
-                    (),
+                    EXPECTED_FALLBACK_BY_TASK[
+                        task_id
+                    ],
+                )
+                self.assertEqual(
+                    policy.automatic_fallback_enabled,
+                    bool(
+                        EXPECTED_FALLBACK_BY_TASK[
+                            task_id
+                        ]
+                    ),
                 )
 
                 route = route_task(
@@ -233,15 +282,58 @@ class GoogleAIResourceFoundationTests(
                 )
                 self.assertEqual(
                     route.resource_id,
-                    DEFAULT_GEMINI_MODEL,
+                    EXPECTED_PRIMARY_BY_TASK[
+                        task_id
+                    ],
                 )
                 self.assertEqual(
                     route.selection_source,
                     "task_primary",
                 )
-                self.assertFalse(
-                    route.requires_project_capacity_config
-                )
+
+    def test_utility_tasks_use_flash_lite(self):
+        for task_id in (
+            ARTICLE_TLDR,
+            ARTICLE_CLASSIFIER,
+        ):
+            self.assertEqual(
+                task_policy(
+                    task_id
+                ).primary_resource_id,
+                FAST_UTILITY_GENERATION_MODEL,
+            )
+
+    def test_rich_analysis_tasks_use_36_flash(self):
+        for task_id in (
+            ARTICLE_SINGLE_PASS,
+            VIDEO_ANALYSIS,
+        ):
+            self.assertEqual(
+                task_policy(
+                    task_id
+                ).primary_resource_id,
+                GENERAL_ANALYSIS_GENERATION_MODEL,
+            )
+
+    def test_evidence_semantics_remain_on_directly_validated_35_flash(self):
+        for task_id in (
+            CORROBORATION_CANDIDATE_SEMANTICS,
+            CORROBORATION_COLLECTION_SEMANTICS,
+        ):
+            policy = task_policy(
+                task_id
+            )
+            self.assertEqual(
+                policy.primary_resource_id,
+                EVIDENCE_SEMANTICS_GENERATION_MODEL,
+            )
+            self.assertFalse(
+                policy.automatic_fallback_enabled
+            )
+            self.assertEqual(
+                policy.fallback_resource_ids,
+                (),
+            )
 
     def test_generation_evaluation_can_select_hosted_gemma(self):
         route = route_task(
@@ -260,9 +352,6 @@ class GoogleAIResourceFoundationTests(
         )
         self.assertTrue(
             route.requires_project_capacity_config
-        )
-        self.assertFalse(
-            route.automatic_fallback_enabled
         )
 
     def test_generation_evaluation_can_select_newest_flash(self):
@@ -283,35 +372,6 @@ class GoogleAIResourceFoundationTests(
         self.assertTrue(
             route.requires_project_capacity_config
         )
-        self.assertFalse(
-            route.automatic_fallback_enabled
-        )
-
-    def test_generation_evaluation_can_select_legacy_free_tier_models(self):
-        for model_id in (
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.5-flash-lite",
-        ):
-            with self.subTest(
-                model=model_id
-            ):
-                route = route_task(
-                    ARTICLE_CLASSIFIER,
-                    requested_resource_id=(
-                        model_id
-                    ),
-                )
-                self.assertEqual(
-                    route.resource_id,
-                    model_id,
-                )
-                self.assertTrue(
-                    route.requires_project_capacity_config
-                )
-                self.assertFalse(
-                    route.automatic_fallback_enabled
-                )
 
     def test_embedding_task_is_evaluation_only(self):
         policy = task_policy(
@@ -412,7 +472,7 @@ class GoogleAIResourceFoundationTests(
                 ),
             )
 
-    def test_current_default_still_integrates_with_existing_quota_policy(self):
+    def test_compatibility_fallback_integrates_with_existing_quota_policy(self):
         policy = capacity_policy_for_model(
             DEFAULT_GEMINI_MODEL
         )
@@ -433,12 +493,24 @@ class GoogleAIResourceFoundationTests(
             0,
         )
 
-    def test_model_resolver_remains_generation_only(self):
+    def test_model_resolver_exposes_task_primary(self):
+        self.assertEqual(
+            resolve_model_for_task(
+                ARTICLE_TLDR
+            ),
+            "gemini-3.5-flash-lite",
+        )
         self.assertEqual(
             resolve_model_for_task(
                 ARTICLE_SINGLE_PASS
             ),
-            DEFAULT_GEMINI_MODEL,
+            "gemini-3.6-flash",
+        )
+        self.assertEqual(
+            resolve_model_for_task(
+                CORROBORATION_CANDIDATE_SEMANTICS
+            ),
+            "gemini-3.5-flash",
         )
 
         with self.assertRaises(
