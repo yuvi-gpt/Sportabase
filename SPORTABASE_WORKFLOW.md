@@ -192,3 +192,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - A resolved label remains a temporally verified canonical resolution, not a declaration of permanent objective truth.
 - Unresolved observations may not carry resolved-outcome verification, and resolved observation classes may not be used without resolved status.
 - Resolved calibration examples remain measurement-only: numeric negative penalty selection and live negative Merit remain disabled until separate calibration and release certification.
+
+## Resolved Negative Merit Real-World Corpus Boundary
+
+- Real-world negative-Merit calibration uses a frozen offline corpus under `backend/evals`; synthetic policy fixtures do not count as real-world evidence.
+- The corpus keeps separate populations for resolved-against-claim cases, unresolved two-gate cases, authority-only controls, semantic-only controls, no-negative-evidence controls, and legitimate early-exclusive controls.
+- A corpus is not measurement-complete while any required population is absent.
+- Resolved cases still require the exact verified canonical-outcome-resolution lineage accepted by the calibration dataset.
+- The corpus digest freezes case content so deliberate case changes become explicit evaluation-data changes.
+- Corpus evaluation cannot select a numeric penalty, enable live negative Merit, call providers, or establish permanent objective truth.
+- Only after sufficient real-world resolved cases and controls are collected and their score distributions inspected may penalty weights be evaluated.
