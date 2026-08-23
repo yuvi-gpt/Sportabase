@@ -212,3 +212,12 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Inventory classification is discovery metadata, not corpus admission, a falsehood label, or release authorization.
 - No-negative-evidence cases must never be automatically relabeled as early-exclusive controls; legitimate exclusivity requires separate curation.
 - The inventory must perform no provider calls, no database writes, no verification persistence, and no live Merit changes.
+
+## Historical Article Intelligence Backfill Boundary
+
+- Legacy `stories` rows may be inspected as potential historical claim seeds, but current rule-classifier confidence alone is not sufficient for automatic backfill admission.
+- Historical claim backfill requires an explicit high-precision headline claim signal compatible with the current claim-bearing article type; classifier/signal mismatches require review.
+- Newsletter, subscription, signup, and similar service-content rows must never be admitted as sports-claim seeds merely because the generic classifier emits a claim-bearing type.
+- A historical backfill admission means only that the headline may be recorded as a reported claim. It does not establish truth, authority, contradiction, corroboration, or live Merit impact.
+- Stored legacy `stories.merit_score` values are archival outputs from the old pipeline and are not valid current negative-Merit calibration baselines.
+- Historical backfill planning must be read-only and provider-free. Any later persistence step must use an explicit frozen admission set and exact database safety checks.
