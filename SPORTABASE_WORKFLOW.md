@@ -250,3 +250,12 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Direct-authority denial candidates must be evaluated semantically before calibration; headline opposition or apparent contradiction alone is insufficient.
 - The sacred first-scoop rule remains unchanged: absence of corroboration is never negative evidence.
 - When a direct authority provides an original-language statement and an AI-translated mirror, freeze the original-language authority page for evidence capture; translation may assist presentation but must not replace the canonical source capture.
+
+## Real-World Two-Gate Calibration Boundary
+
+- Real-world direct-denial calibration must re-fetch the frozen claimant and authority URLs and require exact equality with the previously frozen content SHA-256 values before verifier execution.
+- Deterministic claimant-assertion and direct-authority-denial phrases may feed the existing `direct_authority_record` trusted stance basis only after exact frozen-source identity and subject checks pass.
+- Real-world two-gate calibration executes the production direct-authority, direct-stakeholder contradiction, machine-verified revision, machine semantic contradiction, Negative Merit shadow, and calibration-dataset contracts in an isolated evaluation database. Evaluation-only entity bindings must never be confused with production persisted bindings.
+- A two-gate calibration observation is evidence that the captured source semantics contradict the captured claim under the verified lineage; it is not permanent objective truth.
+- The first provisional negative adjustment is selected from the measured real-world two-gate/control score separation using half of the median separation, rounded upward, with a 15-point cap and a 5-point floor. The calibration report itself never authorizes live release.
+- Live negative Merit still requires a separate release certificate/runtime with fail-closed certificate identity, strict two-gate eligibility, explicit score clamping, positive-release composition tests, and first-scoop protection.
