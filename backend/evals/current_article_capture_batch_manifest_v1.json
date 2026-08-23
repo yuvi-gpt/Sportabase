@@ -1,0 +1,67 @@
+{
+  "base_capture_manifest": {
+    "manifest_digest": "35f70e23df2c7e8cb7cadfd374e042dde3cc6f9e58cf9e397b830338b805a6ac",
+    "story_id": "d9656bc4020146941eb1c66af8ab4af32d6c9ea9"
+  },
+  "captures": [
+    {
+      "analysis_content_hash": "02e431f493569c40c5157cbf92354ef255bd3d44710b4fcc66cee5f71b4fd850",
+      "analysis_version": "article-video-v14-score-single-pass",
+      "article_type": "injury_rumor",
+      "body_sha256": "9fc689d75fe18eda8e42f66322f838886dd3a869bc71231aea0468277998619b",
+      "captured_at": "2026-08-23T16:26:27.720682+00:00",
+      "character_count": 1672,
+      "claim_id": "7f3c59c3aae3051659401c4e493b893a286f70547f64f801820d9920563ad88a",
+      "corpus_admitted": false,
+      "extracted_title": "Jesse Derry: Chelsea teenager says debut was dream come true despite head injury",
+      "label": "Derry",
+      "legacy_merit_total": 64,
+      "media_item_id": "62b1dcd2cefc86b9d3c4342cd1b01173c1efe034b158b52017c90cf3e2a91081",
+      "paragraph_count": 15,
+      "provider_calls": 0,
+      "scoring_version": "merit-v2-certified-corroboration",
+      "snapshot_id": 2,
+      "source_url": "https://www.bbc.com/sport/football/articles/cj0p27mqpgvo?at_campaign=rss&at_medium=RSS",
+      "stored_merit_total": 64,
+      "story_id": "17fbd0f024799ffb4fd5ff732bc451c83d954d2e",
+      "truth_established": false,
+      "type_confidence": 0.2
+    },
+    {
+      "analysis_content_hash": "c6d58d7d34ff51b0d5971f7c2402858b4e4fe692e6ca6ffa37bebfd0b49bb9a0",
+      "analysis_version": "article-video-v14-score-single-pass",
+      "article_type": "contract_news",
+      "body_sha256": "823578f2adb15a163d193912f3efe19a11d9ea9020d05eef136b6dfa6633d28c",
+      "captured_at": "2026-08-23T16:26:28.996236+00:00",
+      "character_count": 832,
+      "claim_id": "49b6ff72655b7a8fd024c2807bdfb4c80e242b9c936d1c266af489745a919a66",
+      "corpus_admitted": false,
+      "extracted_title": "Phil Foden reaches agreement with Man City over new contract -- sources",
+      "label": "Foden",
+      "legacy_merit_total": 56,
+      "media_item_id": "bfd9bd6e16c27b927aba439dfeedfee53ce3bd3e4ee355b6806954153ebae11a",
+      "paragraph_count": 6,
+      "provider_calls": 0,
+      "scoring_version": "merit-v2-certified-corroboration",
+      "snapshot_id": 3,
+      "source_url": "https://www.espn.com/soccer/story/_/id/48682973/phil-foden-reaches-agreement-man-city-new-contract-sources",
+      "stored_merit_total": 56,
+      "story_id": "eac596c4b293ec34ede3fec82ca94935f5ea2685",
+      "truth_established": false,
+      "type_confidence": 0.98
+    }
+  ],
+  "manifest_digest": "418d20fe8bdb1619f798c9300dd2db0614386f40b7ff1d35cdc63afde26ed6ed",
+  "new_capture_count": 2,
+  "policy": {
+    "article_body_stored_in_repository": false,
+    "corpus_admitted": false,
+    "intelligence_shadow_enabled": false,
+    "provider_calls": 0,
+    "structural_export_readiness_is_not_corpus_admission": true,
+    "truth_established": false,
+    "verification_evidence_created": false
+  },
+  "total_current_capture_count": 3,
+  "version": "current-article-capture-batch-manifest-v1"
+}
