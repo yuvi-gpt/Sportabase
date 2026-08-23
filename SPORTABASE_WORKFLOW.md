@@ -132,3 +132,8 @@ These product rules must remain intact across implementation work:
 This is a living project file.
 
 Update it when a new development convention, safety rule, repository workflow, test requirement, environment guard, or architectural invariant becomes stable enough that future Sportabase work should rely on it. Do not clutter it with temporary debugging notes, one-off guesses, or unverified assumptions.
+
+## PowerShell Git Pager Safety
+
+- In runnable PowerShell validation blocks, prefer git --no-pager diff, git --no-pager diff --check, git --no-pager diff --stat, and git --no-pager log so Git cannot interrupt a checkpoint with an interactive pager.
+- If Git has already opened the pager, press q to return to PowerShell.
