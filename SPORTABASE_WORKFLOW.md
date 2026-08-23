@@ -162,3 +162,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Real-world calibration observations require immutable HTTPS source captures with content hashes and machine-verified lineage.
 - Early exclusives and absence-of-corroboration cases belong in the control population and must not become negative evidence.
 - Calibration observation collection must not change shadow or live Merit, choose a penalty weight, or authorize release.
+
+## Canonical Outcome Resolution Boundary
+
+- Canonical outcome comparison is deterministic structured-state analysis, not source verification and not a truth oracle.
+- Canonical outcome v1 supports only positive completed-transfer claims and requires the same canonical subject, transfer destination, and explicit effective period.
+- Overlapping explicit origin and transfer-kind fields must not conflict.
+- A later failed/cancelled transfer state, or an explicit negation of the same completed transfer, may become a resolution-against-claim candidate only.
+- Sequential states such as agreed then failed must not automatically be treated as falsehood because both may have been accurate at different times.
+- A resolution candidate cannot become a resolved calibration label until its later outcome is separately bound to machine-verified authoritative source evidence.
+- Canonical outcome comparison cannot change shadow or live Merit, select a numeric penalty, or establish permanent objective truth.
