@@ -1,0 +1,176 @@
+{
+  "captured_at": "2026-08-23T16:42:55.789579+00:00",
+  "case_count": 3,
+  "cases": [
+    {
+      "authority_capture": {
+        "captured_at": "2026-08-23T16:42:48.915336+00:00",
+        "character_count": 1046,
+        "content_sha256": "9923c2e6ba08735470b01c9bc8c556f303d40b3c625e1214d8e6613b920a6e12",
+        "domain": "realmadrid.com",
+        "extraction_method": "article",
+        "final_url": "https://www.realmadrid.com/es-ES/noticias/club/comunicados/comunicado-oficial-real-madrid-20-06-2026",
+        "paragraph_count": 3,
+        "requested_url": "https://www.realmadrid.com/es-ES/noticias/club/comunicados/comunicado-oficial-real-madrid-20-06-2026",
+        "selected_url_index": 0,
+        "title": "Comunicado Oficial"
+      },
+      "authority_entity": "Real Madrid C. F.",
+      "candidate_id": "olise-real-madrid-direct-denial-2026",
+      "candidate_relationship": "direct_authority_denial_candidate",
+      "candidate_semantic_status": "unverified_direct_authority_denial_candidate",
+      "claim_summary": "Real Madrid intended to pursue Michael Olise and reported club representatives had confirmed that interest.",
+      "claimant_capture": {
+        "captured_at": "2026-08-23T16:42:47.023077+00:00",
+        "character_count": 1758,
+        "content_sha256": "cc5eda66a2c737b780bb4a08b4138c0845f2621c57d20c623454ffa873d2227c",
+        "domain": "goal.com",
+        "extraction_method": "article",
+        "final_url": "https://www.goal.com/en/lists/this-has-been-confirmed-by-representatives-of-real-madrid-fresh-details-have-emerged-about-the-reported-interest-in-bayern-munich-superstar-michael-olise/bltb4af8cd273e845a8",
+        "paragraph_count": 10,
+        "requested_url": "https://www.goal.com/en/lists/this-has-been-confirmed-by-representatives-of-real-madrid-fresh-details-have-emerged-about-the-reported-interest-in-bayern-munich-superstar-michael-olise/bltb4af8cd273e845a8",
+        "selected_url_index": 0,
+        "title": "\"This has been confirmed by representatives of Real Madrid\": Fresh details have emerged about the reported interest in Bayern Munich superstar Michael Olise | Goal.com"
+      },
+      "claimant_current_merit": {
+        "article_type": "transfer_rumor",
+        "measurement_scope": "current_retrievable_claimant_page",
+        "not_a_truth_probability": true,
+        "total": 34,
+        "type_confidence": 0.73
+      },
+      "origin": "real_world",
+      "policy": {
+        "absence_of_corroboration_is_not_falsehood": true,
+        "capture_is_candidate_evidence_only": true,
+        "claim_truth_established": false,
+        "direct_authority_gate_verified": false,
+        "live_negative_merit_authorized": false,
+        "machine_semantics_verified": false,
+        "numeric_negative_penalty_authorized": false,
+        "production_database_written": false,
+        "provider_call_performed": false
+      },
+      "subject": "Michael Olise",
+      "version": "negative-merit-real-world-candidate-v1"
+    },
+    {
+      "authority_capture": {
+        "captured_at": "2026-08-23T16:42:51.477932+00:00",
+        "character_count": 1231,
+        "content_sha256": "f22ada5952c2ca895ba58ccd122f01649b52decc76a8276a7b223e915ef0f355",
+        "domain": "realmadrid.com",
+        "extraction_method": "article",
+        "final_url": "https://www.realmadrid.com/es-ES/noticias/club/comunicados/comunicado-oficial-03-07-2026",
+        "paragraph_count": 4,
+        "requested_url": "https://www.realmadrid.com/es-ES/noticias/club/comunicados/comunicado-oficial-03-07-2026",
+        "selected_url_index": 0,
+        "title": "Comunicado Oficial"
+      },
+      "authority_entity": "Real Madrid C. F.",
+      "candidate_id": "enzo-real-madrid-direct-denial-2026",
+      "candidate_relationship": "direct_authority_denial_candidate",
+      "candidate_semantic_status": "unverified_direct_authority_denial_candidate",
+      "claim_summary": "Real Madrid were preparing a major bid for Enzo Fernandez and treated him as a priority midfield target.",
+      "claimant_capture": {
+        "captured_at": "2026-08-23T16:42:50.424178+00:00",
+        "character_count": 5354,
+        "content_sha256": "d9c60ac3631d0f9f4be57b7cdb66651e5e17498fbb055b8f04d3033cccb1702d",
+        "domain": "teamtalk.com",
+        "extraction_method": "main",
+        "final_url": "https://www.teamtalk.com/chelsea/real-madrid-transfer-news-enzo-fernandez-bid-chelsea-xabi-alonso",
+        "paragraph_count": 33,
+        "requested_url": "https://www.teamtalk.com/chelsea/real-madrid-transfer-news-enzo-fernandez-bid-chelsea-xabi-alonso",
+        "selected_url_index": 0,
+        "title": "Chelsea stunned as Real Madrid prepare big-money Fernandez bid after 'agreement' reached"
+      },
+      "claimant_current_merit": {
+        "article_type": "transfer_rumor",
+        "measurement_scope": "current_retrievable_claimant_page",
+        "not_a_truth_probability": true,
+        "total": 35,
+        "type_confidence": 0.86
+      },
+      "origin": "real_world",
+      "policy": {
+        "absence_of_corroboration_is_not_falsehood": true,
+        "capture_is_candidate_evidence_only": true,
+        "claim_truth_established": false,
+        "direct_authority_gate_verified": false,
+        "live_negative_merit_authorized": false,
+        "machine_semantics_verified": false,
+        "numeric_negative_penalty_authorized": false,
+        "production_database_written": false,
+        "provider_call_performed": false
+      },
+      "subject": "Enzo Fernandez",
+      "version": "negative-merit-real-world-candidate-v1"
+    },
+    {
+      "authority_capture": {
+        "captured_at": "2026-08-23T16:42:55.409651+00:00",
+        "character_count": 1181,
+        "content_sha256": "a8819963e50032fb98f890b90970f23c4d6f057b5de056ff813c572ed6c05bb6",
+        "domain": "galatasaray.org",
+        "extraction_method": "body",
+        "final_url": "https://www.galatasaray.org/haber/kulup/kamuoyuna-duyuru/60690",
+        "paragraph_count": 11,
+        "requested_url": "https://www.galatasaray.org/haber/kulup/kamuoyuna-duyuru/60690",
+        "selected_url_index": 0,
+        "title": "Kamuoyuna Duyuru"
+      },
+      "authority_entity": "Galatasaray Spor Kulübü",
+      "candidate_id": "musiala-galatasaray-direct-denial-2026",
+      "candidate_relationship": "direct_authority_denial_candidate",
+      "candidate_semantic_status": "unverified_direct_authority_denial_candidate",
+      "claim_summary": "Galatasaray were reported to be close to completing a loan move for Jamal Musiala.",
+      "claimant_capture": {
+        "captured_at": "2026-08-23T16:42:53.358732+00:00",
+        "character_count": 857,
+        "content_sha256": "39c2cd447ed9173c54909aaf4a32c4cceaa29d2d8deb2c838e95c101d0b566c0",
+        "domain": "gzt.com",
+        "extraction_method": "article",
+        "final_url": "https://www.gzt.com/spor/son-dakika-galatasaray-on-numara-transferini-bitirmek-uzere-4245038",
+        "paragraph_count": 4,
+        "requested_url": "https://www.gzt.com/spor/son-dakika-galatasaray-on-numara-transferini-bitirmek-uzere-4245038",
+        "selected_url_index": 0,
+        "title": "SON DAKİKA | Galatasaray on numara transferini bitirmek üzere | Futbol Haberleri"
+      },
+      "claimant_current_merit": {
+        "article_type": "generic_news",
+        "measurement_scope": "current_retrievable_claimant_page",
+        "not_a_truth_probability": true,
+        "total": 46,
+        "type_confidence": 0.15
+      },
+      "origin": "real_world",
+      "policy": {
+        "absence_of_corroboration_is_not_falsehood": true,
+        "capture_is_candidate_evidence_only": true,
+        "claim_truth_established": false,
+        "direct_authority_gate_verified": false,
+        "live_negative_merit_authorized": false,
+        "machine_semantics_verified": false,
+        "numeric_negative_penalty_authorized": false,
+        "production_database_written": false,
+        "provider_call_performed": false
+      },
+      "subject": "Jamal Musiala",
+      "version": "negative-merit-real-world-candidate-v1"
+    }
+  ],
+  "manifest_digest": "6868d4330243d2c137c96da6f04078c84b9e7a21b612ada2b63865a0c891dc89",
+  "policy": {
+    "article_bodies_stored_in_repository": false,
+    "claim_truth_established": false,
+    "immutable_capture_hashes_recorded": true,
+    "live_negative_merit_authorized": false,
+    "machine_semantics_verified": false,
+    "next_step_requires_existing_verifier_contracts": true,
+    "numeric_negative_penalty_authorized": false,
+    "production_database_written": false,
+    "provider_call_performed": false,
+    "real_world_sources_only": true
+  },
+  "version": "negative-merit-real-world-candidate-batch-v1"
+}

@@ -240,3 +240,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - A current scoring snapshot is not a truth judgment and creates no verification evidence by itself.
 - `corpus_export_ready` means structural readiness only. It does not admit a case into the frozen calibration corpus and does not establish truth or falsity.
 - A structurally ready no-negative-evidence case still requires curator evidence before it may be treated as an early-exclusive control. Absence of corroboration or contradiction never proves exclusivity.
+
+## Real-World Negative Candidate Batch Boundary
+
+- Real-world negative-Merit candidate collection freezes both the claimant-side page and the later direct-authority statement using HTTPS URLs, capture timestamps, and SHA-256 content hashes.
+- Candidate collection may measure the current deterministic Merit score of the retrievable claimant page, but that score is not a truth probability and the measurement does not authorize any numeric penalty.
+- A publisher claim paired with a direct club denial remains an unverified contradiction candidate until the existing direct-authority and machine-semantic verifier contracts independently pass.
+- Candidate capture itself establishes no objective claim truth, creates no live Merit effect, performs no Gemini/provider call, and writes nothing to the production database.
+- Direct-authority denial candidates must be evaluated semantically before calibration; headline opposition or apparent contradiction alone is insufficient.
+- The sacred first-scoop rule remains unchanged: absence of corroboration is never negative evidence.
+- When a direct authority provides an original-language statement and an AI-translated mirror, freeze the original-language authority page for evidence capture; translation may assist presentation but must not replace the canonical source capture.
