@@ -182,3 +182,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Canonical resolution may satisfy the machine semantic contradiction gate, but it still does not establish permanent objective truth or authorize a numeric negative Merit penalty.
 - Supporting or temporally indeterminate outcomes must fail closed and must not create negative resolution evidence.
 - Live negative Merit remains disabled until real-world calibration and a separate negative release certificate/runtime are completed.
+
+## Resolved Negative Merit Calibration Boundary
+
+- Negative-Merit calibration dataset v2 distinguishes unresolved two-gate observations from `resolved_against_claim_observation` cases.
+- A resolved-against-claim calibration label is accepted only when accompanied by the persisted verified canonical-outcome-resolution verifier result for the same claim.
+- The verifier result must preserve the machine-verified `stance=contradicts` judgment with basis class `canonical_resolution`, verified evidence identity, direct-authority lineage, and immutable canonical source capture hash.
+- The verifier's canonical URL, source identity, and content SHA256 must match an immutable source capture in the calibration observation.
+- A resolved label remains a temporally verified canonical resolution, not a declaration of permanent objective truth.
+- Unresolved observations may not carry resolved-outcome verification, and resolved observation classes may not be used without resolved status.
+- Resolved calibration examples remain measurement-only: numeric negative penalty selection and live negative Merit remain disabled until separate calibration and release certification.

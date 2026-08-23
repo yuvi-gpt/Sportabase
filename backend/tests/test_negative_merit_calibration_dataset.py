@@ -1,4 +1,4 @@
-﻿import copy
+import copy
 import json
 import sys
 import unittest
@@ -31,6 +31,10 @@ from app.analysis.negative_merit_calibration_dataset import (
     build_negative_merit_calibration_dataset,
 )
 
+from app.services.canonical_outcome_resolution_verifier import (
+    CANONICAL_OUTCOME_RESOLUTION_VERIFIER_VERSION,
+)
+
 from app.services.direct_stakeholder_contradiction_verifier import (
     DIRECT_STAKEHOLDER_CONTRADICTION_EVIDENCE_TYPE,
     DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION,
@@ -39,6 +43,10 @@ from app.services.direct_stakeholder_contradiction_verifier import (
 from app.services.machine_verified_contradiction_semantics_verifier import (
     MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE,
     MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION,
+)
+
+from app.services.machine_verified_revision_runtime import (
+    MACHINE_VERIFIED_REVISION_RUNTIME_VERSION,
 )
 
 
@@ -160,6 +168,196 @@ class NegativeMeritCalibrationDatasetTests(
                 "2026-08-23T09:00:00Z"
             ),
         }
+
+    @staticmethod
+    def resolution_verification(
+        case,
+    ):
+        claim_id = case[
+            "claim_id"
+        ]
+
+        capture = case[
+            "source_captures"
+        ][
+            0
+        ]
+
+        source_id = capture[
+            "source_id"
+        ]
+
+        evidence_id = (
+            "resolution-evidence-"
+            + claim_id
+        )
+
+        proof_evidence_id = (
+            "outcome-proof-"
+            + claim_id
+        )
+
+        rule_id = (
+            "transfer_completed_then_failed"
+        )
+
+        evidence_metadata = {
+            "canonical_outcome_resolution_verifier_version": (
+                CANONICAL_OUTCOME_RESOLUTION_VERIFIER_VERSION
+            ),
+            "canonical_outcome_resolution_verified": True,
+            "resolved_against_claim": True,
+            "claim_truth_established": False,
+            "live_merit_changed": False,
+        }
+
+        return {
+            "version": (
+                CANONICAL_OUTCOME_RESOLUTION_VERIFIER_VERSION
+            ),
+            "status": (
+                "persisted_verified_"
+                "canonical_outcome_resolution"
+            ),
+            "persisted": True,
+            "candidate": {
+                "version": (
+                    CANONICAL_OUTCOME_RESOLUTION_VERIFIER_VERSION
+                ),
+                "status": (
+                    "verified_canonical_outcome_"
+                    "against_claim"
+                ),
+                "claim_id": (
+                    claim_id
+                ),
+                "source_id": (
+                    source_id
+                ),
+                "proof_evidence_id": (
+                    proof_evidence_id
+                ),
+                "candidate": {
+                    "canonical_url": (
+                        capture[
+                            "url"
+                        ]
+                    ),
+                    "content_sha256": (
+                        capture[
+                            "content_sha256"
+                        ]
+                    ),
+                    "rule_id": (
+                        rule_id
+                    ),
+                    "canonical_resolution": {
+                        "status": (
+                            "resolution_against_claim_candidate"
+                        ),
+                        "direction": (
+                            "against_claim"
+                        ),
+                        "rule_id": (
+                            rule_id
+                        ),
+                    },
+                },
+            },
+            "revision_runtime": {
+                "version": (
+                    MACHINE_VERIFIED_REVISION_RUNTIME_VERSION
+                ),
+                "status": (
+                    "persisted"
+                ),
+                "evidence": {
+                    "id": (
+                        evidence_id
+                    ),
+                    "verification_status": (
+                        "verified"
+                    ),
+                    "canonical_url": (
+                        capture[
+                            "url"
+                        ]
+                    ),
+                    "metadata_json": json.dumps(
+                        evidence_metadata
+                    ),
+                },
+                "machine_evaluator_runs": [
+                    {
+                        "derivation_mode": (
+                            "machine_verified"
+                        ),
+                        "judgments": [
+                            {
+                                "field": (
+                                    "stance"
+                                ),
+                                "value": (
+                                    "contradicts"
+                                ),
+                                "basis_class": (
+                                    "canonical_resolution"
+                                ),
+                            }
+                        ],
+                    }
+                ],
+            },
+            "resolution_evidence_id": (
+                evidence_id
+            ),
+            "policy": {
+                "canonical_resolution_machine_verified": True,
+                "machine_stance": (
+                    "contradicts"
+                ),
+                "machine_basis_class": (
+                    "canonical_resolution"
+                ),
+                "resolved_against_claim": True,
+                "claim_truth_established": False,
+                "numeric_negative_penalty_authorized": False,
+                "live_negative_merit_authorized": False,
+                "does_not_change_live_merit": True,
+            },
+        }
+
+    def resolved_case(
+        self,
+    ):
+        case = self.case(
+            case_id=(
+                "resolved-two-gate"
+            ),
+            observation_class=(
+                "resolved_against_claim_observation"
+            ),
+            score=84,
+            authority=True,
+            semantics=True,
+            letter="f",
+        )
+
+        case[
+            "resolution_status"
+        ] = (
+            "resolved_against_claim"
+        )
+
+        case[
+            "resolution_verification"
+        ] = (
+            self.resolution_verification(
+                case
+            )
+        )
+
+        return case
 
     def case(
         self,
@@ -421,16 +619,29 @@ class NegativeMeritCalibrationDatasetTests(
             ]
         )
 
+        self.assertTrue(
+            calibration[
+                "canonical_outcome_verifier_available"
+            ]
+        )
+
         self.assertFalse(
             calibration[
                 "canonical_outcome_labels_available"
             ]
         )
 
+        self.assertEqual(
+            calibration[
+                "resolved_against_claim_case_count"
+            ],
+            0,
+        )
+
         self.assertIn(
             (
-                "canonical_outcome_verifier_"
-                "not_implemented"
+                "resolved_outcome_labels_"
+                "not_present"
             ),
             calibration[
                 "blockers"
@@ -453,13 +664,27 @@ class NegativeMeritCalibrationDatasetTests(
             ]
         )
 
-    def test_resolved_outcome_label_is_rejected_until_verifier_exists(
+        self.assertTrue(
+            result[
+                "policy"
+            ][
+                "resolved_labels_require_exact_verified_canonical_outcome_result"
+            ]
+        )
+
+    def test_resolved_label_requires_exact_verifier_result(
         self,
     ):
         case = (
             self.complete_cases()[
                 0
             ]
+        )
+
+        case[
+            "observation_class"
+        ] = (
+            "resolved_against_claim_observation"
         )
 
         case[
@@ -471,8 +696,238 @@ class NegativeMeritCalibrationDatasetTests(
         with self.assertRaisesRegex(
             ValueError,
             (
-                "dedicated .*canonical-outcome "
-                "verifier"
+                "requires the persisted "
+                "canonical outcome verifier result"
+            ),
+        ):
+            build_negative_merit_calibration_dataset(
+                cases=[
+                    case
+                ]
+            )
+
+    def test_verified_resolved_label_enters_separate_distribution(
+        self,
+    ):
+        case = (
+            self.resolved_case()
+        )
+
+        result = (
+            build_negative_merit_calibration_dataset(
+                cases=[
+                    case
+                ]
+            )
+        )
+
+        self.assertEqual(
+            result[
+                "status"
+            ],
+            "measurement_ready",
+        )
+
+        calibration = (
+            result[
+                "calibration"
+            ]
+        )
+
+        self.assertTrue(
+            calibration[
+                "canonical_outcome_verifier_available"
+            ]
+        )
+
+        self.assertTrue(
+            calibration[
+                "canonical_outcome_labels_available"
+            ]
+        )
+
+        self.assertEqual(
+            calibration[
+                "resolved_against_claim_case_count"
+            ],
+            1,
+        )
+
+        self.assertNotIn(
+            (
+                "resolved_outcome_labels_"
+                "not_present"
+            ),
+            calibration[
+                "blockers"
+            ],
+        )
+
+        self.assertIn(
+            (
+                "numeric_penalty_not_calibrated"
+            ),
+            calibration[
+                "blockers"
+            ],
+        )
+
+        distribution = (
+            result[
+                "score_distribution"
+            ][
+                "resolved_against_claim"
+            ]
+        )
+
+        self.assertEqual(
+            distribution[
+                "count"
+            ],
+            1,
+        )
+
+        self.assertEqual(
+            distribution[
+                "mean"
+            ],
+            84.0,
+        )
+
+        observation = (
+            result[
+                "observations"
+            ][
+                0
+            ]
+        )
+
+        self.assertEqual(
+            observation[
+                "resolution_status"
+            ],
+            "resolved_against_claim",
+        )
+
+        verification = (
+            observation[
+                "resolution_verification"
+            ]
+        )
+
+        self.assertEqual(
+            verification[
+                "status"
+            ],
+            "resolved_against_claim",
+        )
+
+        self.assertTrue(
+            verification[
+                "machine_verified"
+            ]
+        )
+
+        self.assertFalse(
+            verification[
+                "claim_truth_established"
+            ]
+        )
+
+        self.assertFalse(
+            verification[
+                "live_merit_effect_enabled"
+            ]
+        )
+
+        self.assertEqual(
+            observation[
+                "negative_merit"
+            ][
+                "adjustment"
+            ],
+            0.0,
+        )
+
+    def test_resolved_verification_must_match_case_claim(
+        self,
+    ):
+        case = (
+            self.resolved_case()
+        )
+
+        case[
+            "resolution_verification"
+        ][
+            "candidate"
+        ][
+            "claim_id"
+        ] = (
+            "claim-other"
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "belongs to another claim",
+        ):
+            build_negative_merit_calibration_dataset(
+                cases=[
+                    case
+                ]
+            )
+
+    def test_resolved_verification_must_match_immutable_capture(
+        self,
+    ):
+        case = (
+            self.resolved_case()
+        )
+
+        case[
+            "source_captures"
+        ][
+            0
+        ][
+            "content_sha256"
+        ] = (
+            "9" * 64
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "not bound to an immutable "
+                "source capture"
+            ),
+        ):
+            build_negative_merit_calibration_dataset(
+                cases=[
+                    case
+                ]
+            )
+
+    def test_unresolved_case_cannot_carry_resolution_verification(
+        self,
+    ):
+        case = (
+            self.complete_cases()[
+                0
+            ]
+        )
+
+        case[
+            "resolution_verification"
+        ] = (
+            self.resolution_verification(
+                case
+            )
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            (
+                "must not carry "
+                "resolved-outcome verification"
             ),
         ):
             build_negative_merit_calibration_dataset(
