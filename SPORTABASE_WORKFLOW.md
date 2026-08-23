@@ -230,3 +230,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Historical `stories.merit_score` values remain archival only and must never become the current negative-Merit calibration baseline.
 - Historical claim-seed persistence performs no Gemini/provider calls, creates no verification evidence, establishes no truth, changes no live Merit, and creates no analysis snapshot.
 - The backfill must be idempotent and must be rehearsed against a database clone before applying the frozen allowlist to the local Sportabase database.
+
+## Current Full-Article Capture Boundary
+
+- A historical claim seed becomes a current full-capture candidate only after Sportabase can fetch the live source through its safe article resolver and the fetched page still matches the frozen claim identity.
+- Capture selection must consider semantic and article-type stability as well as retrieval quality. Fetch success, same-domain identity, and title overlap alone are insufficient when the current page represents a different claim or article state.
+- Persist the exact source URL, extracted title, body SHA-256, analysis-content hash, capture time, article type, scoring versions, and snapshot identity in a manifest. Do not store copyrighted article body text in the repository.
+- Provider-free capture may use the normal Sportabase article scoring and snapshot path only with Gemini generation, intelligence-shadow discovery, analysis-cache writes, and user-history writes explicitly suppressed.
+- A current scoring snapshot is not a truth judgment and creates no verification evidence by itself.
+- `corpus_export_ready` means structural readiness only. It does not admit a case into the frozen calibration corpus and does not establish truth or falsity.
+- A structurally ready no-negative-evidence case still requires curator evidence before it may be treated as an early-exclusive control. Absence of corroboration or contradiction never proves exclusivity.
