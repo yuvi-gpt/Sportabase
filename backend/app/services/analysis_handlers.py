@@ -21,6 +21,10 @@ from app.services.article_intelligence_public import (
 from app.services.live_merit_release import (
     LIVE_MERIT_RELEASE_RUNTIME_VERSION,
 )
+from app.services.negative_merit_runtime import (
+    NEGATIVE_MERIT_RUNTIME_VERSION,
+    run_negative_merit_shadow,
+)
 
 
 def analyze_video_impl(
@@ -600,6 +604,37 @@ def analyze_article_impl(
 
     mark("live_merit_release_ms")
 
+    try:
+        negative_merit_shadow = (
+            run_negative_merit_shadow(
+                legacy_score=legacy_score,
+                evidence_bundle=(
+                    article_evidence_bundle
+                ),
+                media_item_id=(
+                    evidence_media_item_id
+                ),
+                connection_factory=db_conn,
+            )
+        )
+
+    except Exception as error:
+        negative_merit_shadow = {
+            "version": (
+                NEGATIVE_MERIT_RUNTIME_VERSION
+            ),
+            "status": "failed_closed",
+            "mode": "shadow",
+            "error_type": (
+                type(error).__name__
+            ),
+            "live_merit_effect_enabled": False,
+            "claim_truth_established": False,
+            "provider_call_performed": False,
+        }
+
+    mark("negative_merit_shadow_ms")
+
     if isinstance(
         single_pass_result,
         dict,
@@ -844,6 +879,10 @@ def analyze_article_impl(
         in live_merit_release.items()
         if key != "score"
     }
+
+    response.debug[
+        "negative_merit_shadow"
+    ] = negative_merit_shadow
 
     try:
         media_item = upsert_media_item(
