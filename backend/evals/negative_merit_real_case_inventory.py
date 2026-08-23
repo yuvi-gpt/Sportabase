@@ -1270,6 +1270,22 @@ def _article_capture_state(
 
     blockers = []
 
+    media_metadata = _json_object(
+        media_item.get(
+            "metadata_json"
+        )
+    )
+
+    if (
+        media_metadata.get(
+            "full_article_capture"
+        )
+        is False
+    ):
+        blockers.append(
+            "full_article_capture_unavailable"
+        )
+
     if not source_id:
         blockers.append(
             "article_source_identity_missing"

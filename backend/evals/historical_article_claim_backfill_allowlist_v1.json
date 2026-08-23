@@ -1,0 +1,95 @@
+{
+  "allowlist_digest": "753fe1e790027e3b9f1bfba64c2ed98ab4d8c1d73a534bf7d40525c0481bc252",
+  "entries": [
+    {
+      "admission_reason": "explicit_headline_claim_signal_recovers_classifier_miss",
+      "current_rule_confidence": 0.15,
+      "current_rule_type": "generic_news",
+      "observed_at": "2026-05-05T11:16:53+00:00",
+      "planned_article_type": "injury_rumor",
+      "planned_article_type_source": "explicit_headline_signal",
+      "source": "BBC Sport - Football",
+      "sport": "football",
+      "story_id": "17fbd0f024799ffb4fd5ff732bc451c83d954d2e",
+      "title": "Derry says debut a 'dream come true' despite injury",
+      "url": "https://www.bbc.com/sport/football/articles/cj0p27mqpgvo?at_campaign=rss&at_medium=RSS"
+    },
+    {
+      "admission_reason": "explicit_headline_claim_signal_recovers_classifier_miss",
+      "current_rule_confidence": 0.15,
+      "current_rule_type": "generic_news",
+      "observed_at": "2026-05-05T16:24:33+00:00",
+      "planned_article_type": "discipline_legal",
+      "planned_article_type_source": "explicit_headline_signal",
+      "source": "BBC Sport - Football",
+      "sport": "football",
+      "story_id": "4f34486a4460eefbd94c6666e35e4f9b0fd681c8",
+      "title": "Everton fan arrested for alleged Semenyo racist abuse",
+      "url": "https://www.bbc.com/sport/football/articles/cedpnxqwg29o?at_campaign=rss&at_medium=RSS"
+    },
+    {
+      "admission_reason": "current_rule_confirmed_by_explicit_headline_claim_signal",
+      "current_rule_confidence": 0.98,
+      "current_rule_type": "transfer_rumor",
+      "observed_at": "2026-05-05T10:29:29-05:00",
+      "planned_article_type": "transfer_rumor",
+      "planned_article_type_source": "current_rule_confirmed_by_headline",
+      "source": "ESPN - Soccer",
+      "sport": "football",
+      "story_id": "98d0c1db4bbcd4d5642bdff36401102836fd959c",
+      "title": "Transfer rumors, news: Barcelona keen on Newcastle...",
+      "url": "https://www.espn.com/soccer/story/_/id/48682828/barcelona-keen-newcastle-united-anthony-gordon"
+    },
+    {
+      "admission_reason": "current_rule_confirmed_by_explicit_headline_claim_signal",
+      "current_rule_confidence": 0.98,
+      "current_rule_type": "discipline_legal",
+      "observed_at": "2026-05-05T17:17:25+00:00",
+      "planned_article_type": "discipline_legal",
+      "planned_article_type_source": "current_rule_confirmed_by_headline",
+      "source": "BBC Sport - Football",
+      "sport": "football",
+      "story_id": "d9656bc4020146941eb1c66af8ab4af32d6c9ea9",
+      "title": "Rangers' Sterling banned from road after drink driving crash",
+      "url": "https://www.bbc.com/news/articles/c707kj6k367o?at_campaign=rss&at_medium=RSS"
+    },
+    {
+      "admission_reason": "current_rule_confirmed_by_explicit_headline_claim_signal",
+      "current_rule_confidence": 0.46,
+      "current_rule_type": "injury_rumor",
+      "observed_at": "2026-05-05T18:23:52+00:00",
+      "planned_article_type": "injury_rumor",
+      "planned_article_type_source": "current_rule_confirmed_by_headline",
+      "source": "BBC Sport - Football",
+      "sport": "football",
+      "story_id": "e4c602724364bc924033d0b6a9e0c9761283028a",
+      "title": "Forest hopeful of Gibbs-White fitness for Europa tie",
+      "url": "https://www.bbc.com/sport/football/articles/c8jv81ry299o?at_campaign=rss&at_medium=RSS"
+    },
+    {
+      "admission_reason": "current_rule_confirmed_by_explicit_headline_claim_signal",
+      "current_rule_confidence": 0.98,
+      "current_rule_type": "contract_news",
+      "observed_at": "2026-05-05T18:23:19-05:00",
+      "planned_article_type": "contract_news",
+      "planned_article_type_source": "current_rule_confirmed_by_headline",
+      "source": "ESPN - Soccer",
+      "sport": "football",
+      "story_id": "eac596c4b293ec34ede3fec82ca94935f5ea2685",
+      "title": "Sources: Foden agrees new deal with Man City",
+      "url": "https://www.espn.com/soccer/story/_/id/48682973/phil-foden-reaches-agreement-man-city-new-contract-sources"
+    }
+  ],
+  "planner_report_digest": "c8bdb9001ff9699257823d0f2f326c75b8009d760b43b4232594fdbba875513e",
+  "planner_version": "historical-article-claim-backfill-plan-v1",
+  "policy": {
+    "claim_truth_established": false,
+    "frozen_admit_population_only": true,
+    "full_article_capture_claimed": false,
+    "headline_is_reported_claim_only": true,
+    "historical_merit_score_used_as_calibration_baseline": false,
+    "live_merit_changed": false,
+    "provider_call_performed": false
+  },
+  "version": "historical-article-claim-backfill-allowlist-v1"
+}

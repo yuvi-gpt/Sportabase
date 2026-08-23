@@ -221,3 +221,12 @@ Update it when a new development convention, safety rule, repository workflow, t
 - A historical backfill admission means only that the headline may be recorded as a reported claim. It does not establish truth, authority, contradiction, corroboration, or live Merit impact.
 - Stored legacy `stories.merit_score` values are archival outputs from the old pipeline and are not valid current negative-Merit calibration baselines.
 - Historical backfill planning must be read-only and provider-free. Any later persistence step must use an explicit frozen admission set and exact database safety checks.
+
+## Historical Claim Seed Persistence Boundary
+
+- Historical article claim persistence must use a frozen allowlist produced from the high-precision planner; current planner digest and exact admitted story identities must still match before any write.
+- The frozen historical backfill persists only the reported-claim seed layer: source, media item, primary claim, source observation, and claim link.
+- Historical RSS/feed title-summary material is explicitly not a full article capture. Its media metadata must set `full_article_capture=false`, and the real-case inventory must therefore keep it ineligible for calibration export until a genuine current article capture and analysis snapshot exist.
+- Historical `stories.merit_score` values remain archival only and must never become the current negative-Merit calibration baseline.
+- Historical claim-seed persistence performs no Gemini/provider calls, creates no verification evidence, establishes no truth, changes no live Merit, and creates no analysis snapshot.
+- The backfill must be idempotent and must be rehearsed against a database clone before applying the frozen allowlist to the local Sportabase database.
