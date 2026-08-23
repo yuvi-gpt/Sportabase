@@ -145,3 +145,11 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Machine-verified contradiction semantics describe verified source/claim semantics; they do not by themselves establish objective falsity.
 - Passing both gates still does not authorize a live negative Merit adjustment. Numeric negative weights require separate calibration, real-world controls, and a dedicated negative release certificate/runtime.
 - Absence of corroboration, an early exclusive, or a model-only contradiction must never create a negative Merit penalty.
+
+## Negative Merit Evaluation Boundary
+
+- Deterministic negative-Merit policy fixtures validate safety behavior only; they are not real-world calibration evidence.
+- The policy evaluation harness must include a two-gate candidate plus authority-only, semantics-only, no-negative-evidence, and early-exclusive controls.
+- Until real-world calibration is separately certified, any nonzero negative adjustment, changed shadow total, changed live total, or enabled live negative score effect is a safety violation.
+- Passing policy evaluation never authorizes a numeric negative weight or live negative Merit.
+- Real-world machine-verifiable calibration cases and a separate negative release certificate/runtime are required before any live negative score effect.
