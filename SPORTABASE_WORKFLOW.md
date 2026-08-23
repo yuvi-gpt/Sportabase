@@ -153,3 +153,12 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Until real-world calibration is separately certified, any nonzero negative adjustment, changed shadow total, changed live total, or enabled live negative score effect is a safety violation.
 - Passing policy evaluation never authorizes a numeric negative weight or live negative Merit.
 - Real-world machine-verifiable calibration cases and a separate negative release certificate/runtime are required before any live negative score effect.
+
+## Negative Merit Calibration Observation Boundary
+
+- Measure real-world legacy Merit score distributions for two-gate observations and negative controls before selecting any numeric penalty weight.
+- A two-gate observation is not a falsehood label. It records verified direct-authority contradiction lineage plus machine-verified contradiction semantics only.
+- Negative-Merit calibration dataset v1 accepts unresolved outcomes only. Do not create or trust resolved-against-claim labels until a dedicated machine-verifiable canonical-outcome verifier exists.
+- Real-world calibration observations require immutable HTTPS source captures with content hashes and machine-verified lineage.
+- Early exclusives and absence-of-corroboration cases belong in the control population and must not become negative evidence.
+- Calibration observation collection must not change shadow or live Merit, choose a penalty weight, or authorize release.
