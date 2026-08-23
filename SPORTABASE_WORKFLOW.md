@@ -172,3 +172,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Sequential states such as agreed then failed must not automatically be treated as falsehood because both may have been accurate at different times.
 - A resolution candidate cannot become a resolved calibration label until its later outcome is separately bound to machine-verified authoritative source evidence.
 - Canonical outcome comparison cannot change shadow or live Merit, select a numeric penalty, or establish permanent objective truth.
+
+## Verified Canonical Outcome Resolution Boundary
+
+- A deterministic canonical-outcome comparison is not enough to create a resolved-against-claim label by itself.
+- Verified canonical resolution requires a persisted structured canonical claim, a verified canonical-outcome proof with immutable content hash, a canonical URL belonging to the verified source, and verified direct-stakeholder claim-participation lineage.
+- The outcome proof must itself be part of the verified direct-authority participant lineage for the claim.
+- A verified resolution-against-claim emits a machine-verified stance judgment with basis class `canonical_resolution`; callers do not choose the machine derivation mode or evaluator identity.
+- Canonical resolution may satisfy the machine semantic contradiction gate, but it still does not establish permanent objective truth or authorize a numeric negative Merit penalty.
+- Supporting or temporally indeterminate outcomes must fail closed and must not create negative resolution evidence.
+- Live negative Merit remains disabled until real-world calibration and a separate negative release certificate/runtime are completed.
