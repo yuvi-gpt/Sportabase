@@ -314,3 +314,125 @@ def run_negative_merit_shadow(
         ],
         "shadow": shadow,
     }
+
+
+def refresh_negative_merit_after_intelligence(
+    *,
+    prior_result: Dict[str, Any],
+    intelligence_shadow: Dict[str, Any] | None,
+    legacy_score: Dict[str, Any],
+    media_item_id: str,
+    evidence_state_loader,
+    connection_factory,
+    runtime_runner=run_negative_merit_shadow,
+) -> Dict[str, Any]:
+    prior = (
+        prior_result
+        if isinstance(
+            prior_result,
+            dict,
+        )
+        else {
+            "version": (
+                NEGATIVE_MERIT_RUNTIME_VERSION
+            ),
+            "status": "failed_closed",
+            "mode": "shadow",
+            "live_merit_effect_enabled": False,
+            "claim_truth_established": False,
+            "provider_call_performed": False,
+        }
+    )
+
+    if (
+        not isinstance(
+            intelligence_shadow,
+            dict,
+        )
+        or _key(
+            intelligence_shadow.get(
+                "status"
+            )
+        )
+        != "completed"
+    ):
+        return prior
+
+    normalized_media_item_id = _clean(
+        media_item_id
+    )
+
+    if not normalized_media_item_id:
+        return prior
+
+    try:
+        evidence_state = (
+            evidence_state_loader(
+                media_item_id=(
+                    normalized_media_item_id
+                ),
+            )
+        )
+
+        if not isinstance(
+            evidence_state,
+            dict,
+        ):
+            return prior
+
+        evidence_bundle = (
+            evidence_state.get(
+                "bundle"
+            )
+        )
+
+        if not isinstance(
+            evidence_bundle,
+            dict,
+        ):
+            return prior
+
+        refreshed = runtime_runner(
+            legacy_score=legacy_score,
+            evidence_bundle=(
+                evidence_bundle
+            ),
+            media_item_id=(
+                normalized_media_item_id
+            ),
+            connection_factory=(
+                connection_factory
+            ),
+        )
+
+        if not isinstance(
+            refreshed,
+            dict,
+        ):
+            return prior
+
+    except Exception:
+        return prior
+
+    result = dict(
+        refreshed
+    )
+
+    result[
+        "refresh"
+    ] = {
+        "performed": True,
+        "source": (
+            "post_article_intelligence_shadow"
+        ),
+        "prior_status": _clean(
+            prior.get(
+                "status"
+            )
+        ),
+        "provider_call_performed": False,
+        "live_merit_effect_enabled": False,
+        "claim_truth_established": False,
+    }
+
+    return result

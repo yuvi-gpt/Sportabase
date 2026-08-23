@@ -23,6 +23,7 @@ from app.services.live_merit_release import (
 )
 from app.services.negative_merit_runtime import (
     NEGATIVE_MERIT_RUNTIME_VERSION,
+    refresh_negative_merit_after_intelligence,
     run_negative_merit_shadow,
 )
 
@@ -977,6 +978,33 @@ def analyze_article_impl(
                 ),
                 "truth_established": False,
             }
+
+        negative_merit_shadow = (
+            refresh_negative_merit_after_intelligence(
+                prior_result=(
+                    negative_merit_shadow
+                ),
+                intelligence_shadow=(
+                    intelligence_shadow
+                ),
+                legacy_score=(
+                    legacy_score
+                ),
+                media_item_id=(
+                    media_item["id"]
+                ),
+                evidence_state_loader=(
+                    load_evidence_analysis_state_for_media_item
+                ),
+                connection_factory=(
+                    db_conn
+                ),
+            )
+        )
+
+        response.debug[
+            "negative_merit_shadow"
+        ] = negative_merit_shadow
 
         response.debug[
             "intelligence_shadow"
