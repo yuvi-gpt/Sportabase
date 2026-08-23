@@ -38,3 +38,23 @@ Exit code 2 means the corpus is malformed or unverifiable.
 A passing corpus still does not authorize a numeric penalty. Real score
 distributions and false-positive controls must be inspected before any negative
 release certificate can be considered.
+
+## Real-case inventory
+
+Before adding cases to the frozen corpus, inspect the persisted Sportabase database
+with the read-only inventory runner:
+
+    python -m evals.run_negative_merit_real_case_inventory
+
+The inventory opens SQLite in read-only/query-only mode. It does not persist new
+verification, call providers, modify Merit, or admit cases into the corpus.
+
+For each persisted primary article claim it reports the latest analysis snapshot,
+the pre-live-overlay legacy Merit total when recoverable, persisted direct-authority
+and machine-semantic gates, canonical-resolution lineage, source-capture readiness,
+and a suggested calibration class.
+
+The suggested class is discovery metadata only. In particular, a row with no
+negative evidence is never automatically called a legitimate exclusive scoop.
+Exclusive controls require separate curation because absence of corroboration does
+not prove exclusivity.

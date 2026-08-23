@@ -202,3 +202,13 @@ Update it when a new development convention, safety rule, repository workflow, t
 - The corpus digest freezes case content so deliberate case changes become explicit evaluation-data changes.
 - Corpus evaluation cannot select a numeric penalty, enable live negative Merit, call providers, or establish permanent objective truth.
 - Only after sufficient real-world resolved cases and controls are collected and their score distributions inspected may penalty weights be evaluated.
+
+## Negative Merit Real-Case Inventory Boundary
+
+- Inspect persisted real-world calibration candidates through a read-only SQLite inventory before exporting anything into the frozen negative-Merit corpus.
+- Recover the pre-live-positive-overlay legacy Merit total from persisted analysis debug lineage rather than treating the stored live score as the calibration baseline.
+- Persisted direct-authority and machine-semantic evidence may be reconstructed into gate inputs only when their exact verifier contracts still validate through the Negative Merit shadow.
+- A resolved candidate requires persisted machine-verified `stance=contradicts` lineage with basis class `canonical_resolution` plus its verified canonical-outcome proof record.
+- Inventory classification is discovery metadata, not corpus admission, a falsehood label, or release authorization.
+- No-negative-evidence cases must never be automatically relabeled as early-exclusive controls; legitimate exclusivity requires separate curation.
+- The inventory must perform no provider calls, no database writes, no verification persistence, and no live Merit changes.
