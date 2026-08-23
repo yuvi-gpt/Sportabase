@@ -1,4 +1,4 @@
-﻿from typing import Any, Dict
+from typing import Any, Dict
 
 from app.analysis.negative_merit import (
     build_negative_merit_shadow,
@@ -7,9 +7,13 @@ from app.services.direct_stakeholder_contradiction_verifier import (
     persist_direct_stakeholder_contradiction_verification,
 )
 
+from app.services.machine_verified_contradiction_semantics_verifier import (
+    persist_machine_verified_contradiction_semantics_verification,
+)
+
 
 NEGATIVE_MERIT_RUNTIME_VERSION = (
-    "negative-merit-runtime-v1"
+    "negative-merit-runtime-v2"
 )
 
 
@@ -165,6 +169,8 @@ def run_negative_merit_shadow(
             "no_gemini_calls": True,
             "absence_of_corroboration_is_not_false": True,
             "semantic_contradiction_alone_cannot_change_merit": True,
+            "direct_authority_alone_is_not_calibration_eligible": True,
+            "machine_verified_semantics_are_required_for_calibration": True,
             "live_negative_merit_is_disabled": True,
         },
     }
@@ -277,12 +283,42 @@ def run_negative_merit_shadow(
         else None
     )
 
+    semantic_verification = None
+
+    if selected is not None:
+        try:
+            semantic_verification = (
+                persist_machine_verified_contradiction_semantics_verification(
+                    claim_id=(
+                        claim_id
+                    ),
+                    connection_factory=(
+                        connection_factory
+                    ),
+                )
+            )
+
+        except Exception as error:
+            semantic_verification = {
+                "status": (
+                    "semantic_verification_failed:"
+                    + type(
+                        error
+                    ).__name__
+                ),
+                "persisted": False,
+                "evidence": None,
+            }
+
     shadow = (
         build_negative_merit_shadow(
             legacy_score=legacy_score,
             claim_id=claim_id,
             contradiction_verification=(
                 selected
+            ),
+            semantic_verification=(
+                semantic_verification
             ),
         )
     )
@@ -312,6 +348,16 @@ def run_negative_merit_shadow(
             _summary(row)
             for row in verifications
         ],
+        "semantic_verification": (
+            _summary(
+                semantic_verification
+            )
+            if isinstance(
+                semantic_verification,
+                dict,
+            )
+            else None
+        ),
         "shadow": shadow,
     }
 

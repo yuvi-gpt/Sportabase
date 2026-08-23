@@ -137,3 +137,11 @@ Update it when a new development convention, safety rule, repository workflow, t
 
 - In runnable PowerShell validation blocks, prefer git --no-pager diff, git --no-pager diff --check, git --no-pager diff --stat, and git --no-pager log so Git cannot interrupt a checkpoint with an interactive pager.
 - If Git has already opened the pager, press q to return to PowerShell.
+
+## Negative Merit Two-Gate Calibration Boundary
+
+- A persisted direct-stakeholder contradiction lineage alone is not sufficient for negative-Merit penalty calibration.
+- A negative-evidence candidate becomes calibration-eligible only when both the direct-authority contradiction lineage gate and the persisted machine-verified contradiction-semantics gate pass for the claim.
+- Machine-verified contradiction semantics describe verified source/claim semantics; they do not by themselves establish objective falsity.
+- Passing both gates still does not authorize a live negative Merit adjustment. Numeric negative weights require separate calibration, real-world controls, and a dedicated negative release certificate/runtime.
+- Absence of corroboration, an early exclusive, or a model-only contradiction must never create a negative Merit penalty.

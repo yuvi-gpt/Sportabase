@@ -3,7 +3,10 @@ import sys
 import unittest
 
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import (
+    Mock,
+    patch,
+)
 
 
 BACKEND_DIR = Path(
@@ -19,6 +22,11 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.services.direct_stakeholder_contradiction_verifier import (
     DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION,
+)
+
+from app.services.machine_verified_contradiction_semantics_verifier import (
+    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE,
+    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION,
 )
 
 from app.services.negative_merit_runtime import (
@@ -73,7 +81,7 @@ class NegativeMeritRuntimeTests(
         }
 
     @staticmethod
-    def verified_result():
+    def verified_authority_result():
         return {
             "version": (
                 DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION
@@ -84,7 +92,7 @@ class NegativeMeritRuntimeTests(
             ),
             "persisted": True,
             "evidence": {
-                "id": "evidence-1",
+                "id": "authority-evidence-1",
                 "evidence_type": (
                     "direct_stakeholder_"
                     "contradiction_reference"
@@ -111,22 +119,80 @@ class NegativeMeritRuntimeTests(
             },
         }
 
-    def test_verified_direct_contradiction_becomes_calibration_eligible(
+    @staticmethod
+    def verified_semantic_result():
+        return {
+            "version": (
+                MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+            ),
+            "status": (
+                "persisted_verified_machine_"
+                "contradiction_semantics"
+            ),
+            "persisted": True,
+            "evidence": {
+                "id": (
+                    "semantic-evidence-1"
+                ),
+                "evidence_type": (
+                    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE
+                ),
+                "verification_status": (
+                    "verified"
+                ),
+                "subject_key": (
+                    "merit-negative-semantic-evidence|"
+                    "claim-1"
+                ),
+                "metadata_json": json.dumps(
+                    {
+                        "verifier_version": (
+                            MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+                        ),
+                        "claim_id": (
+                            "claim-1"
+                        ),
+                        "stance": (
+                            "contradicts"
+                        ),
+                        "contradiction_semantics_verified": True,
+                        "contradiction_semantics_are_source_semantics": True,
+                        "claim_truth_established": False,
+                        "live_merit_changed": False,
+                    }
+                ),
+            },
+        }
+
+    def test_two_verified_gates_become_calibration_eligible(
         self,
     ):
-        verifier = Mock(
+        authority = Mock(
             return_value=(
-                self.verified_result()
+                self.verified_authority_result()
             )
         )
 
-        with unittest.mock.patch(
+        semantics = Mock(
+            return_value=(
+                self.verified_semantic_result()
+            )
+        )
+
+        with patch(
             (
                 "app.services.negative_merit_runtime."
                 "persist_direct_stakeholder_"
                 "contradiction_verification"
             ),
-            verifier,
+            authority,
+        ), patch(
+            (
+                "app.services.negative_merit_runtime."
+                "persist_machine_verified_"
+                "contradiction_semantics_verification"
+            ),
+            semantics,
         ):
             result = (
                 run_negative_merit_shadow(
@@ -146,27 +212,71 @@ class NegativeMeritRuntimeTests(
             )
 
         self.assertEqual(
-            result["version"],
+            result[
+                "version"
+            ],
             NEGATIVE_MERIT_RUNTIME_VERSION,
         )
 
         self.assertEqual(
-            result["status"],
+            result[
+                "status"
+            ],
             (
                 "negative_evidence_"
                 "calibration_eligible"
             ),
         )
 
-        self.assertEqual(
+        self.assertTrue(
             result[
-                "contradiction_observation_ids"
-            ],
-            ["obs-1"],
+                "shadow"
+            ][
+                "evidence_gates"
+            ][
+                "direct_authority_contradiction_lineage"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "shadow"
+            ][
+                "evidence_gates"
+            ][
+                "machine_verified_contradiction_semantics"
+            ]
+        )
+
+        self.assertTrue(
+            result[
+                "shadow"
+            ][
+                "proposed"
+            ][
+                "eligible_for_penalty_calibration"
+            ]
         )
 
         self.assertEqual(
-            result["shadow"]["live"]["total"],
+            result[
+                "shadow"
+            ][
+                "proposed"
+            ][
+                "adjustment"
+            ],
+            0.0,
+        )
+
+        self.assertEqual(
+            result[
+                "shadow"
+            ][
+                "live"
+            ][
+                "total"
+            ],
             72.0,
         )
 
@@ -176,20 +286,145 @@ class NegativeMeritRuntimeTests(
             ]
         )
 
-        verifier.assert_called_once()
+        authority.assert_called_once()
+        semantics.assert_called_once()
 
-    def test_no_contradiction_does_not_call_verifier(
+    def test_authority_without_machine_semantics_is_not_eligible(
         self,
     ):
-        verifier = Mock()
+        authority = Mock(
+            return_value=(
+                self.verified_authority_result()
+            )
+        )
 
-        with unittest.mock.patch(
+        semantics = Mock(
+            return_value={
+                "version": (
+                    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+                ),
+                "status": (
+                    "no_machine_verified_stance"
+                ),
+                "persisted": False,
+                "evidence": None,
+            }
+        )
+
+        with patch(
             (
                 "app.services.negative_merit_runtime."
                 "persist_direct_stakeholder_"
                 "contradiction_verification"
             ),
-            verifier,
+            authority,
+        ), patch(
+            (
+                "app.services.negative_merit_runtime."
+                "persist_machine_verified_"
+                "contradiction_semantics_verification"
+            ),
+            semantics,
+        ):
+            result = (
+                run_negative_merit_shadow(
+                    legacy_score=(
+                        self.legacy()
+                    ),
+                    evidence_bundle=(
+                        self.bundle()
+                    ),
+                    media_item_id=(
+                        "media-1"
+                    ),
+                    connection_factory=(
+                        object()
+                    ),
+                )
+            )
+
+        self.assertEqual(
+            result[
+                "status"
+            ],
+            (
+                "no_certified_negative_evidence"
+            ),
+        )
+
+        self.assertEqual(
+            result[
+                "shadow"
+            ][
+                "signal"
+            ],
+            (
+                "verified_authority_contradiction_"
+                "semantics_unverified"
+            ),
+        )
+
+        self.assertTrue(
+            result[
+                "shadow"
+            ][
+                "evidence_gates"
+            ][
+                "direct_authority_contradiction_lineage"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "shadow"
+            ][
+                "evidence_gates"
+            ][
+                "machine_verified_contradiction_semantics"
+            ]
+        )
+
+        self.assertFalse(
+            result[
+                "shadow"
+            ][
+                "proposed"
+            ][
+                "eligible_for_penalty_calibration"
+            ]
+        )
+
+        self.assertEqual(
+            result[
+                "shadow"
+            ][
+                "live"
+            ][
+                "total"
+            ],
+            72.0,
+        )
+
+    def test_no_contradiction_does_not_call_verifiers(
+        self,
+    ):
+        authority = Mock()
+        semantics = Mock()
+
+        with patch(
+            (
+                "app.services.negative_merit_runtime."
+                "persist_direct_stakeholder_"
+                "contradiction_verification"
+            ),
+            authority,
+        ), patch(
+            (
+                "app.services.negative_merit_runtime."
+                "persist_machine_verified_"
+                "contradiction_semantics_verification"
+            ),
+            semantics,
         ):
             result = (
                 run_negative_merit_shadow(
@@ -211,7 +446,9 @@ class NegativeMeritRuntimeTests(
             )
 
         self.assertEqual(
-            result["status"],
+            result[
+                "status"
+            ],
             (
                 "no_certified_negative_evidence"
             ),
@@ -224,20 +461,29 @@ class NegativeMeritRuntimeTests(
             [],
         )
 
-        verifier.assert_not_called()
+        authority.assert_not_called()
+        semantics.assert_not_called()
 
-    def test_reporter_contradiction_is_not_direct_authority_candidate(
+    def test_reporter_contradiction_does_not_call_verifiers(
         self,
     ):
-        verifier = Mock()
+        authority = Mock()
+        semantics = Mock()
 
-        with unittest.mock.patch(
+        with patch(
             (
                 "app.services.negative_merit_runtime."
                 "persist_direct_stakeholder_"
                 "contradiction_verification"
             ),
-            verifier,
+            authority,
+        ), patch(
+            (
+                "app.services.negative_merit_runtime."
+                "persist_machine_verified_"
+                "contradiction_semantics_verification"
+            ),
+            semantics,
         ):
             result = (
                 run_negative_merit_shadow(
@@ -267,14 +513,17 @@ class NegativeMeritRuntimeTests(
             [],
         )
 
-        verifier.assert_not_called()
+        authority.assert_not_called()
+        semantics.assert_not_called()
 
     def test_duplicate_primary_claim_fails_closed(
         self,
     ):
         bundle = self.bundle()
 
-        bundle["claims"].append(
+        bundle[
+            "claims"
+        ].append(
             {
                 "id": "claim-2",
                 "canonical_key": (
@@ -286,9 +535,15 @@ class NegativeMeritRuntimeTests(
 
         result = (
             run_negative_merit_shadow(
-                legacy_score=self.legacy(),
-                evidence_bundle=bundle,
-                media_item_id="media-1",
+                legacy_score=(
+                    self.legacy()
+                ),
+                evidence_bundle=(
+                    bundle
+                ),
+                media_item_id=(
+                    "media-1"
+                ),
                 connection_factory=(
                     object()
                 ),
@@ -296,12 +551,18 @@ class NegativeMeritRuntimeTests(
         )
 
         self.assertEqual(
-            result["status"],
-            "primary_claim_not_unique",
+            result[
+                "status"
+            ],
+            (
+                "primary_claim_not_unique"
+            ),
         )
 
         self.assertIsNone(
-            result["shadow"]
+            result[
+                "shadow"
+            ]
         )
 
 

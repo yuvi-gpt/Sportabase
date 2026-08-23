@@ -7,9 +7,14 @@ from app.services.direct_stakeholder_contradiction_verifier import (
     DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION,
 )
 
+from app.services.machine_verified_contradiction_semantics_verifier import (
+    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE,
+    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION,
+)
+
 
 NEGATIVE_MERIT_SHADOW_VERSION = (
-    "negative-merit-shadow-v1"
+    "negative-merit-shadow-v2"
 )
 
 
@@ -36,6 +41,7 @@ def _score(value: Any) -> float:
         result = float(
             value
         )
+
     except (
         TypeError,
         ValueError,
@@ -62,8 +68,11 @@ def _metadata(
 ) -> Dict[str, Any]:
     try:
         parsed = json.loads(
-            str(value or "{}")
+            str(
+                value or "{}"
+            )
         )
+
     except Exception:
         return {}
 
@@ -77,6 +86,216 @@ def _metadata(
     )
 
 
+def _authority_gate(
+    *,
+    claim_id: str,
+    verification: Dict[str, Any] | None,
+) -> bool:
+    result = (
+        verification
+        if isinstance(
+            verification,
+            dict,
+        )
+        else {}
+    )
+
+    evidence = result.get(
+        "evidence"
+    )
+
+    if (
+        result.get(
+            "version"
+        )
+        != DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION
+        or result.get(
+            "status"
+        )
+        != (
+            "persisted_verified_direct_stakeholder_"
+            "contradiction_lineage"
+        )
+        or result.get(
+            "persisted"
+        )
+        is not True
+        or not isinstance(
+            evidence,
+            dict,
+        )
+    ):
+        return False
+
+    metadata = _metadata(
+        evidence.get(
+            "metadata_json"
+        )
+    )
+
+    return bool(
+        _key(
+            evidence.get(
+                "evidence_type"
+            )
+        )
+        == (
+            DIRECT_STAKEHOLDER_CONTRADICTION_EVIDENCE_TYPE
+        )
+        and _key(
+            evidence.get(
+                "verification_status"
+            )
+        )
+        == "verified"
+        and _clean(
+            evidence.get(
+                "subject_key"
+            )
+        )
+        == (
+            "merit-negative-evidence|"
+            + claim_id
+        )
+        and metadata.get(
+            "verifier_version"
+        )
+        == (
+            DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION
+        )
+        and metadata.get(
+            "machine_verified_authority"
+        )
+        is True
+        and metadata.get(
+            "recorded_contradiction_relationship"
+        )
+        is True
+        and metadata.get(
+            "contradiction_semantics_verified"
+        )
+        is False
+        and metadata.get(
+            "claim_truth_established"
+        )
+        is False
+        and metadata.get(
+            "live_merit_changed"
+        )
+        is False
+    )
+
+
+def _semantic_gate(
+    *,
+    claim_id: str,
+    verification: Dict[str, Any] | None,
+) -> bool:
+    result = (
+        verification
+        if isinstance(
+            verification,
+            dict,
+        )
+        else {}
+    )
+
+    evidence = result.get(
+        "evidence"
+    )
+
+    if (
+        result.get(
+            "version"
+        )
+        != (
+            MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+        )
+        or result.get(
+            "status"
+        )
+        != (
+            "persisted_verified_machine_"
+            "contradiction_semantics"
+        )
+        or result.get(
+            "persisted"
+        )
+        is not True
+        or not isinstance(
+            evidence,
+            dict,
+        )
+    ):
+        return False
+
+    metadata = _metadata(
+        evidence.get(
+            "metadata_json"
+        )
+    )
+
+    return bool(
+        _key(
+            evidence.get(
+                "evidence_type"
+            )
+        )
+        == (
+            MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE
+        )
+        and _key(
+            evidence.get(
+                "verification_status"
+            )
+        )
+        == "verified"
+        and _clean(
+            evidence.get(
+                "subject_key"
+            )
+        )
+        == (
+            "merit-negative-semantic-evidence|"
+            + claim_id
+        )
+        and metadata.get(
+            "verifier_version"
+        )
+        == (
+            MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+        )
+        and _clean(
+            metadata.get(
+                "claim_id"
+            )
+        )
+        == claim_id
+        and _key(
+            metadata.get(
+                "stance"
+            )
+        )
+        == "contradicts"
+        and metadata.get(
+            "contradiction_semantics_verified"
+        )
+        is True
+        and metadata.get(
+            "contradiction_semantics_are_source_semantics"
+        )
+        is True
+        and metadata.get(
+            "claim_truth_established"
+        )
+        is False
+        and metadata.get(
+            "live_merit_changed"
+        )
+        is False
+    )
+
+
 def build_negative_merit_shadow(
     *,
     legacy_score: Dict[str, Any],
@@ -84,6 +303,9 @@ def build_negative_merit_shadow(
     contradiction_verification: (
         Dict[str, Any] | None
     ),
+    semantic_verification: (
+        Dict[str, Any] | None
+    ) = None,
 ) -> Dict[str, Any]:
     if not isinstance(
         legacy_score,
@@ -110,127 +332,99 @@ def build_negative_merit_shadow(
         )
     )
 
-    verification = (
-        contradiction_verification
-        if isinstance(
-            contradiction_verification,
-            dict,
+    authority_verified = (
+        _authority_gate(
+            claim_id=(
+                normalized_claim_id
+            ),
+            verification=(
+                contradiction_verification
+            ),
         )
-        else {}
     )
 
-    evidence = verification.get(
-        "evidence"
+    semantics_verified = (
+        _semantic_gate(
+            claim_id=(
+                normalized_claim_id
+            ),
+            verification=(
+                semantic_verification
+            ),
+        )
     )
 
-    qualifies = False
+    calibration_eligible = bool(
+        authority_verified
+        and semantics_verified
+    )
 
-    if (
-        verification.get(
-            "version"
-        )
-        == DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION
-        and verification.get(
-            "status"
-        )
-        == (
-            "persisted_verified_direct_stakeholder_"
-            "contradiction_lineage"
-        )
-        and verification.get(
-            "persisted"
-        )
-        is True
-        and isinstance(
-            evidence,
-            dict,
-        )
-    ):
-        metadata = _metadata(
-            evidence.get(
-                "metadata_json"
-            )
-        )
-
-        qualifies = (
-            _key(
-                evidence.get(
-                    "evidence_type"
-                )
-            )
-            == (
-                DIRECT_STAKEHOLDER_CONTRADICTION_EVIDENCE_TYPE
-            )
-            and _key(
-                evidence.get(
-                    "verification_status"
-                )
-            )
-            == "verified"
-            and _clean(
-                evidence.get(
-                    "subject_key"
-                )
-            )
-            == (
-                "merit-negative-evidence|"
-                + normalized_claim_id
-            )
-            and metadata.get(
-                "verifier_version"
-            )
-            == (
-                DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION
-            )
-            and metadata.get(
-                "machine_verified_authority"
-            )
-            is True
-            and metadata.get(
-                "recorded_contradiction_relationship"
-            )
-            is True
-            and metadata.get(
-                "contradiction_semantics_verified"
-            )
-            is False
-            and metadata.get(
-                "claim_truth_established"
-            )
-            is False
-            and metadata.get(
-                "live_merit_changed"
-            )
-            is False
-        )
-
-    if qualifies:
+    if calibration_eligible:
         signal = (
-            "verified_authority_"
-            "contradiction_recorded"
+            "verified_authority_machine_"
+            "semantic_contradiction"
         )
+
         severity_class = (
-            "strong_negative_evidence_candidate"
+            "two_gate_negative_evidence_candidate"
         )
-        calibration_eligible = True
+
         reason = (
             "A persisted contradiction is tied "
-            "to a machine-verified direct "
-            "stakeholder. This is eligible for "
-            "negative-Merit calibration but does "
-            "not yet authorize a live penalty."
+            "to machine-verified direct authority "
+            "and the claim also has persisted "
+            "machine-verified contradiction "
+            "semantics. This qualifies for "
+            "negative-Merit calibration only; "
+            "it does not establish objective "
+            "claim falsity or authorize a live "
+            "score penalty."
+        )
+
+    elif authority_verified:
+        signal = (
+            "verified_authority_contradiction_"
+            "semantics_unverified"
+        )
+
+        severity_class = (
+            "authority_only_negative_evidence_candidate"
+        )
+
+        reason = (
+            "Direct-authority contradiction "
+            "lineage is verified, but the "
+            "machine semantic contradiction "
+            "gate has not been satisfied."
+        )
+
+    elif semantics_verified:
+        signal = (
+            "machine_semantic_contradiction_"
+            "without_verified_direct_authority"
+        )
+
+        severity_class = (
+            "semantic_only_negative_evidence_candidate"
+        )
+
+        reason = (
+            "Machine-verified contradiction "
+            "semantics exist, but verified "
+            "direct-authority contradiction "
+            "lineage is unavailable."
         )
 
     else:
         signal = (
             "no_certified_negative_evidence"
         )
+
         severity_class = "none"
-        calibration_eligible = False
+
         reason = (
-            "No qualifying machine-verified "
-            "direct-stakeholder contradiction "
-            "lineage is available."
+            "The two required negative-evidence "
+            "gates are not both satisfied."
         )
 
     return {
@@ -246,6 +440,22 @@ def build_negative_merit_shadow(
             severity_class
         ),
         "reason": reason,
+        "evidence_gates": {
+            (
+                "direct_authority_"
+                "contradiction_lineage"
+            ): (
+                authority_verified
+            ),
+            (
+                "machine_verified_"
+                "contradiction_semantics"
+            ): (
+                semantics_verified
+            ),
+            "both_required": True,
+            "claim_truth_established": False,
+        },
         "legacy": {
             "total": legacy_total,
         },
@@ -254,7 +464,10 @@ def build_negative_merit_shadow(
             "shadow_total": (
                 legacy_total
             ),
-            "eligible_for_penalty_calibration": (
+            (
+                "eligible_for_"
+                "penalty_calibration"
+            ): (
                 calibration_eligible
             ),
         },
@@ -263,13 +476,55 @@ def build_negative_merit_shadow(
             "total": legacy_total,
         },
         "policy": {
-            "absence_of_corroboration_is_not_negative_evidence": True,
-            "single_source_exclusive_is_not_penalized": True,
-            "publisher_or_aggregator_contradiction_is_not_certified_here": True,
-            "model_only_contradiction_never_changes_merit": True,
-            "verified_direct_authority_lineage_is_required": True,
-            "recorded_contradiction_is_not_permanent_truth": True,
-            "numeric_negative_weight_requires_calibration": True,
-            "live_negative_merit_is_disabled": True,
+            (
+                "absence_of_corroboration_"
+                "is_not_negative_evidence"
+            ): True,
+            (
+                "single_source_exclusive_"
+                "is_not_penalized"
+            ): True,
+            (
+                "publisher_or_aggregator_"
+                "contradiction_is_not_"
+                "certified_here"
+            ): True,
+            (
+                "model_only_contradiction_"
+                "never_changes_merit"
+            ): True,
+            (
+                "verified_direct_authority_"
+                "lineage_is_required"
+            ): True,
+            (
+                "machine_verified_"
+                "contradiction_semantics_"
+                "required_for_calibration"
+            ): True,
+            (
+                "authority_lineage_alone_"
+                "is_not_calibration_eligible"
+            ): True,
+            (
+                "semantic_verification_alone_"
+                "is_not_calibration_eligible"
+            ): True,
+            (
+                "recorded_contradiction_"
+                "is_not_permanent_truth"
+            ): True,
+            (
+                "semantic_contradiction_"
+                "is_not_objective_falsity"
+            ): True,
+            (
+                "numeric_negative_weight_"
+                "requires_calibration"
+            ): True,
+            (
+                "live_negative_merit_"
+                "is_disabled"
+            ): True,
         },
     }

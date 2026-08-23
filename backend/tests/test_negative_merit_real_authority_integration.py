@@ -1,4 +1,4 @@
-﻿import json
+import json
 import sys
 import tempfile
 import unittest
@@ -456,7 +456,7 @@ class NegativeMeritRealAuthorityIntegrationTests(
             ],
         }
 
-    def test_real_direct_authority_contradiction_qualifies_shadow_runtime(
+    def test_real_direct_authority_without_semantics_does_not_qualify(
         self,
     ):
         self.seed_graph()
@@ -607,18 +607,37 @@ class NegativeMeritRealAuthorityIntegrationTests(
                 "status"
             ],
             (
-                "negative_evidence_"
-                "calibration_eligible"
+                "no_certified_negative_evidence"
             ),
         )
 
-        self.assertTrue(
+        self.assertFalse(
             runtime[
                 "shadow"
             ][
                 "proposed"
             ][
                 "eligible_for_penalty_calibration"
+            ]
+        )
+
+        self.assertTrue(
+            runtime[
+                "shadow"
+            ][
+                "evidence_gates"
+            ][
+                "direct_authority_contradiction_lineage"
+            ]
+        )
+
+        self.assertFalse(
+            runtime[
+                "shadow"
+            ][
+                "evidence_gates"
+            ][
+                "machine_verified_contradiction_semantics"
             ]
         )
 

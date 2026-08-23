@@ -1,4 +1,4 @@
-﻿import json
+import json
 import sys
 import tempfile
 import unittest
@@ -40,6 +40,11 @@ from app.services.direct_stakeholder_contradiction_verifier import (
     DIRECT_STAKEHOLDER_CONTRADICTION_VERIFIER_VERSION,
     build_direct_stakeholder_contradiction_candidate,
     persist_direct_stakeholder_contradiction_verification,
+)
+
+from app.services.machine_verified_contradiction_semantics_verifier import (
+    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE,
+    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION,
 )
 
 
@@ -263,6 +268,51 @@ class NegativeMeritEvidenceTests(
             "reasons": [],
         }
 
+    @staticmethod
+    def verified_semantic_result():
+        return {
+            "version": (
+                MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+            ),
+            "status": (
+                "persisted_verified_machine_"
+                "contradiction_semantics"
+            ),
+            "persisted": True,
+            "evidence": {
+                "id": (
+                    "semantic-evidence-claim-transfer-1"
+                ),
+                "evidence_type": (
+                    MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_EVIDENCE_TYPE
+                ),
+                "verification_status": (
+                    "verified"
+                ),
+                "subject_key": (
+                    "merit-negative-semantic-evidence|"
+                    "claim-transfer-1"
+                ),
+                "metadata_json": json.dumps(
+                    {
+                        "verifier_version": (
+                            MACHINE_VERIFIED_CONTRADICTION_SEMANTICS_VERIFIER_VERSION
+                        ),
+                        "claim_id": (
+                            "claim-transfer-1"
+                        ),
+                        "stance": (
+                            "contradicts"
+                        ),
+                        "contradiction_semantics_verified": True,
+                        "contradiction_semantics_are_source_semantics": True,
+                        "claim_truth_established": False,
+                        "live_merit_changed": False,
+                    }
+                ),
+            },
+        }
+
     def test_verified_authority_contradiction_lineage_persists(
         self,
     ):
@@ -381,6 +431,9 @@ class NegativeMeritEvidenceTests(
                 contradiction_verification=(
                     persisted
                 ),
+                semantic_verification=(
+                    self.verified_semantic_result()
+                ),
             )
         )
 
@@ -396,8 +449,8 @@ class NegativeMeritEvidenceTests(
                 "signal"
             ],
             (
-                "verified_authority_"
-                "contradiction_recorded"
+                "verified_authority_machine_"
+                "semantic_contradiction"
             ),
         )
 
@@ -406,7 +459,7 @@ class NegativeMeritEvidenceTests(
                 "severity_class"
             ],
             (
-                "strong_negative_evidence_candidate"
+                "two_gate_negative_evidence_candidate"
             ),
         )
 
