@@ -1,4 +1,4 @@
-﻿from datetime import (
+from datetime import (
     datetime,
 )
 
@@ -17,6 +17,10 @@ from app.intelligence.canonical_claims import (
 
 CANONICAL_OUTCOME_CONTRACT_VERSION = (
     "canonical-outcome-contract-v1"
+)
+
+CANONICAL_TENURE_OUTCOME_CONTRACT_VERSION = (
+    "canonical-tenure-outcome-contract-v1"
 )
 
 CANONICAL_OUTCOME_SUPPORTED_EVENT_TYPES = {
@@ -362,7 +366,7 @@ def _transfer_occurrence_status(
     }
 
 
-def compare_canonical_claim_to_outcome(
+def _compare_transfer_canonical_claim_to_outcome(
     *,
     claim_candidate: Mapping[
         str,
@@ -694,4 +698,482 @@ def compare_canonical_claim_to_outcome(
             "states can both have been accurate "
             "at different times."
         ),
+    )
+
+TENURE_OUTCOME_AGAINST_RULES = {
+    (
+        "appointed",
+        False,
+        "appointed",
+        True,
+    ): (
+        "tenure_appointed_explicitly_negated"
+    ),
+}
+
+TENURE_OUTCOME_SUPPORT_RULES = {
+    (
+        "appointed",
+        False,
+        "appointed",
+        False,
+    ): (
+        "tenure_appointment_reconfirmed"
+    ),
+}
+
+
+def _tenure_policy():
+    return {
+        "deterministic_only": True,
+        "provider_call_performed": False,
+        "supported_event_types": [
+            "tenure"
+        ],
+        "requires_later_outcome": True,
+        "requires_same_subject": True,
+        "requires_same_event_type": True,
+        "requires_same_organization": True,
+        "requires_matching_role": True,
+        "requires_matching_effective_period": True,
+        "state_transition_rules_are_explicit": True,
+        "departure_after_prior_appointment_is_not_automatically_false": True,
+        "comparison_does_not_verify_source": True,
+        "comparison_does_not_verify_authority": True,
+        "comparison_does_not_establish_claim_truth": True,
+        "comparison_is_not_a_falsehood_label": True,
+        "candidate_resolution_is_temporal": True,
+        "machine_verified_outcome_required_before_resolved_label": True,
+        "numeric_negative_penalty_authorized": False,
+        "live_negative_merit_authorized": False,
+        "live_merit_changed": False,
+    }
+
+
+def _tenure_result(
+    *,
+    status,
+    direction,
+    rule_id,
+    claim,
+    outcome,
+    claim_observed_at,
+    outcome_observed_at,
+    reason,
+):
+    return {
+        "version": (
+            CANONICAL_TENURE_OUTCOME_CONTRACT_VERSION
+        ),
+        "status": status,
+        "direction": direction,
+        "rule_id": rule_id,
+        "reason": reason,
+        "claim": claim,
+        "outcome": outcome,
+        "claim_observed_at": (
+            claim_observed_at.isoformat()
+        ),
+        "outcome_observed_at": (
+            outcome_observed_at.isoformat()
+        ),
+        "candidate_resolution": {
+            "against_claim": (
+                direction
+                == "against_claim"
+            ),
+            "supports_claim": (
+                direction
+                == "supports_claim"
+            ),
+            "indeterminate": (
+                direction
+                == "indeterminate"
+            ),
+            "claim_truth_established": False,
+            "machine_verified": False,
+            "source_authority_verified": False,
+            "live_merit_effect_enabled": False,
+        },
+        "policy": _tenure_policy(),
+    }
+
+
+def _compare_tenure_canonical_claim_to_outcome(
+    *,
+    claim_candidate,
+    outcome_candidate,
+    claim_observed_at,
+    outcome_observed_at,
+):
+    claim = normalize_canonical_claim(
+        claim_candidate
+    )
+
+    outcome = normalize_canonical_claim(
+        outcome_candidate
+    )
+
+    claim_time = _timestamp(
+        claim_observed_at,
+        label=(
+            "Canonical tenure claim observed_at"
+        ),
+    )
+
+    outcome_time = _timestamp(
+        outcome_observed_at,
+        label=(
+            "Canonical tenure outcome observed_at"
+        ),
+    )
+
+    if outcome_time <= claim_time:
+        return _tenure_result(
+            status=(
+                "outcome_not_later_than_claim"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "Tenure outcome evidence must be later "
+                "than the claim observation."
+            ),
+        )
+
+    if (
+        claim["subject_key"]
+        != outcome["subject_key"]
+    ):
+        return _tenure_result(
+            status="claim_subject_mismatch",
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The tenure claim and outcome reference "
+                "different canonical subjects."
+            ),
+        )
+
+    if (
+        claim["event_type"] != "tenure"
+        or outcome["event_type"] != "tenure"
+    ):
+        return _tenure_result(
+            status="event_type_mismatch",
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The tenure outcome contract requires "
+                "tenure records on both sides."
+            ),
+        )
+
+    claim_roles = claim["roles"]
+    outcome_roles = outcome["roles"]
+
+    claim_facets = claim["facets"]
+    outcome_facets = outcome["facets"]
+
+    claim_org = _clean(
+        claim_roles.get(
+            "organization"
+        )
+    )
+
+    outcome_org = _clean(
+        outcome_roles.get(
+            "organization"
+        )
+    )
+
+    if (
+        not claim_org
+        or not outcome_org
+    ):
+        return _tenure_result(
+            status=(
+                "resolution_event_identity_insufficient"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "Tenure organization is required "
+                "for resolution."
+            ),
+        )
+
+    if claim_org != outcome_org:
+        return _tenure_result(
+            status=(
+                "different_tenure_organization"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The claim and outcome reference "
+                "different organizations."
+            ),
+        )
+
+    claim_role = _clean(
+        claim_facets.get(
+            "role"
+        )
+    )
+
+    outcome_role = _clean(
+        outcome_facets.get(
+            "role"
+        )
+    )
+
+    if (
+        not claim_role
+        or not outcome_role
+    ):
+        return _tenure_result(
+            status=(
+                "resolution_event_identity_insufficient"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "Tenure role is required "
+                "for resolution."
+            ),
+        )
+
+    if claim_role != outcome_role:
+        return _tenure_result(
+            status="different_tenure_role",
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The claim and outcome reference "
+                "different roles."
+            ),
+        )
+
+    claim_period = _clean(
+        claim_facets.get(
+            "effective_period"
+        )
+    )
+
+    outcome_period = _clean(
+        outcome_facets.get(
+            "effective_period"
+        )
+    )
+
+    if (
+        not claim_period
+        or not outcome_period
+    ):
+        return _tenure_result(
+            status=(
+                "resolution_event_identity_insufficient"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "Tenure effective period is required "
+                "to avoid conflating separate tenures."
+            ),
+        )
+
+    if claim_period != outcome_period:
+        return _tenure_result(
+            status=(
+                "different_tenure_occurrence"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The tenure records reference "
+                "different effective periods."
+            ),
+        )
+
+    if claim["negated"] is True:
+        return _tenure_result(
+            status=(
+                "claim_semantics_not_supported_by_tenure_v1"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "Tenure outcome v1 evaluates "
+                "positive appointment claims only."
+            ),
+        )
+
+    if claim["state"] != "appointed":
+        return _tenure_result(
+            status=(
+                "claim_semantics_not_supported_by_tenure_v1"
+            ),
+            direction="indeterminate",
+            rule_id="",
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "Tenure outcome v1 resolves "
+                "appointment assertions only."
+            ),
+        )
+
+    transition = (
+        claim["state"],
+        claim["negated"],
+        outcome["state"],
+        outcome["negated"],
+    )
+
+    against_rule = (
+        TENURE_OUTCOME_AGAINST_RULES.get(
+            transition
+        )
+    )
+
+    if against_rule:
+        return _tenure_result(
+            status=(
+                "resolution_against_claim_candidate"
+            ),
+            direction="against_claim",
+            rule_id=against_rule,
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The later structured tenure outcome "
+                "explicitly negates the same appointment, "
+                "role, organization, and effective period. "
+                "Source and authority verification are "
+                "still required."
+            ),
+        )
+
+    support_rule = (
+        TENURE_OUTCOME_SUPPORT_RULES.get(
+            transition
+        )
+    )
+
+    if support_rule:
+        return _tenure_result(
+            status=(
+                "resolution_supports_claim_candidate"
+            ),
+            direction="supports_claim",
+            rule_id=support_rule,
+            claim=claim,
+            outcome=outcome,
+            claim_observed_at=claim_time,
+            outcome_observed_at=outcome_time,
+            reason=(
+                "The later tenure record reconfirms "
+                "the earlier appointment assertion."
+            ),
+        )
+
+    return _tenure_result(
+        status=(
+            "state_transition_not_decisive"
+        ),
+        direction="indeterminate",
+        rule_id="",
+        claim=claim,
+        outcome=outcome,
+        claim_observed_at=claim_time,
+        outcome_observed_at=outcome_time,
+        reason=(
+            "Sequential tenure states can both "
+            "have been accurate at different times."
+        ),
+    )
+
+
+def compare_canonical_claim_to_outcome(
+    *,
+    claim_candidate,
+    outcome_candidate,
+    claim_observed_at,
+    outcome_observed_at,
+):
+    normalized_claim = normalize_canonical_claim(
+        claim_candidate
+    )
+
+    normalized_outcome = normalize_canonical_claim(
+        outcome_candidate
+    )
+
+    if (
+        normalized_claim["event_type"]
+        == "tenure"
+        or normalized_outcome["event_type"]
+        == "tenure"
+    ):
+        return (
+            _compare_tenure_canonical_claim_to_outcome(
+                claim_candidate=normalized_claim,
+                outcome_candidate=normalized_outcome,
+                claim_observed_at=claim_observed_at,
+                outcome_observed_at=outcome_observed_at,
+            )
+        )
+
+    return (
+        _compare_transfer_canonical_claim_to_outcome(
+            claim_candidate=normalized_claim,
+            outcome_candidate=normalized_outcome,
+            claim_observed_at=claim_observed_at,
+            outcome_observed_at=outcome_observed_at,
+        )
     )

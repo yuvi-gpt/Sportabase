@@ -1,4 +1,4 @@
-﻿import hashlib
+import hashlib
 import json
 import re
 
@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from app.analysis.canonical_outcome import (
     CANONICAL_OUTCOME_CONTRACT_VERSION,
+    CANONICAL_TENURE_OUTCOME_CONTRACT_VERSION,
     compare_canonical_claim_to_outcome,
 )
 
@@ -785,7 +786,10 @@ def build_canonical_outcome_resolution_candidate(
                 "version"
             )
         )
-        != CANONICAL_OUTCOME_CONTRACT_VERSION
+        not in {
+            CANONICAL_OUTCOME_CONTRACT_VERSION,
+            CANONICAL_TENURE_OUTCOME_CONTRACT_VERSION,
+        }
     ):
         raise ValueError(
             "Canonical outcome comparison "

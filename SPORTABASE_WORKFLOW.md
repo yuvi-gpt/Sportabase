@@ -259,3 +259,15 @@ Update it when a new development convention, safety rule, repository workflow, t
 - A two-gate calibration observation is evidence that the captured source semantics contradict the captured claim under the verified lineage; it is not permanent objective truth.
 - The first provisional negative adjustment is selected from the measured real-world two-gate/control score separation using half of the median separation, rounded upward, with a 15-point cap and a 5-point floor. The calibration report itself never authorizes live release.
 - Live negative Merit still requires a separate release certificate/runtime with fail-closed certificate identity, strict two-gate eligibility, explicit score clamping, positive-release composition tests, and first-scoop protection.
+
+## Resolved Real-World Release Gate Boundary
+
+- Canonical outcome resolution now has a separate narrow tenure contract for appointment assertions such as a driver, manager, or coach being appointed to a specific organization, role, and effective period. Existing transfer outcome semantics remain unchanged.
+- A tenure appointment may become a resolution-against-claim candidate only when a later structured record explicitly negates the same subject, organization, role, and effective period. Later departure alone is not retroactive evidence that the original appointment was false.
+- Real resolved Negative Merit calibration must pass the production direct-authority contradiction verifier, canonical-outcome-resolution verifier, machine-semantic contradiction verifier, and two-gate Negative Merit contract in an isolated evaluation database.
+- The resolved calibration source must preserve immutable current captures for both the earlier claim and later official outcome, while the machine verifier preserves the historical event ordering used for resolution.
+- A direct club denial of an agreement is not automatically a falsehood label. The Cucurella 2022 control remains indeterminate because agreement, denial, and later completion can represent changing sports states across time.
+- Clearing `resolved_outcome_labels_not_present` does not itself authorize a numeric penalty. The final remaining calibration blocker is intentionally `numeric_penalty_not_calibrated` until the separate negative release certificate freezes the selected adjustment and its runtime safety contract.
+- Live negative Merit remains disabled at this boundary.
+- When an official page's article extractor omits source text that remains present in the fetched server HTML, evaluation capture may use the raw server response as a semantic fallback only if the final domain remains verified and the exact raw-response SHA-256 scope is recorded. Extracted article text remains preferred.
+- For official dynamic pages whose generic article extractor omits the statement body, evaluation evidence may fall back to the exact fetched server HTML only when the verified final domain is unchanged and every required semantic phrase is present. The frozen capture must record content_hash_scope=raw_server_html; semantic requirements must not be weakened merely because extraction failed.

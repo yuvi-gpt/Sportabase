@@ -1,0 +1,772 @@
+{
+  "calibration_dataset": {
+    "calibration": {
+      "blockers": [
+        "numeric_penalty_not_calibrated"
+      ],
+      "canonical_outcome_labels_available": true,
+      "canonical_outcome_verifier_available": true,
+      "live_negative_merit_authorized": false,
+      "numeric_penalty_authorized": false,
+      "penalty_weight_selected": false,
+      "resolved_against_claim_case_count": 1
+    },
+    "capture_hash_count": 11,
+    "case_count": 7,
+    "observations": [
+      {
+        "claim_id": "a26f1c7c03076d74459d89839b14fa714b69c537e0b2f7dd97b14353d7935c4e",
+        "id": "0673383ebb0e0d8679aa2d7c96213895938bbb6fd3968305562d0e23507235a8",
+        "legacy_total": 41.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": true,
+          "calibration_eligible": true,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": true,
+          "severity_class": "two_gate_negative_evidence_candidate",
+          "signal": "verified_authority_machine_semantic_contradiction"
+        },
+        "observation_class": "resolved_against_claim_observation",
+        "observed_at": "2026-08-24T01:56:45.152788+00:00",
+        "resolution_status": "resolved_against_claim",
+        "resolution_verification": {
+          "canonical_url": "https://media.alpinecars.com/pierre-gasly-completes-2023-bwt-alpine-f1-team-driver-line-up?lang=eng",
+          "claim_id": "a26f1c7c03076d74459d89839b14fa714b69c537e0b2f7dd97b14353d7935c4e",
+          "claim_truth_established": false,
+          "content_sha256": "4b638ff814bc8f5f3cec054ff254bb89434c26b272b19b71d0893b3afd0fe838",
+          "live_merit_effect_enabled": false,
+          "machine_verified": true,
+          "proof_evidence_id": "22955a5b7a4e986ac78ec539c99841df65d3b63477d0bf43df626444cd02ec96",
+          "resolution_evidence_id": "22c5c8c289b6b176b778aba960e5d5c5a6c318f8820f4509014628b14f76d724",
+          "rule_id": "tenure_appointed_explicitly_negated",
+          "source_id": "fdf85d13385c7e0fb1d76b66d7f40122a5f05b16bdd27b532bb05cbe949d59e2",
+          "status": "resolved_against_claim",
+          "version": "canonical-outcome-resolution-verifier-v1"
+        },
+        "source_captures": [
+          {
+            "captured_at": "2026-08-24T01:56:43.814527+00:00",
+            "content_sha256": "db5bdd6c52ccd689650b465f6735f4c426e4f63cd01485afb44a88d5a683c00f",
+            "source_id": "fdf85d13385c7e0fb1d76b66d7f40122a5f05b16bdd27b532bb05cbe949d59e2",
+            "url": "https://media.alpinecars.com/35821?lang=eng"
+          },
+          {
+            "captured_at": "2026-08-24T01:56:45.152788+00:00",
+            "content_sha256": "4b638ff814bc8f5f3cec054ff254bb89434c26b272b19b71d0893b3afd0fe838",
+            "source_id": "fdf85d13385c7e0fb1d76b66d7f40122a5f05b16bdd27b532bb05cbe949d59e2",
+            "url": "https://media.alpinecars.com/pierre-gasly-completes-2023-bwt-alpine-f1-team-driver-line-up?lang=eng"
+          }
+        ]
+      },
+      {
+        "claim_id": "d89711660ed69a623d1c0923dd85265148deec2cb4848fd900deda9d98fb4172",
+        "id": "728d158d5c044d2a167d2aa19c39f69e524242b00881003cb3d191cb5a9d562e",
+        "legacy_total": 34.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": true,
+          "calibration_eligible": true,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": true,
+          "severity_class": "two_gate_negative_evidence_candidate",
+          "signal": "verified_authority_machine_semantic_contradiction"
+        },
+        "observation_class": "two_gate_observation",
+        "observed_at": "2026-08-23T16:42:48.915336+00:00",
+        "resolution_status": "unresolved",
+        "resolution_verification": null,
+        "source_captures": [
+          {
+            "captured_at": "2026-08-23T16:42:47.023077+00:00",
+            "content_sha256": "cc5eda66a2c737b780bb4a08b4138c0845f2621c57d20c623454ffa873d2227c",
+            "source_id": "d922cd7543c79e9bebb6c60e37e848202a2a9d2367bbf711aabf05c6de1b2834",
+            "url": "https://www.goal.com/en/lists/this-has-been-confirmed-by-representatives-of-real-madrid-fresh-details-have-emerged-about-the-reported-interest-in-bayern-munich-superstar-michael-olise/bltb4af8cd273e845a8"
+          },
+          {
+            "captured_at": "2026-08-23T16:42:48.915336+00:00",
+            "content_sha256": "9923c2e6ba08735470b01c9bc8c556f303d40b3c625e1214d8e6613b920a6e12",
+            "source_id": "bf283788824b37f688f0af929fb98ee446341d905b3c9e82dc58d4d7393d893d",
+            "url": "https://www.realmadrid.com/es-ES/noticias/club/comunicados/comunicado-oficial-real-madrid-20-06-2026"
+          }
+        ]
+      },
+      {
+        "claim_id": "29ce270a4f7d6f12473a3b2dfec43dbf0b22690adc1160c41eb55f5fd4a5e530",
+        "id": "e66df146a1c60f0a2ff68f455314e226452e06fde4883c48772835bf814c822a",
+        "legacy_total": 35.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": true,
+          "calibration_eligible": true,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": true,
+          "severity_class": "two_gate_negative_evidence_candidate",
+          "signal": "verified_authority_machine_semantic_contradiction"
+        },
+        "observation_class": "two_gate_observation",
+        "observed_at": "2026-08-23T16:42:51.477932+00:00",
+        "resolution_status": "unresolved",
+        "resolution_verification": null,
+        "source_captures": [
+          {
+            "captured_at": "2026-08-23T16:42:50.424178+00:00",
+            "content_sha256": "d9c60ac3631d0f9f4be57b7cdb66651e5e17498fbb055b8f04d3033cccb1702d",
+            "source_id": "83c91600b7cf97bdb0b69e09b77d9eb1fb1829afdf7977a6de9a9c94ce203ef4",
+            "url": "https://www.teamtalk.com/chelsea/real-madrid-transfer-news-enzo-fernandez-bid-chelsea-xabi-alonso"
+          },
+          {
+            "captured_at": "2026-08-23T16:42:51.477932+00:00",
+            "content_sha256": "f22ada5952c2ca895ba58ccd122f01649b52decc76a8276a7b223e915ef0f355",
+            "source_id": "bf283788824b37f688f0af929fb98ee446341d905b3c9e82dc58d4d7393d893d",
+            "url": "https://www.realmadrid.com/es-ES/noticias/club/comunicados/comunicado-oficial-03-07-2026"
+          }
+        ]
+      },
+      {
+        "claim_id": "242b647e220e05f45a474a69234c1c48a4752f998e962884175d33d428892673",
+        "id": "cd3c354d87bac6bc3f9f0efceb12b9d04942c0eef796397bad7d91cdb7b8f48a",
+        "legacy_total": 46.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": true,
+          "calibration_eligible": true,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": true,
+          "severity_class": "two_gate_negative_evidence_candidate",
+          "signal": "verified_authority_machine_semantic_contradiction"
+        },
+        "observation_class": "two_gate_observation",
+        "observed_at": "2026-08-23T16:42:55.409651+00:00",
+        "resolution_status": "unresolved",
+        "resolution_verification": null,
+        "source_captures": [
+          {
+            "captured_at": "2026-08-23T16:42:53.358732+00:00",
+            "content_sha256": "39c2cd447ed9173c54909aaf4a32c4cceaa29d2d8deb2c838e95c101d0b566c0",
+            "source_id": "a7769437f9b133b8781811cc1009f68343437734b5279bcd81c21ee37bef145e",
+            "url": "https://www.gzt.com/spor/son-dakika-galatasaray-on-numara-transferini-bitirmek-uzere-4245038"
+          },
+          {
+            "captured_at": "2026-08-23T16:42:55.409651+00:00",
+            "content_sha256": "a8819963e50032fb98f890b90970f23c4d6f057b5de056ff813c572ed6c05bb6",
+            "source_id": "4ec0862cc3570a00597eb15f277d77a557431d0d36a408edf213c5c0c56b1d2c",
+            "url": "https://www.galatasaray.org/haber/kulup/kamuoyuna-duyuru/60690"
+          }
+        ]
+      },
+      {
+        "claim_id": "ae993e6038c5ace2ef449b5fa20210b5ddfbca4da48a8782b2887362a50085e0",
+        "id": "1330fa079d331e744c75bd65441a581318800e3a8c9b6970744af665a6d49f33",
+        "legacy_total": 64.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": false,
+          "calibration_eligible": false,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": false,
+          "severity_class": "none",
+          "signal": "no_certified_negative_evidence"
+        },
+        "observation_class": "no_negative_evidence_control",
+        "observed_at": "2026-08-23T16:19:36.157340+00:00",
+        "resolution_status": "unresolved",
+        "resolution_verification": null,
+        "source_captures": [
+          {
+            "captured_at": "2026-08-23T16:19:36.157340+00:00",
+            "content_sha256": "0725e546ed67485821c1ab80f8e545d714a95ac5633a1943117d62500de260ce",
+            "source_id": "ac04c7e18064861d56f772ecaf85f7587fe90f0eff146192fcc75954a3d04df0",
+            "url": "https://www.bbc.com/news/articles/c707kj6k367o?at_campaign=rss&at_medium=RSS"
+          }
+        ]
+      },
+      {
+        "claim_id": "7f3c59c3aae3051659401c4e493b893a286f70547f64f801820d9920563ad88a",
+        "id": "7af8c9f5cb2ca122c1d0d99175cbe09ca9f424d8295fd8ab79a22011fe0464da",
+        "legacy_total": 64.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": false,
+          "calibration_eligible": false,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": false,
+          "severity_class": "none",
+          "signal": "no_certified_negative_evidence"
+        },
+        "observation_class": "no_negative_evidence_control",
+        "observed_at": "2026-08-23T16:26:27.720682+00:00",
+        "resolution_status": "unresolved",
+        "resolution_verification": null,
+        "source_captures": [
+          {
+            "captured_at": "2026-08-23T16:26:27.720682+00:00",
+            "content_sha256": "9fc689d75fe18eda8e42f66322f838886dd3a869bc71231aea0468277998619b",
+            "source_id": "ac04c7e18064861d56f772ecaf85f7587fe90f0eff146192fcc75954a3d04df0",
+            "url": "https://www.bbc.com/sport/football/articles/cj0p27mqpgvo?at_campaign=rss&at_medium=RSS"
+          }
+        ]
+      },
+      {
+        "claim_id": "49b6ff72655b7a8fd024c2807bdfb4c80e242b9c936d1c266af489745a919a66",
+        "id": "302655940254c693f5a5de93b77e02baeadfc831b637d28a702623cd6e0c460b",
+        "legacy_total": 56.0,
+        "negative_merit": {
+          "adjustment": 0.0,
+          "authority_gate": false,
+          "calibration_eligible": false,
+          "claim_truth_established": false,
+          "live_effect_enabled": false,
+          "semantic_gate": false,
+          "severity_class": "none",
+          "signal": "no_certified_negative_evidence"
+        },
+        "observation_class": "no_negative_evidence_control",
+        "observed_at": "2026-08-23T16:26:28.996236+00:00",
+        "resolution_status": "unresolved",
+        "resolution_verification": null,
+        "source_captures": [
+          {
+            "captured_at": "2026-08-23T16:26:28.996236+00:00",
+            "content_sha256": "823578f2adb15a163d193912f3efe19a11d9ea9020d05eef136b6dfa6633d28c",
+            "source_id": "d1d71ef830e4be6897979dbea2a3fc48550ac6e48fd9a66d28a831130a5a8344",
+            "url": "https://www.espn.com/soccer/story/_/id/48682973/phil-foden-reaches-agreement-man-city-new-contract-sources"
+          }
+        ]
+      }
+    ],
+    "policy": {
+      "absence_of_corroboration_is_not_negative_evidence": true,
+      "case_machine_verified_does_not_mean_claim_truth": true,
+      "dataset_does_not_authorize_release": true,
+      "early_exclusives_are_controls_not_falsehoods": true,
+      "immutable_https_source_captures_required": true,
+      "live_negative_merit_is_forbidden": true,
+      "machine_verified_lineage_required": true,
+      "numeric_negative_adjustments_are_forbidden": true,
+      "real_world_observations_required": true,
+      "resolved_label_is_not_permanent_objective_truth": true,
+      "resolved_label_must_match_case_claim": true,
+      "resolved_label_must_match_immutable_source_capture": true,
+      "resolved_label_requires_machine_verified_canonical_resolution_stance": true,
+      "resolved_labels_require_exact_verified_canonical_outcome_result": true,
+      "score_distribution_must_be_measured_before_weight_selection": true,
+      "two_gate_observation_is_not_a_falsehood_label": true
+    },
+    "score_distribution": {
+      "by_class": {
+        "authority_only_control": {
+          "buckets": {
+            "00_19": 0,
+            "20_39": 0,
+            "40_59": 0,
+            "60_79": 0,
+            "80_100": 0
+          },
+          "count": 0,
+          "maximum": null,
+          "mean": null,
+          "median": null,
+          "minimum": null
+        },
+        "exclusive_no_corroboration_control": {
+          "buckets": {
+            "00_19": 0,
+            "20_39": 0,
+            "40_59": 0,
+            "60_79": 0,
+            "80_100": 0
+          },
+          "count": 0,
+          "maximum": null,
+          "mean": null,
+          "median": null,
+          "minimum": null
+        },
+        "no_negative_evidence_control": {
+          "buckets": {
+            "00_19": 0,
+            "20_39": 0,
+            "40_59": 1,
+            "60_79": 2,
+            "80_100": 0
+          },
+          "count": 3,
+          "maximum": 64.0,
+          "mean": 61.333333333333336,
+          "median": 64.0,
+          "minimum": 56.0
+        },
+        "resolved_against_claim_observation": {
+          "buckets": {
+            "00_19": 0,
+            "20_39": 0,
+            "40_59": 1,
+            "60_79": 0,
+            "80_100": 0
+          },
+          "count": 1,
+          "maximum": 41.0,
+          "mean": 41.0,
+          "median": 41.0,
+          "minimum": 41.0
+        },
+        "semantic_only_control": {
+          "buckets": {
+            "00_19": 0,
+            "20_39": 0,
+            "40_59": 0,
+            "60_79": 0,
+            "80_100": 0
+          },
+          "count": 0,
+          "maximum": null,
+          "mean": null,
+          "median": null,
+          "minimum": null
+        },
+        "two_gate_observation": {
+          "buckets": {
+            "00_19": 0,
+            "20_39": 2,
+            "40_59": 1,
+            "60_79": 0,
+            "80_100": 0
+          },
+          "count": 3,
+          "maximum": 46.0,
+          "mean": 38.333333333333336,
+          "median": 35.0,
+          "minimum": 34.0
+        }
+      },
+      "controls": {
+        "buckets": {
+          "00_19": 0,
+          "20_39": 0,
+          "40_59": 1,
+          "60_79": 2,
+          "80_100": 0
+        },
+        "count": 3,
+        "maximum": 64.0,
+        "mean": 61.333333333333336,
+        "median": 64.0,
+        "minimum": 56.0
+      },
+      "overall": {
+        "buckets": {
+          "00_19": 0,
+          "20_39": 2,
+          "40_59": 3,
+          "60_79": 2,
+          "80_100": 0
+        },
+        "count": 7,
+        "maximum": 64.0,
+        "mean": 48.57142857142857,
+        "median": 46.0,
+        "minimum": 34.0
+      },
+      "resolved_against_claim": {
+        "buckets": {
+          "00_19": 0,
+          "20_39": 0,
+          "40_59": 1,
+          "60_79": 0,
+          "80_100": 0
+        },
+        "count": 1,
+        "maximum": 41.0,
+        "mean": 41.0,
+        "median": 41.0,
+        "minimum": 41.0
+      },
+      "two_gate_observations": {
+        "buckets": {
+          "00_19": 0,
+          "20_39": 2,
+          "40_59": 1,
+          "60_79": 0,
+          "80_100": 0
+        },
+        "count": 3,
+        "maximum": 46.0,
+        "mean": 38.333333333333336,
+        "median": 35.0,
+        "minimum": 34.0
+      }
+    },
+    "source_count": 8,
+    "status": "measurement_ready",
+    "version": "negative-merit-calibration-dataset-v2"
+  },
+  "controls": [
+    {
+      "captured_at": "2026-08-23T16:19:36.157340+00:00",
+      "claim_id": "ae993e6038c5ace2ef449b5fa20210b5ddfbca4da48a8782b2887362a50085e0",
+      "content_sha256": "0725e546ed67485821c1ab80f8e545d714a95ac5633a1943117d62500de260ce",
+      "label": "Rangers",
+      "legacy_merit_total": 64,
+      "url": "https://www.bbc.com/news/articles/c707kj6k367o?at_campaign=rss&at_medium=RSS"
+    },
+    {
+      "captured_at": "2026-08-23T16:26:27.720682+00:00",
+      "claim_id": "7f3c59c3aae3051659401c4e493b893a286f70547f64f801820d9920563ad88a",
+      "content_sha256": "9fc689d75fe18eda8e42f66322f838886dd3a869bc71231aea0468277998619b",
+      "label": "Derry",
+      "legacy_merit_total": 64,
+      "url": "https://www.bbc.com/sport/football/articles/cj0p27mqpgvo?at_campaign=rss&at_medium=RSS"
+    },
+    {
+      "captured_at": "2026-08-23T16:26:28.996236+00:00",
+      "claim_id": "49b6ff72655b7a8fd024c2807bdfb4c80e242b9c936d1c266af489745a919a66",
+      "content_sha256": "823578f2adb15a163d193912f3efe19a11d9ea9020d05eef136b6dfa6633d28c",
+      "label": "Foden",
+      "legacy_merit_total": 56,
+      "url": "https://www.espn.com/soccer/story/_/id/48682973/phil-foden-reaches-agreement-man-city-new-contract-sources"
+    }
+  ],
+  "manifest_digest": "abdec795c72cab03231322b4ad13dacdb2edfd44465d53a427a900e75840032f",
+  "penalty_selection": {
+    "cap": 15,
+    "control_median": 64.0,
+    "control_scores": [
+      64,
+      64,
+      56
+    ],
+    "floor": 5,
+    "median_separation": 29.0,
+    "provisional_adjustment": -15.0,
+    "release_authorized": false,
+    "requires_separate_release_certificate": true,
+    "selection_rule": "negative_half_of_median_two_gate_control_separation_rounded_up_and_capped",
+    "status": "provisional_penalty_selected",
+    "two_gate_median": 35.0,
+    "two_gate_scores": [
+      34,
+      35,
+      46
+    ]
+  },
+  "policy": {
+    "absence_of_corroboration_is_not_negative_evidence": true,
+    "claim_truth_established": false,
+    "club_denial_alone_never_authorizes_negative_merit": true,
+    "live_negative_merit_authorized": false,
+    "numeric_penalty_live": false,
+    "production_database_written": false,
+    "production_verifier_logic_used": true,
+    "provider_call_performed": false,
+    "real_world_sources_only": true,
+    "resolved_case_is_temporal_not_permanent_truth": true,
+    "separate_release_certificate_still_required": true,
+    "temporary_evaluation_database_only": true
+  },
+  "resolved_case": {
+    "calibration_eligible": true,
+    "canonical_claim": {
+      "event_type": "tenure",
+      "facets": {
+        "effective_period": "2023-season",
+        "role": "formula_1_race_driver"
+      },
+      "negated": false,
+      "roles": {
+        "organization": "motorsport|team|alpine-f1-team"
+      },
+      "state": "appointed",
+      "subject_key": "motorsport|driver|oscar-piastri"
+    },
+    "canonical_contract_version": "canonical-tenure-outcome-contract-v1",
+    "canonical_outcome": {
+      "event_type": "tenure",
+      "facets": {
+        "effective_period": "2023-season",
+        "role": "formula_1_race_driver"
+      },
+      "negated": true,
+      "roles": {
+        "organization": "motorsport|team|alpine-f1-team"
+      },
+      "state": "appointed",
+      "subject_key": "motorsport|driver|oscar-piastri"
+    },
+    "canonical_resolution_status": "persisted_verified_canonical_outcome_resolution",
+    "case_id": "piastri-alpine-2023-resolved-against-claim",
+    "claim_id": "a26f1c7c03076d74459d89839b14fa714b69c537e0b2f7dd97b14353d7935c4e",
+    "claim_source": {
+      "captured_at": "2026-08-24T01:56:43.814527+00:00",
+      "character_count": 2880,
+      "content_hash_scope": "extracted_body",
+      "content_sha256": "db5bdd6c52ccd689650b465f6735f4c426e4f63cd01485afb44a88d5a683c00f",
+      "paragraph_count": 10,
+      "semantic_verification_source": "article_extraction",
+      "title": "BWT Alpine F1 Team promotes Oscar Piastri to race driver alongside Esteban Ocon - Newsroom Alpine",
+      "url": "https://media.alpinecars.com/35821?lang=eng"
+    },
+    "claim_truth_established": false,
+    "current_article_type": "opinion_analysis",
+    "current_legacy_merit": 41,
+    "direct_contradiction_status": "persisted_verified_direct_stakeholder_contradiction_lineage",
+    "live_merit_changed": false,
+    "negative_merit_signal": "verified_authority_machine_semantic_contradiction",
+    "outcome_source": {
+      "captured_at": "2026-08-24T01:56:45.152788+00:00",
+      "character_count": 3916,
+      "content_hash_scope": "extracted_body",
+      "content_sha256": "4b638ff814bc8f5f3cec054ff254bb89434c26b272b19b71d0893b3afd0fe838",
+      "paragraph_count": 11,
+      "semantic_verification_source": "article_extraction",
+      "title": "Pierre Gasly completes 2023 BWT Alpine F1 Team driver line up - Newsroom Alpine",
+      "url": "https://media.alpinecars.com/pierre-gasly-completes-2023-bwt-alpine-f1-team-driver-line-up?lang=eng"
+    },
+    "semantic_status": "persisted_verified_machine_contradiction_semantics",
+    "subject": "Oscar Piastri",
+    "version": "negative-merit-real-world-resolved-case-v1"
+  },
+  "temporal_false_positive_control": {
+    "claim_truth_established": false,
+    "completion_comparison": {
+      "candidate_resolution": {
+        "against_claim": false,
+        "claim_truth_established": false,
+        "indeterminate": true,
+        "live_merit_effect_enabled": false,
+        "machine_verified": false,
+        "source_authority_verified": false,
+        "supports_claim": false
+      },
+      "claim": {
+        "event_type": "transfer",
+        "facets": {
+          "effective_period": "2022-summer",
+          "transfer_kind": "permanent"
+        },
+        "negated": false,
+        "roles": {
+          "destination": "football|club|chelsea",
+          "origin": "football|club|brighton"
+        },
+        "state": "agreed",
+        "subject_key": "football|player|marc-cucurella",
+        "version": "canonical-claim-contract-v1"
+      },
+      "claim_observed_at": "2022-08-03T18:00:00+00:00",
+      "direction": "indeterminate",
+      "outcome": {
+        "event_type": "transfer",
+        "facets": {
+          "effective_period": "2022-summer",
+          "transfer_kind": "permanent"
+        },
+        "negated": false,
+        "roles": {
+          "destination": "football|club|chelsea",
+          "origin": "football|club|brighton"
+        },
+        "state": "completed",
+        "subject_key": "football|player|marc-cucurella",
+        "version": "canonical-claim-contract-v1"
+      },
+      "outcome_observed_at": "2022-08-05T12:00:00+00:00",
+      "policy": {
+        "agreement_then_failure_is_not_automatically_false": true,
+        "candidate_resolution_is_temporal": true,
+        "comparison_does_not_establish_claim_truth": true,
+        "comparison_does_not_verify_authority": true,
+        "comparison_does_not_verify_source": true,
+        "comparison_is_not_a_falsehood_label": true,
+        "deterministic_only": true,
+        "live_merit_changed": false,
+        "live_negative_merit_authorized": false,
+        "machine_verified_outcome_required_before_resolved_label": true,
+        "numeric_negative_penalty_authorized": false,
+        "overlapping_origin_must_not_conflict": true,
+        "overlapping_transfer_kind_must_not_conflict": true,
+        "provider_call_performed": false,
+        "requires_later_outcome": true,
+        "requires_matching_effective_period": true,
+        "requires_same_event_type": true,
+        "requires_same_subject": true,
+        "requires_same_transfer_destination": true,
+        "state_transition_rules_are_explicit": true,
+        "supported_event_types": [
+          "transfer"
+        ]
+      },
+      "reason": "The observed state transition is not treated as proof against the earlier claim. Sequential sports states can both have been accurate at different times.",
+      "rule_id": "",
+      "status": "state_transition_not_decisive",
+      "version": "canonical-outcome-contract-v1"
+    },
+    "denial_comparison": {
+      "candidate_resolution": {
+        "against_claim": false,
+        "claim_truth_established": false,
+        "indeterminate": true,
+        "live_merit_effect_enabled": false,
+        "machine_verified": false,
+        "source_authority_verified": false,
+        "supports_claim": false
+      },
+      "claim": {
+        "event_type": "transfer",
+        "facets": {
+          "effective_period": "2022-summer",
+          "transfer_kind": "permanent"
+        },
+        "negated": false,
+        "roles": {
+          "destination": "football|club|chelsea",
+          "origin": "football|club|brighton"
+        },
+        "state": "agreed",
+        "subject_key": "football|player|marc-cucurella",
+        "version": "canonical-claim-contract-v1"
+      },
+      "claim_observed_at": "2022-08-03T18:00:00+00:00",
+      "direction": "indeterminate",
+      "outcome": {
+        "event_type": "transfer",
+        "facets": {
+          "effective_period": "2022-summer",
+          "transfer_kind": "permanent"
+        },
+        "negated": false,
+        "roles": {
+          "destination": "football|club|chelsea",
+          "origin": "football|club|brighton"
+        },
+        "state": "failed",
+        "subject_key": "football|player|marc-cucurella",
+        "version": "canonical-claim-contract-v1"
+      },
+      "outcome_observed_at": "2022-08-03T20:00:00+00:00",
+      "policy": {
+        "agreement_then_failure_is_not_automatically_false": true,
+        "candidate_resolution_is_temporal": true,
+        "comparison_does_not_establish_claim_truth": true,
+        "comparison_does_not_verify_authority": true,
+        "comparison_does_not_verify_source": true,
+        "comparison_is_not_a_falsehood_label": true,
+        "deterministic_only": true,
+        "live_merit_changed": false,
+        "live_negative_merit_authorized": false,
+        "machine_verified_outcome_required_before_resolved_label": true,
+        "numeric_negative_penalty_authorized": false,
+        "overlapping_origin_must_not_conflict": true,
+        "overlapping_transfer_kind_must_not_conflict": true,
+        "provider_call_performed": false,
+        "requires_later_outcome": true,
+        "requires_matching_effective_period": true,
+        "requires_same_event_type": true,
+        "requires_same_subject": true,
+        "requires_same_transfer_destination": true,
+        "state_transition_rules_are_explicit": true,
+        "supported_event_types": [
+          "transfer"
+        ]
+      },
+      "reason": "The observed state transition is not treated as proof against the earlier claim. Sequential sports states can both have been accurate at different times.",
+      "rule_id": "",
+      "status": "state_transition_not_decisive",
+      "version": "canonical-outcome-contract-v1"
+    },
+    "direct_club_denial": {
+      "captured_at": "2026-08-24T01:56:45.444437+00:00",
+      "character_count": 133,
+      "content_hash_scope": "raw_server_html",
+      "content_sha256": "4dc9ee1949babf12777a01ae7fab4acb8e282ac3ee109670b6a77e58b73c3cb4",
+      "paragraph_count": 7,
+      "semantic_verification_source": "raw_server_html_fallback",
+      "title": "Club statement: Marc Cucurella",
+      "url": "https://www.brightonandhovealbion.com/media-article/Club-statement%3A-Marc-Cucurella"
+    },
+    "later_official_completion": {
+      "captured_at": "2026-08-24T01:56:45.752086+00:00",
+      "character_count": 133,
+      "content_hash_scope": "raw_server_html",
+      "content_sha256": "44cfeb093ad2e7057de4358ee6be329ff528414956ee828acbd3572b0bb136a1",
+      "paragraph_count": 7,
+      "semantic_verification_source": "raw_server_html_fallback",
+      "title": "Marc Cucurella makes record move to Chelsea",
+      "url": "https://www.brightonandhovealbion.com/media-article/Marc-Cucurella-makes-record-move-to-Chelsea"
+    },
+    "penalty_authorized": false,
+    "reported_state": "agreed",
+    "safety_rule": "club_denial_does_not_make_agreement_claim_permanently_false",
+    "subject": "Marc Cucurella",
+    "version": "negative-merit-temporal-false-positive-control-v1"
+  },
+  "two_gate_cases": [
+    {
+      "authority_content_sha256": "9923c2e6ba08735470b01c9bc8c556f303d40b3c625e1214d8e6613b920a6e12",
+      "authority_entity": "Real Madrid C. F.",
+      "authority_source": "realmadrid.com",
+      "calibration_eligible": true,
+      "candidate_id": "olise-real-madrid-direct-denial-2026",
+      "claim_id": "d89711660ed69a623d1c0923dd85265148deec2cb4848fd900deda9d98fb4172",
+      "claim_truth_established": false,
+      "claimant_content_sha256": "cc5eda66a2c737b780bb4a08b4138c0845f2621c57d20c623454ffa873d2227c",
+      "claimant_source": "goal.com",
+      "direct_authority_status": "verified_direct_stakeholder",
+      "direct_stakeholder_status": "persisted_verified_direct_stakeholder_contradiction_lineage",
+      "legacy_merit_total": 34,
+      "live_merit_changed": false,
+      "machine_revision_status": "persisted_evaluation_revision",
+      "matched_authority_denial": "no ha mantenido ningún contacto directo ni indirecto",
+      "matched_claimant_assertion": "intended to pursue michael olise",
+      "negative_merit_signal": "verified_authority_machine_semantic_contradiction",
+      "semantic_status": "persisted_verified_machine_contradiction_semantics"
+    },
+    {
+      "authority_content_sha256": "f22ada5952c2ca895ba58ccd122f01649b52decc76a8276a7b223e915ef0f355",
+      "authority_entity": "Real Madrid C. F.",
+      "authority_source": "realmadrid.com",
+      "calibration_eligible": true,
+      "candidate_id": "enzo-real-madrid-direct-denial-2026",
+      "claim_id": "29ce270a4f7d6f12473a3b2dfec43dbf0b22690adc1160c41eb55f5fd4a5e530",
+      "claim_truth_established": false,
+      "claimant_content_sha256": "d9c60ac3631d0f9f4be57b7cdb66651e5e17498fbb055b8f04d3033cccb1702d",
+      "claimant_source": "teamtalk.com",
+      "direct_authority_status": "verified_direct_stakeholder",
+      "direct_stakeholder_status": "persisted_verified_direct_stakeholder_contradiction_lineage",
+      "legacy_merit_total": 35,
+      "live_merit_changed": false,
+      "machine_revision_status": "persisted_evaluation_revision",
+      "matched_authority_denial": "no ha realizado gestión alguna",
+      "matched_claimant_assertion": "preparing to test chelsea",
+      "negative_merit_signal": "verified_authority_machine_semantic_contradiction",
+      "semantic_status": "persisted_verified_machine_contradiction_semantics"
+    },
+    {
+      "authority_content_sha256": "a8819963e50032fb98f890b90970f23c4d6f057b5de056ff813c572ed6c05bb6",
+      "authority_entity": "Galatasaray Spor Kulübü",
+      "authority_source": "galatasaray.org",
+      "calibration_eligible": true,
+      "candidate_id": "musiala-galatasaray-direct-denial-2026",
+      "claim_id": "242b647e220e05f45a474a69234c1c48a4752f998e962884175d33d428892673",
+      "claim_truth_established": false,
+      "claimant_content_sha256": "39c2cd447ed9173c54909aaf4a32c4cceaa29d2d8deb2c838e95c101d0b566c0",
+      "claimant_source": "gzt.com",
+      "direct_authority_status": "verified_direct_stakeholder",
+      "direct_stakeholder_status": "persisted_verified_direct_stakeholder_contradiction_lineage",
+      "legacy_merit_total": 46,
+      "live_merit_changed": false,
+      "machine_revision_status": "persisted_evaluation_revision",
+      "matched_authority_denial": "iddialar gerçek dışıdır",
+      "matched_claimant_assertion": "anlaşma sağlamak üzere",
+      "negative_merit_signal": "verified_authority_machine_semantic_contradiction",
+      "semantic_status": "persisted_verified_machine_contradiction_semantics"
+    }
+  ],
+  "version": "negative-merit-real-world-resolved-release-gate-v1"
+}

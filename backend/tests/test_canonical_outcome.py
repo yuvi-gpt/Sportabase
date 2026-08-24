@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import unittest
 
 from pathlib import Path
@@ -600,6 +600,175 @@ class CanonicalOutcomeContractTests(
             policy[
                 "live_negative_merit_authorized"
             ]
+        )
+
+
+
+from app.analysis.canonical_outcome import (
+    CANONICAL_TENURE_OUTCOME_CONTRACT_VERSION,
+)
+
+
+TENURE_DRIVER = (
+    "motorsport|driver|oscar-piastri"
+)
+
+TENURE_TEAM = (
+    "motorsport|team|alpine-f1-team"
+)
+
+
+def tenure(
+    *,
+    state="appointed",
+    negated=False,
+    organization=TENURE_TEAM,
+    role="formula_1_race_driver",
+    period="2023-season",
+):
+    facets = {}
+
+    if role:
+        facets["role"] = role
+
+    if period:
+        facets[
+            "effective_period"
+        ] = period
+
+    return {
+        "subject_key": TENURE_DRIVER,
+        "event_type": "tenure",
+        "state": state,
+        "negated": negated,
+        "roles": {
+            "organization": organization,
+        },
+        "facets": facets,
+    }
+
+
+class CanonicalTenureOutcomeContractTests(
+    unittest.TestCase
+):
+    def test_same_appointment_explicitly_negated_is_against_claim(
+        self,
+    ):
+        result = compare(
+            tenure(),
+            tenure(
+                negated=True
+            ),
+        )
+
+        self.assertEqual(
+            result["version"],
+            CANONICAL_TENURE_OUTCOME_CONTRACT_VERSION,
+        )
+
+        self.assertEqual(
+            result["status"],
+            "resolution_against_claim_candidate",
+        )
+
+        self.assertEqual(
+            result["direction"],
+            "against_claim",
+        )
+
+        self.assertEqual(
+            result["rule_id"],
+            "tenure_appointed_explicitly_negated",
+        )
+
+        self.assertFalse(
+            result[
+                "candidate_resolution"
+            ][
+                "claim_truth_established"
+            ]
+        )
+
+    def test_same_appointment_reconfirmed_supports_claim(
+        self,
+    ):
+        result = compare(
+            tenure(),
+            tenure(),
+        )
+
+        self.assertEqual(
+            result["status"],
+            "resolution_supports_claim_candidate",
+        )
+
+        self.assertEqual(
+            result["direction"],
+            "supports_claim",
+        )
+
+    def test_different_tenure_organization_fails_closed(
+        self,
+    ):
+        result = compare(
+            tenure(),
+            tenure(
+                organization=(
+                    "motorsport|team|mclaren"
+                )
+            ),
+        )
+
+        self.assertEqual(
+            result["status"],
+            "different_tenure_organization",
+        )
+
+        self.assertEqual(
+            result["direction"],
+            "indeterminate",
+        )
+
+    def test_missing_tenure_period_fails_closed(
+        self,
+    ):
+        result = compare(
+            tenure(
+                period=""
+            ),
+            tenure(
+                period=""
+            ),
+        )
+
+        self.assertEqual(
+            result["status"],
+            "resolution_event_identity_insufficient",
+        )
+
+        self.assertEqual(
+            result["direction"],
+            "indeterminate",
+        )
+
+    def test_departure_after_appointment_is_not_retroactive_falsehood(
+        self,
+    ):
+        result = compare(
+            tenure(),
+            tenure(
+                state="departed",
+            ),
+        )
+
+        self.assertEqual(
+            result["status"],
+            "state_transition_not_decisive",
+        )
+
+        self.assertEqual(
+            result["direction"],
+            "indeterminate",
         )
 
 
