@@ -271,3 +271,16 @@ Update it when a new development convention, safety rule, repository workflow, t
 - Live negative Merit remains disabled at this boundary.
 - When an official page's article extractor omits source text that remains present in the fetched server HTML, evaluation capture may use the raw server response as a semantic fallback only if the final domain remains verified and the exact raw-response SHA-256 scope is recorded. Extracted article text remains preferred.
 - For official dynamic pages whose generic article extractor omits the statement body, evaluation evidence may fall back to the exact fetched server HTML only when the verified final domain is unchanged and every required semantic phrase is present. The frozen capture must record content_hash_scope=raw_server_html; semantic requirements must not be weakened merely because extraction failed.
+
+## Certified Live Negative Merit Release Boundary
+
+- Negative Merit live release is separately certified from positive corroboration release.
+- The first certified live negative adjustment is `-15`, frozen from the pinned resolved real-world release-gate report whose manifest digest is `abdec795c72cab03231322b4ad13dacdb2edfd44465d53a427a900e75840032f`.
+- Live negative Merit requires the exact two-gate runtime result: persisted verified direct-stakeholder contradiction lineage plus persisted machine-verified contradiction semantics. Authority-only, semantic-only, raw/model-only contradiction, lack of corroboration, and early exclusivity never qualify.
+- The certificate is machine-built and machine-validated from the immutable resolved calibration report; its identity is pinned by the live runtime and tampering fails closed.
+- The negative runtime consumes the score after any certified positive corroboration adjustment, so positive `+6` composition is preserved before the certified `-15` adjustment.
+- Missing, disabled, malformed, tampered, mismatched, or ineligible negative-release state preserves the exact score entering the negative runtime, including any valid positive Merit adjustment already applied.
+- Scores are clamped to the 0–100 range.
+- Negative release does not claim permanent objective truth. It represents a certified score consequence for the strict verified evidence state.
+- The live-negative certificate identity participates in article cache keys so certificate enablement or tampering cannot reuse a stale scoring cache.
+- Newly discovered evidence created later in the same article-intelligence pass remains governed by the evidence-context hash and is eligible on the next analysis context rather than mutating an already-built response out of order.

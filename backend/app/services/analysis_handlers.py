@@ -21,6 +21,9 @@ from app.services.article_intelligence_public import (
 from app.services.live_merit_release import (
     LIVE_MERIT_RELEASE_RUNTIME_VERSION,
 )
+from app.services.live_negative_merit_release import (
+    LIVE_NEGATIVE_MERIT_RELEASE_RUNTIME_VERSION,
+)
 from app.services.negative_merit_runtime import (
     NEGATIVE_MERIT_RUNTIME_VERSION,
     refresh_negative_merit_after_intelligence,
@@ -220,10 +223,13 @@ def analyze_article_impl(
     BRAVE_NEWS_API_KEY,
     INTELLIGENCE_SHADOW_ENABLED,
     LIVE_MERIT_ENABLED,
+    LIVE_NEGATIVE_MERIT_ENABLED,
     MAX_ANALYZE_CHARS,
     MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+    NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
     analysis_content_hash,
     apply_certified_live_merit,
+    apply_certified_live_negative_merit,
     app,
     badge,
     clean_html,
@@ -240,6 +246,7 @@ def analyze_article_impl(
     get_cached_analysis,
     load_evidence_analysis_state_for_media_item,
     live_merit_release_cache_token,
+    live_negative_merit_release_cache_token,
     make_analysis_cache_key,
     media_item_id_for_url,
     merit_score,
@@ -345,6 +352,17 @@ def analyze_article_impl(
         )
     )
 
+    live_negative_merit_cache_token = (
+        live_negative_merit_release_cache_token(
+            enabled=(
+                LIVE_NEGATIVE_MERIT_ENABLED
+            ),
+            certificate_path=(
+                NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH
+            ),
+        )
+    )
+
     cache_key = make_analysis_cache_key(
         mode="article",
         url=req.url,
@@ -357,6 +375,8 @@ def analyze_article_impl(
             f"{ARTICLE_INTELLIGENCE_PUBLIC_VERSION}"
             "|live_merit:"
             f"{live_merit_cache_token}"
+            "|live_negative_merit:"
+            f"{live_negative_merit_cache_token}"
         ),
         context_hash=(
             article_evidence_context_hash
@@ -636,6 +656,82 @@ def analyze_article_impl(
 
     mark("negative_merit_shadow_ms")
 
+    score_before_negative_merit = score
+
+    try:
+        live_negative_merit_release = (
+            apply_certified_live_negative_merit(
+                enabled=(
+                    LIVE_NEGATIVE_MERIT_ENABLED
+                ),
+                score=(
+                    score_before_negative_merit
+                ),
+                negative_merit_result=(
+                    negative_merit_shadow
+                ),
+                certificate_path=(
+                    NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH
+                ),
+                badge_resolver=badge,
+            )
+        )
+
+        runtime_negative_score = (
+            live_negative_merit_release.get(
+                "score"
+            )
+        )
+
+        if not isinstance(
+            runtime_negative_score,
+            dict,
+        ):
+            raise ValueError(
+                "Live Negative Merit runtime "
+                "score must be a dictionary."
+            )
+
+        score = runtime_negative_score
+
+    except Exception as error:
+        score = score_before_negative_merit
+
+        live_negative_merit_release = {
+            "version": (
+                LIVE_NEGATIVE_MERIT_RELEASE_RUNTIME_VERSION
+            ),
+            "status": "score_preserved",
+            "enabled": bool(
+                LIVE_NEGATIVE_MERIT_ENABLED
+            ),
+            "score_effect_applied": False,
+            "reason": (
+                "runtime_exception:"
+                + type(
+                    error
+                ).__name__
+            ),
+            "claim_id": "",
+            "signal": "",
+            "adjustment": 0.0,
+            "input_total": (
+                score_before_negative_merit.get(
+                    "total"
+                )
+            ),
+            "live_total": (
+                score_before_negative_merit.get(
+                    "total"
+                )
+            ),
+            "score": (
+                score_before_negative_merit
+            ),
+        }
+
+    mark("live_negative_merit_release_ms")
+
     if isinstance(
         single_pass_result,
         dict,
@@ -884,6 +980,15 @@ def analyze_article_impl(
     response.debug[
         "negative_merit_shadow"
     ] = negative_merit_shadow
+
+    response.debug[
+        "live_negative_merit_release"
+    ] = {
+        key: value
+        for key, value
+        in live_negative_merit_release.items()
+        if key != "score"
+    }
 
     try:
         media_item = upsert_media_item(

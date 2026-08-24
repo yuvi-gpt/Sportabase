@@ -163,6 +163,26 @@ MERIT_SCORE_RELEASE_CERTIFICATE_PATH = (
     / "merit_score_release_certificate.json"
 )
 
+LIVE_NEGATIVE_MERIT_ENABLED = (
+    os.getenv(
+        "SPORTABASE_LIVE_NEGATIVE_MERIT_ENABLED",
+        "1",
+    )
+    .strip()
+    .lower()
+    in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+)
+
+NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH = (
+    DATA_DIR
+    / "negative_merit_score_release_certificate.json"
+)
+
 BRAVE_NEWS_API_KEY = os.getenv(
     "SPORTABASE_BRAVE_NEWS_API_KEY",
     "",

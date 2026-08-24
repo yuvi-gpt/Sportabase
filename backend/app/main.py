@@ -50,6 +50,8 @@ from app.application.config import (
     MULTIMODAL_SHADOW_API_ENABLED,
     LIVE_MERIT_ENABLED,
     MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+    LIVE_NEGATIVE_MERIT_ENABLED,
+    NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
     BRAVE_NEWS_API_KEY,
     GEMINI_INPUT_COST_PER_MILLION_USD,
     GEMINI_OUTPUT_COST_PER_MILLION_USD,
@@ -165,6 +167,10 @@ from app.services.article_intelligence_shadow import (
 from app.services.live_merit_release import (
     apply_certified_live_merit,
     live_merit_release_cache_token,
+)
+from app.services.live_negative_merit_release import (
+    apply_certified_live_negative_merit,
+    live_negative_merit_release_cache_token,
 )
 from app.models.api import (
     AnalyzeRequest,
@@ -1876,10 +1882,13 @@ def analyze(
         BRAVE_NEWS_API_KEY=BRAVE_NEWS_API_KEY,
         INTELLIGENCE_SHADOW_ENABLED=INTELLIGENCE_SHADOW_ENABLED,
         LIVE_MERIT_ENABLED=LIVE_MERIT_ENABLED,
+        LIVE_NEGATIVE_MERIT_ENABLED=LIVE_NEGATIVE_MERIT_ENABLED,
         MAX_ANALYZE_CHARS=MAX_ANALYZE_CHARS,
         MERIT_SCORE_RELEASE_CERTIFICATE_PATH=MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+        NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH=NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
         analysis_content_hash=analysis_content_hash,
         apply_certified_live_merit=apply_certified_live_merit,
+        apply_certified_live_negative_merit=apply_certified_live_negative_merit,
         app=app,
         badge=badge,
         clean_html=clean_html,
@@ -1896,6 +1905,7 @@ def analyze(
         get_cached_analysis=get_cached_analysis,
         load_evidence_analysis_state_for_media_item=load_evidence_analysis_state_for_media_item,
         live_merit_release_cache_token=live_merit_release_cache_token,
+        live_negative_merit_release_cache_token=live_negative_merit_release_cache_token,
         make_analysis_cache_key=make_analysis_cache_key,
         media_item_id_for_url=media_item_id_for_url,
         merit_score=merit_score,

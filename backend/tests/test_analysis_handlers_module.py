@@ -122,11 +122,39 @@ class AnalysisHandlersModuleTests(
             main.live_merit_release_cache_token,
         )
 
+        self.assertIs(
+            kwargs[
+                "apply_certified_live_negative_merit"
+            ],
+            main.apply_certified_live_negative_merit,
+        )
+
+        self.assertIs(
+            kwargs[
+                "live_negative_merit_release_cache_token"
+            ],
+            main.live_negative_merit_release_cache_token,
+        )
+
         self.assertEqual(
             kwargs[
                 "MERIT_SCORE_RELEASE_CERTIFICATE_PATH"
             ],
             main.MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+        )
+
+        self.assertEqual(
+            kwargs[
+                "NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH"
+            ],
+            main.NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH,
+        )
+
+        self.assertEqual(
+            kwargs[
+                "LIVE_NEGATIVE_MERIT_ENABLED"
+            ],
+            main.LIVE_NEGATIVE_MERIT_ENABLED,
         )
 
     def test_video_wrapper_delegates(
@@ -198,6 +226,10 @@ class AnalysisHandlersModuleTests(
             "live_merit_release_cache_token",
             "LIVE_MERIT_ENABLED",
             "MERIT_SCORE_RELEASE_CERTIFICATE_PATH",
+            "apply_certified_live_negative_merit",
+            "live_negative_merit_release_cache_token",
+            "LIVE_NEGATIVE_MERIT_ENABLED",
+            "NEGATIVE_MERIT_SCORE_RELEASE_CERTIFICATE_PATH",
             "badge",
         ):
             self.assertIn(
