@@ -1,0 +1,9 @@
+C:\Users\Yuvraj\Documents\Sportabase\extension\src\styles\article-mode.css
+  line 549: [layout-transition] transition: width
+    → Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.
+
+C:\Users\Yuvraj\Documents\Sportabase\extension\src\styles\video-results.css
+  line 309: [layout-transition] transition: width
+    → Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.
+
+2 anti-patterns found.

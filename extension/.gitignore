@@ -1,3 +1,7 @@
 node_modules/
 cws-package/
 sportabase-v*.zip
+.playwright-cli/
+playwright-report/
+test-results/
+ui-audit/tmp/
