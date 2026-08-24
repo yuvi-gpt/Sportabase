@@ -119,31 +119,15 @@ a:focus-visible {
   text-decoration: none;
 }
 
-.brand-mark {
-  width: 37px;
-  height: 37px;
+.brand-logo {
+  width: 48px;
+  height: 48px;
 
-  display: grid;
-  place-items: center;
+  flex: 0 0 auto;
 
-  border:
-    1px solid
-    var(--line-strong);
+  display: block;
 
-  border-radius:
-    var(--radius-small);
-
-  color: var(--accent);
-  background: #0d100d;
-
-  font-family:
-    var(--brand-font);
-
-  font-size: 13px;
-  font-weight: 800;
-
-  letter-spacing:
-    -0.02em;
+  object-fit: contain;
 }
 
 .brand-copy {
@@ -1161,9 +1145,9 @@ footer span:first-child {
     min-height: 70px;
   }
 
-  .brand-mark {
-    width: 34px;
-    height: 34px;
+  .brand-logo {
+    width: 43px;
+    height: 43px;
   }
 
   .brand strong {
