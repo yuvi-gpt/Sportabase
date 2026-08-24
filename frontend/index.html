@@ -14,7 +14,7 @@
     />
 
     <title>
-      Sportabase ? Sports Intelligence
+      Sportabase — Sports Intelligence
     </title>
 
     <link
@@ -41,13 +41,16 @@
           href="./"
           aria-label="Sportabase home"
         >
-          <span class="brand-mark">
+          <span
+            class="brand-mark"
+            aria-hidden="true"
+          >
             SB
           </span>
 
-          <span>
+          <span class="brand-copy">
             <strong>Sportabase</strong>
-            <small>SPORTS INTELLIGENCE</small>
+            <small>Sports intelligence</small>
           </span>
         </a>
 
@@ -56,35 +59,52 @@
           id="api-state"
           aria-live="polite"
         >
-          <span></span>
-          CHECKING API
+          <span aria-hidden="true"></span>
+          Connecting
         </div>
       </header>
 
       <main>
         <section class="hero">
           <div class="hero-copy">
-            <p class="eyebrow">
-              EVIDENCE-FIRST ANALYSIS
-            </p>
-
             <h1>
-              Understand the story,
+              Sports reporting,
               <br />
-              not just the headline.
+              scored against the evidence.
             </h1>
 
             <p class="hero-description">
-              Sportabase reads the article, summarizes
-              the important reporting, scores its Merit,
-              and checks cross-source evidence when that
-              evidence is available.
+              Paste a story and Sportabase separates
+              the reporting from the noise: what happened,
+              what the source actually supports, and how
+              much informational Merit the story earns.
             </p>
+
+            <ul
+              class="hero-capabilities"
+              aria-label="Sportabase analysis capabilities"
+            >
+              <li>Merit scoring</li>
+              <li>Evidence checks</li>
+              <li>Source independence</li>
+            </ul>
           </div>
 
           <div class="analyzer-card">
+            <div class="analyzer-intro">
+              <h2>
+                Analyze an article
+              </h2>
+
+              <p>
+                Start with the source. Sportabase will
+                resolve the article before running its
+                intelligence pipeline.
+              </p>
+            </div>
+
             <label for="article-url">
-              ARTICLE URL
+              Article URL
             </label>
 
             <div class="url-row">
@@ -100,7 +120,7 @@
                 id="analyze-button"
                 type="button"
               >
-                Analyze
+                Analyze article
               </button>
             </div>
 
@@ -128,7 +148,7 @@
             <div class="score-top">
               <div>
                 <p class="section-label">
-                  MERIT SCORE
+                  Merit score
                 </p>
 
                 <div class="score-value">
@@ -144,11 +164,14 @@
                 class="badge"
                 id="merit-badge"
               >
-                ANALYSIS
+                Analysis
               </div>
             </div>
 
-            <div class="score-track">
+            <div
+              class="score-track"
+              aria-hidden="true"
+            >
               <div
                 id="score-fill"
                 class="score-fill"
@@ -166,7 +189,7 @@
           <div class="content-grid">
             <article class="result-card">
               <p class="section-label">
-                TL;DR
+                Summary
               </p>
 
               <ul
@@ -177,7 +200,7 @@
 
             <article class="result-card">
               <p class="section-label">
-                WHY THIS SCORE
+                Why this score
               </p>
 
               <ul
@@ -195,7 +218,7 @@
             <div class="intelligence-header">
               <div>
                 <p class="section-label">
-                  EVIDENCE INTELLIGENCE
+                  Evidence intelligence
                 </p>
 
                 <h3 id="intelligence-label">
@@ -207,7 +230,7 @@
                 id="intelligence-state"
                 class="status-pill"
               >
-                LIMITED
+                Limited
               </div>
             </div>
 
@@ -221,7 +244,8 @@
               class="intelligence-grid"
             >
               <div>
-                <span>CORROBORATION</span>
+                <span>Corroboration</span>
+
                 <strong
                   id="corroboration-value"
                 >
@@ -230,7 +254,8 @@
               </div>
 
               <div>
-                <span>INDEPENDENCE</span>
+                <span>Independence</span>
+
                 <strong
                   id="independence-value"
                 >
@@ -239,7 +264,8 @@
               </div>
 
               <div>
-                <span>SOURCES FOUND</span>
+                <span>Sources found</span>
+
                 <strong
                   id="candidate-count"
                 >
@@ -248,7 +274,8 @@
               </div>
 
               <div>
-                <span>PAIRS CHECKED</span>
+                <span>Pairs checked</span>
+
                 <strong
                   id="verification-pairs"
                 >
@@ -266,7 +293,7 @@
           <article class="result-card source-card">
             <div>
               <p class="section-label">
-                ANALYZED STORY
+                Analyzed story
               </p>
 
               <h3 id="source-title"></h3>
@@ -292,23 +319,25 @@
         <section class="insight-section">
           <div class="section-heading">
             <div>
-              <p class="eyebrow">
-                LIVE SPORT INTELLIGENCE
-              </p>
-
               <h2>
                 IPL chasing-bias monitor
               </h2>
+
+              <p>
+                Follow how often teams choose to bowl
+                first and whether chasing is actually
+                translating into wins.
+              </p>
             </div>
 
-            <span class="secondary-badge">
-              CRICKET
+            <span class="section-context">
+              Cricket / live
             </span>
           </div>
 
           <article class="insight-card">
             <div id="insight-status">
-              Loading current trend?
+              Loading current trend…
             </div>
 
             <div class="chart-shell">

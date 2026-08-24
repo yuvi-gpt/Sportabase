@@ -1,0 +1,5 @@
+C:\Users\Yuvraj\Documents\Sportabase\frontend\index.html
+  [side-tab] border-left: 3px + border-radius: 8px
+    → Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.
+
+1 anti-pattern found.

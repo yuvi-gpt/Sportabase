@@ -495,8 +495,8 @@ function renderAnalysis(
 
   byId(
     "score-fill"
-  ).style.width =
-    `${score}%`;
+  ).style.transform =
+    `scaleX(${score / 100})`;
 
   byId(
     "result-title"
@@ -767,7 +767,7 @@ async function analyzeArticle() {
         false;
 
       button.textContent =
-        "Analyze";
+        "Analyze article";
     }
   }
 }
@@ -1117,7 +1117,7 @@ async function checkHealth() {
     if (health?.ok) {
       setApiState(
         "online",
-        "API ONLINE"
+        "Connected"
       );
 
       return;
@@ -1127,7 +1127,7 @@ async function checkHealth() {
   } catch (_) {
     setApiState(
       "offline",
-      "API OFFLINE"
+      "Offline"
     );
   }
 }
