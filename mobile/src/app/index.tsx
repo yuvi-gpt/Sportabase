@@ -58,8 +58,8 @@ const COLORS = {
   line: '#2b312c',
   lineSoft: '#1d221e',
   text: '#f2f3ef',
-  muted: '#a6ada7',
-  mutedStrong: '#c9ceca',
+  muted: '#b2b8b3',
+  mutedStrong: '#d0d4d0',
   accent: '#b5f36b',
   accentInk: '#14200c',
   warning: '#e2b85f',
@@ -107,10 +107,19 @@ export default function HomeScreen() {
     width,
   } = useWindowDimensions();
 
+  const [
+    layoutReady,
+    setLayoutReady,
+  ] =
+    useState(false);
+
+
   const isWide =
+    layoutReady &&
     width >= 920;
 
   const isCompact =
+    !layoutReady ||
     width < 620;
 
 
@@ -183,6 +192,14 @@ export default function HomeScreen() {
     >(
       'checking',
     );
+
+
+  useEffect(
+    () => {
+      setLayoutReady(true);
+    },
+    [],
+  );
 
 
   useEffect(
@@ -694,52 +711,43 @@ export default function HomeScreen() {
 
 
             <View
-              style={
-                styles.sourceWorkspace
-              }
+              style={[
+                styles.sourceWorkspace,
+
+                hasResults &&
+                styles.sourceWorkspaceCompact,
+              ]}
             >
-              <View
-                style={[
-                  styles.workspaceHeading,
+              {!hasResults ? (
+                <View
+                  style={[
+                    styles.workspaceHeading,
 
-                  isWide
-                    &&
+                    isWide &&
                     styles.workspaceHeadingWide,
-                ]}
-              >
-                <View>
-                  <Text
-                    style={
-                      styles.workspaceTitle
-                    }
-                  >
-                    {hasResults
-                      ? 'Analyze another source'
-                      : 'Analyze a source'}
-                  </Text>
+                  ]}
+                >
+                  <View>
+                    <Text
+                      style={
+                        styles.workspaceTitle
+                      }
+                    >
+                      Analyze a source
+                    </Text>
 
-                  <Text
-                    style={
-                      styles.workspaceCopy
-                    }
-                  >
-                    Paste a sports article or
-                    YouTube link. Sportabase
-                    routes it automatically.
-                  </Text>
+                    <Text
+                      style={
+                        styles.workspaceCopy
+                      }
+                    >
+                      Paste a sports article or
+                      YouTube link. Sportabase
+                      routes it automatically.
+                    </Text>
+                  </View>
                 </View>
-
-
-                {!isCompact ? (
-                  <Text
-                    style={
-                      styles.workspaceMeta
-                    }
-                  >
-                    Automatic source detection
-                  </Text>
-                ) : null}
-              </View>
+              ) : null}
 
 
               <View
@@ -856,19 +864,25 @@ export default function HomeScreen() {
                   ]}
                 >
                   <Text
-                    style={
-                      styles.analyzeButtonText
-                    }
+                    style={[
+                      styles.analyzeButtonText,
+                      (!hasLink || isResolving) &&
+                        styles.analyzeButtonTextDisabled,
+                    ]}
                   >
                     {isResolving
                       ? 'Analyzing...'
-                      : 'Analyze source'}
+                      : hasResults
+                        ? 'Analyze another'
+                        : 'Analyze source'}
                   </Text>
 
                   <Text
-                    style={
-                      styles.analyzeArrow
-                    }
+                    style={[
+                      styles.analyzeArrow,
+                      (!hasLink || isResolving) &&
+                        styles.analyzeArrowDisabled,
+                    ]}
                   >
                     →
                   </Text>
@@ -876,35 +890,60 @@ export default function HomeScreen() {
               </View>
 
 
-              <View
-                style={
-                  styles.workspaceFooter
-                }
-              >
-                <Text
-                  style={[
-                    styles.message,
-
-                    messageIsError
-                      ? styles.errorMessage
-                      : styles.statusMessage,
-                  ]}
+              {!hasResults ? (
+                <View
+                  style={
+                    styles.workspaceFooter
+                  }
                 >
-                  {message
-                    ||
-                    'Analysis begins only after you submit the source.'}
-                </Text>
-
-                {!isCompact ? (
                   <Text
-                    style={
-                      styles.supportedText
-                    }
+                    style={[
+                      styles.message,
+
+                      messageIsError
+                        ? styles.errorMessage
+                        : styles.statusMessage,
+                    ]}
                   >
-                    Article / YouTube
+                    {message
+                      ||
+                      'Analysis begins only after you submit the source.'}
                   </Text>
-                ) : null}
-              </View>
+                </View>
+              ) : null}
+
+
+              {!hasResults ? (
+                <View
+                  style={
+                    styles.intelligenceStrip
+                  }
+                >
+                  {[
+                    'Merit',
+                    'Evidence',
+                    'Independence',
+                    'Claim status',
+                  ].map(
+                    (
+                      signal
+                    ) => (
+                      <Text
+                        key={
+                          signal
+                        }
+                        style={
+                          styles.intelligenceStripItem
+                        }
+                      >
+                        {signal}
+                      </Text>
+                    ),
+                  )}
+                </View>
+              ) : null}
+
+
             </View>
 
 
@@ -1229,16 +1268,16 @@ const styles =
       color: COLORS.text,
       fontFamily:
         DISPLAY_FONT,
-      fontSize: 70,
-      lineHeight: 73,
+      fontSize: 62,
+      lineHeight: 66,
       fontWeight: '400',
-      letterSpacing: -1.6,
+      letterSpacing: -1.2,
     },
 
     headlineCompact: {
-      fontSize: 44,
-      lineHeight: 47,
-      letterSpacing: -0.8,
+      fontSize: 40,
+      lineHeight: 44,
+      letterSpacing: -0.6,
     },
 
     leadLower: {
@@ -1288,6 +1327,11 @@ const styles =
       borderBottomWidth: 1,
       borderBottomColor:
         COLORS.line,
+    },
+
+    sourceWorkspaceCompact: {
+      paddingTop: 14,
+      paddingBottom: 14,
     },
 
     workspaceHeading: {
@@ -1377,7 +1421,16 @@ const styles =
     },
 
     analyzeButtonDisabled: {
-      opacity: 0.36,
+      opacity: 1,
+      backgroundColor: '#242a25',
+    },
+
+    analyzeButtonTextDisabled: {
+      color: '#b8beb9',
+    },
+
+    analyzeArrowDisabled: {
+      color: '#b8beb9',
     },
 
     analyzeButtonPressed: {
@@ -1429,8 +1482,29 @@ const styles =
     },
 
     resultsSection: {
-      paddingTop: 52,
+      paddingTop: 24,
       paddingBottom: 36,
+    },
+
+    intelligenceStrip: {
+      minHeight: 46,
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 26,
+      marginTop: 18,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor:
+        COLORS.lineSoft,
+    },
+
+    intelligenceStripItem: {
+      color:
+        COLORS.mutedStrong,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '600',
     },
 
     methodSection: {

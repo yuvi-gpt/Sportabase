@@ -1,0 +1,9 @@
+http://127.0.0.1:8103/
+  [layout-transition] transition: padding
+    → Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.
+  [layout-transition] transition: padding
+    → Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.
+  [layout-transition] transition: padding
+    → Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.
+
+3 anti-patterns found.

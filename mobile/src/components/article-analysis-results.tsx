@@ -28,8 +28,8 @@ const COLORS = {
   line: '#2b312c',
   lineSoft: '#1d221e',
   text: '#f2f3ef',
-  muted: '#a6ada7',
-  mutedStrong: '#c9ceca',
+  muted: '#b2b8b3',
+  mutedStrong: '#d0d4d0',
   accent: '#b5f36b',
   warning: '#e2b85f',
 };
@@ -117,14 +117,6 @@ export function ArticleAnalysisResults({
     )
     ||
     'Analyzed story';
-
-
-  const badge =
-    clean(
-      result.badge,
-    )
-    ||
-    'Analysis complete';
 
 
   const typeConfidence =
@@ -241,13 +233,6 @@ export function ArticleAnalysisResults({
             Type confidence {typeConfidence}%
           </Text>
 
-          <Text
-            style={
-              styles.metaText
-            }
-          >
-            {badge}
-          </Text>
         </View>
 
 

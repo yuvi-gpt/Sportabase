@@ -25,8 +25,8 @@ const COLORS = {
   line: '#2b312c',
   lineSoft: '#1d221e',
   text: '#f2f3ef',
-  muted: '#a6ada7',
-  mutedStrong: '#c9ceca',
+  muted: '#b2b8b3',
+  mutedStrong: '#d0d4d0',
   accent: '#b5f36b',
 };
 
@@ -120,17 +120,6 @@ export function VideoAnalysisResults({
   const logicScore =
     clampScore(
       result.logic_score,
-    );
-
-
-  const supportScore =
-    Math.round(
-      (
-        evidenceScore
-        +
-        logicScore
-      )
-      / 2,
     );
 
 
@@ -267,18 +256,17 @@ export function VideoAnalysisResults({
         style={[
           styles.signalGrid,
 
-          isWide
-            &&
-            styles.signalGridWide,
+          isWide &&
+          styles.signalGridWide,
         ]}
       >
         <View
           style={[
             styles.signalPanel,
+            styles.signalPanelDivider,
 
-            isWide
-              &&
-              styles.signalPanelFirst,
+            isWide &&
+            styles.signalPanelWideDivider,
           ]}
         >
           <Text
@@ -286,7 +274,7 @@ export function VideoAnalysisResults({
               styles.signalLabel
             }
           >
-            Overall support
+            Evidence
           </Text>
 
           <Text
@@ -294,9 +282,9 @@ export function VideoAnalysisResults({
               styles.signalDescription
             }
           >
-            Combined evidence and logic assessment.
+            Strength of the supporting material
+            used in the analysis.
           </Text>
-
 
           <View
             style={
@@ -308,7 +296,7 @@ export function VideoAnalysisResults({
                 styles.score
               }
             >
-              {supportScore}
+              {evidenceScore}
             </Text>
 
             <Text
@@ -319,7 +307,6 @@ export function VideoAnalysisResults({
               /100
             </Text>
           </View>
-
 
           <View
             style={
@@ -332,7 +319,7 @@ export function VideoAnalysisResults({
 
                 {
                   flex:
-                    supportScore,
+                    evidenceScore,
                 },
               ]}
             />
@@ -342,7 +329,83 @@ export function VideoAnalysisResults({
                 flex:
                   100
                   -
-                  supportScore,
+                  evidenceScore,
+              }}
+            />
+          </View>
+        </View>
+
+
+        <View
+          style={[
+            styles.signalPanel,
+            styles.signalPanelDivider,
+
+            isWide &&
+            styles.signalPanelWideDivider,
+          ]}
+        >
+          <Text
+            style={
+              styles.signalLabel
+            }
+          >
+            Logic
+          </Text>
+
+          <Text
+            style={
+              styles.signalDescription
+            }
+          >
+            Internal coherence of the argument
+            presented by the source.
+          </Text>
+
+          <View
+            style={
+              styles.scoreRow
+            }
+          >
+            <Text
+              style={
+                styles.score
+              }
+            >
+              {logicScore}
+            </Text>
+
+            <Text
+              style={
+                styles.scoreMaximum
+              }
+            >
+              /100
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.scoreTrack
+            }
+          >
+            <View
+              style={[
+                styles.scoreFill,
+
+                {
+                  flex:
+                    logicScore,
+                },
+              ]}
+            />
+
+            <View
+              style={{
+                flex:
+                  100
+                  -
+                  logicScore,
               }}
             />
           </View>
@@ -371,7 +434,6 @@ export function VideoAnalysisResults({
             support and reasoning.
           </Text>
 
-
           <Text
             style={
               styles.verdict
@@ -379,86 +441,6 @@ export function VideoAnalysisResults({
           >
             {verdict}
           </Text>
-        </View>
-      </View>
-
-
-      <View
-        style={
-          styles.metricRow
-        }
-      >
-        <View
-          style={
-            styles.metric
-          }
-        >
-          <Text
-            style={
-              styles.metricLabel
-            }
-          >
-            Evidence
-          </Text>
-
-          <View
-            style={
-              styles.metricValueRow
-            }
-          >
-            <Text
-              style={
-                styles.metricScore
-              }
-            >
-              {evidenceScore}
-            </Text>
-
-            <Text
-              style={
-                styles.metricMaximum
-              }
-            >
-              /100
-            </Text>
-          </View>
-        </View>
-
-
-        <View
-          style={
-            styles.metric
-          }
-        >
-          <Text
-            style={
-              styles.metricLabel
-            }
-          >
-            Logic
-          </Text>
-
-          <View
-            style={
-              styles.metricValueRow
-            }
-          >
-            <Text
-              style={
-                styles.metricScore
-              }
-            >
-              {logicScore}
-            </Text>
-
-            <Text
-              style={
-                styles.metricMaximum
-              }
-            >
-              /100
-            </Text>
-          </View>
         </View>
       </View>
 
@@ -729,18 +711,29 @@ const styles =
         30,
     },
 
-    signalPanelFirst: {
+    signalPanelDivider: {
+      borderBottomWidth:
+        1,
+
+      borderBottomColor:
+        COLORS.lineSoft,
+    },
+
+    signalPanelWideDivider: {
       paddingRight:
-        36,
+        28,
 
       marginRight:
-        36,
+        28,
 
       borderRightWidth:
         1,
 
       borderRightColor:
         COLORS.line,
+
+      borderBottomWidth:
+        0,
     },
 
     signalLabel: {

@@ -49,3 +49,15 @@ This redesign preserves:
 - backend API contracts
 
 Article and video result components are redesigned in the next checkpoint.
+
+## Final interface polish boundary
+
+After analysis completes, source entry collapses so the report becomes the primary visual object.
+
+The homepage uses a restrained Sportabase intelligence vocabulary strip instead of generic feature-card framing.
+
+Article metadata does not repeat the prominent evidence state.
+
+Video analysis does not invent an aggregate score by averaging Evidence and Logic. Evidence, Logic, and Verdict remain separate first-class outputs.
+
+Secondary report text uses stronger contrast for long-form readability.
