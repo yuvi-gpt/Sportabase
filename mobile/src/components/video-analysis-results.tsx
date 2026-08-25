@@ -1,6 +1,8 @@
-﻿import {
+import {
+  Platform,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -8,26 +10,57 @@ import type {
   VideoAnalyzeResponse,
 } from '../lib/api';
 
+
 type VideoAnalysisResultsProps = {
   result: VideoAnalyzeResponse;
+
   transcript: {
     segmentCount: number;
     characterCount: number;
   };
 };
 
+
 const COLORS = {
-  surface: '#101412',
-  surfaceRaised: '#171c19',
-  border: '#283029',
-  text: '#f4f7f4',
-  muted: '#98a39b',
-  accent: '#76f53f',
-  accentSoft: 'rgba(118, 245, 63, 0.12)',
+  line: '#2b312c',
+  lineSoft: '#1d221e',
+  text: '#f2f3ef',
+  muted: '#a6ada7',
+  mutedStrong: '#c9ceca',
+  accent: '#b5f36b',
 };
 
-function clampScore(value: number) {
-  if (!Number.isFinite(value)) {
+
+const DISPLAY_FONT =
+  Platform.select({
+    web: 'Georgia',
+    ios: 'Georgia',
+    default: 'serif',
+  }) ?? 'serif';
+
+
+function clean(
+  value: unknown,
+) {
+  return String(
+    value ?? '',
+  )
+    .trim()
+    .replace(
+      /\s+/g,
+      ' ',
+    );
+}
+
+
+function clampScore(
+  value: number,
+) {
+  if (
+    !Number.isFinite(
+      value,
+    )
+  ) {
     return 0;
   }
 
@@ -35,370 +68,1018 @@ function clampScore(value: number) {
     0,
     Math.min(
       100,
-      Math.round(value),
+      Math.round(
+        value,
+      ),
     ),
   );
 }
 
-function humanizeLabel(value: string) {
-  const normalized = String(
-    value || 'Analysis complete',
-  )
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
+
+function humanizeLabel(
+  value: unknown,
+) {
+  const normalized =
+    clean(value)
+      .replace(
+        /[_-]+/g,
+        ' ',
+      );
+
+  if (!normalized) {
+    return 'Analysis complete';
+  }
 
   return normalized.replace(
     /\b\w/g,
-    (character) => character.toUpperCase(),
+    (character) =>
+      character.toUpperCase(),
   );
 }
+
 
 export function VideoAnalysisResults({
   result,
   transcript,
 }: VideoAnalysisResultsProps) {
-  const evidenceScore = clampScore(
-    result.evidence_score,
-  );
+  const {
+    width,
+  } =
+    useWindowDimensions();
 
-  const logicScore = clampScore(
-    result.logic_score,
-  );
+  const isWide =
+    width >= 900;
 
-  const supportScore = Math.round(
-    (evidenceScore + logicScore) / 2,
-  );
+
+  const evidenceScore =
+    clampScore(
+      result.evidence_score,
+    );
+
+
+  const logicScore =
+    clampScore(
+      result.logic_score,
+    );
+
+
+  const supportScore =
+    Math.round(
+      (
+        evidenceScore
+        +
+        logicScore
+      )
+      / 2,
+    );
+
 
   const verdict =
-    result.localized_verdict.trim() ||
-    humanizeLabel(result.verdict);
+    clean(
+      result.localized_verdict,
+    )
+    ||
+    humanizeLabel(
+      result.verdict,
+    );
+
 
   const contentType =
-    result.localized_content_type.trim() ||
-    humanizeLabel(result.content_type);
+    clean(
+      result.localized_content_type,
+    )
+    ||
+    humanizeLabel(
+      result.content_type,
+    );
+
+
+  const claim =
+    clean(
+      result.claim,
+    )
+    ||
+    'No central claim was returned.';
+
 
   const evidenceItems =
-    Array.isArray(result.evidence_used)
-      ? result.evidence_used.filter(
-          (item) => item.trim().length > 0,
-        )
+    Array.isArray(
+      result.evidence_used,
+    )
+      ? result.evidence_used
+          .map(clean)
+          .filter(Boolean)
       : [];
 
+
+  const evidenceLabel =
+    clean(
+      result.ui_labels
+        .evidence_used,
+    )
+    ||
+    'Evidence used';
+
+
+  const logicLabel =
+    clean(
+      result.ui_labels
+        .logic_check,
+    )
+    ||
+    'Logic check';
+
+
+  const hypeLabel =
+    clean(
+      result.ui_labels
+        .hype_check,
+    )
+    ||
+    'Hype check';
+
+
   return (
-    <View style={styles.container}>
-      <View style={styles.scoreCard}>
-        <View style={styles.scoreTop}>
-          <View>
-            <Text style={styles.eyebrow}>
-              OVERALL SUPPORT
-            </Text>
+    <View
+      style={
+        styles.report
+      }
+    >
+      <View
+        style={
+          styles.reportHeader
+        }
+      >
+        <View
+          style={
+            styles.metaRow
+          }
+        >
+          <Text
+            style={
+              styles.metaStrong
+            }
+          >
+            Video analysis
+          </Text>
 
-            <View style={styles.scoreRow}>
-              <Text style={styles.score}>
-                {supportScore}
-              </Text>
-
-              <Text style={styles.scoreMaximum}>
-                /100
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.verdictPill}>
-            <Text style={styles.verdictText}>
-              {verdict}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.scoreTrack}>
-          <View
-            style={[
-              styles.scoreFill,
-              {
-                width: `${supportScore}%`,
-              },
-            ]}
-          />
-        </View>
-
-        <Text style={styles.transcriptMeta}>
-          {transcript.segmentCount} transcript segments
-          {' · '}
-          {transcript.characterCount.toLocaleString()}
-          {' '}
-          characters analyzed
-        </Text>
-      </View>
-
-      <View style={styles.claimCard}>
-        <Text style={styles.sectionLabel}>
-          {result.ui_labels.main_claim ||
-            'MAIN CLAIM'}
-        </Text>
-
-        <Text style={styles.claimText}>
-          {result.claim ||
-            'No central claim was returned.'}
-        </Text>
-
-        <View style={styles.contentTypePill}>
-          <Text style={styles.contentTypeText}>
+          <Text
+            style={
+              styles.metaText
+            }
+          >
             {contentType}
           </Text>
-        </View>
-      </View>
 
-      <View style={styles.metricRow}>
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>
-            EVIDENCE
+          <Text
+            style={
+              styles.metaText
+            }
+          >
+            {transcript
+              .segmentCount
+              .toLocaleString()} transcript segments
           </Text>
 
-          <Text style={styles.metricScore}>
-            {evidenceScore}
-          </Text>
-
-          <Text style={styles.metricMaximum}>
-            /100
-          </Text>
-        </View>
-
-        <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>
-            LOGIC
-          </Text>
-
-          <Text style={styles.metricScore}>
-            {logicScore}
-          </Text>
-
-          <Text style={styles.metricMaximum}>
-            /100
+          <Text
+            style={
+              styles.metaText
+            }
+          >
+            {transcript
+              .characterCount
+              .toLocaleString()} characters
           </Text>
         </View>
-      </View>
 
-      <View style={styles.detailCard}>
-        <Text style={styles.sectionLabel}>
-          {result.ui_labels.evidence_used ||
-            'EVIDENCE USED'}
+
+        <Text
+          style={
+            styles.reportTitle
+          }
+        >
+          {claim}
         </Text>
+      </View>
 
-        {evidenceItems.length > 0 ? (
-          evidenceItems.map((item, index) => (
-            <View
-              key={`${index}-${item}`}
-              style={styles.evidenceItem}
+
+      <View
+        style={[
+          styles.signalGrid,
+
+          isWide
+            &&
+            styles.signalGridWide,
+        ]}
+      >
+        <View
+          style={[
+            styles.signalPanel,
+
+            isWide
+              &&
+              styles.signalPanelFirst,
+          ]}
+        >
+          <Text
+            style={
+              styles.signalLabel
+            }
+          >
+            Overall support
+          </Text>
+
+          <Text
+            style={
+              styles.signalDescription
+            }
+          >
+            Combined evidence and logic assessment.
+          </Text>
+
+
+          <View
+            style={
+              styles.scoreRow
+            }
+          >
+            <Text
+              style={
+                styles.score
+              }
             >
-              <View style={styles.evidenceDot} />
+              {supportScore}
+            </Text>
 
-              <Text style={styles.detailText}>
-                {item}
-              </Text>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.detailText}>
-            No specific supporting evidence was
-            returned.
+            <Text
+              style={
+                styles.scoreMaximum
+              }
+            >
+              /100
+            </Text>
+          </View>
+
+
+          <View
+            style={
+              styles.scoreTrack
+            }
+          >
+            <View
+              style={[
+                styles.scoreFill,
+
+                {
+                  flex:
+                    supportScore,
+                },
+              ]}
+            />
+
+            <View
+              style={{
+                flex:
+                  100
+                  -
+                  supportScore,
+              }}
+            />
+          </View>
+        </View>
+
+
+        <View
+          style={
+            styles.signalPanel
+          }
+        >
+          <Text
+            style={
+              styles.signalLabel
+            }
+          >
+            Verdict
           </Text>
-        )}
+
+          <Text
+            style={
+              styles.signalDescription
+            }
+          >
+            Structured reading of the video's
+            support and reasoning.
+          </Text>
+
+
+          <Text
+            style={
+              styles.verdict
+            }
+          >
+            {verdict}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.detailCard}>
-        <Text style={styles.sectionLabel}>
-          {result.ui_labels.logic_check ||
-            'LOGIC CHECK'}
-        </Text>
 
-        <Text style={styles.detailText}>
-          {result.logic_check ||
-            'No logic assessment was returned.'}
+      <View
+        style={
+          styles.metricRow
+        }
+      >
+        <View
+          style={
+            styles.metric
+          }
+        >
+          <Text
+            style={
+              styles.metricLabel
+            }
+          >
+            Evidence
+          </Text>
+
+          <View
+            style={
+              styles.metricValueRow
+            }
+          >
+            <Text
+              style={
+                styles.metricScore
+              }
+            >
+              {evidenceScore}
+            </Text>
+
+            <Text
+              style={
+                styles.metricMaximum
+              }
+            >
+              /100
+            </Text>
+          </View>
+        </View>
+
+
+        <View
+          style={
+            styles.metric
+          }
+        >
+          <Text
+            style={
+              styles.metricLabel
+            }
+          >
+            Logic
+          </Text>
+
+          <View
+            style={
+              styles.metricValueRow
+            }
+          >
+            <Text
+              style={
+                styles.metricScore
+              }
+            >
+              {logicScore}
+            </Text>
+
+            <Text
+              style={
+                styles.metricMaximum
+              }
+            >
+              /100
+            </Text>
+          </View>
+        </View>
+      </View>
+
+
+      <View
+        style={
+          styles.detailSection
+        }
+      >
+        <View
+          style={
+            styles.sectionHeading
+          }
+        >
+          <Text
+            style={
+              styles.sectionNumber
+            }
+          >
+            01
+          </Text>
+
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            {evidenceLabel}
+          </Text>
+        </View>
+
+
+        <View
+          style={
+            styles.sectionBody
+          }
+        >
+          {(evidenceItems.length > 0
+            ? evidenceItems
+            : ['No specific supporting evidence was returned.']
+          ).map(
+            (
+              item,
+              index,
+            ) => (
+              <View
+                key={
+                  `${index}-${item}`
+                }
+                style={
+                  styles.evidenceRow
+                }
+              >
+                <View
+                  style={
+                    styles.evidenceMark
+                  }
+                />
+
+                <Text
+                  style={
+                    styles.detailText
+                  }
+                >
+                  {item}
+                </Text>
+              </View>
+            ),
+          )}
+        </View>
+      </View>
+
+
+      <View
+        style={
+          styles.detailSection
+        }
+      >
+        <View
+          style={
+            styles.sectionHeading
+          }
+        >
+          <Text
+            style={
+              styles.sectionNumber
+            }
+          >
+            02
+          </Text>
+
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            {logicLabel}
+          </Text>
+        </View>
+
+
+        <Text
+          style={
+            styles.prose
+          }
+        >
+          {clean(
+            result.logic_check,
+          )
+          ||
+          'No logic assessment was returned.'}
         </Text>
       </View>
 
-      <View style={styles.detailCard}>
-        <Text style={styles.sectionLabel}>
-          {result.ui_labels.hype_check ||
-            'HYPE CHECK'}
-        </Text>
 
-        <Text style={styles.detailText}>
-          {result.hype_check ||
-            'No presentation assessment was returned.'}
+      <View
+        style={
+          styles.detailSection
+        }
+      >
+        <View
+          style={
+            styles.sectionHeading
+          }
+        >
+          <Text
+            style={
+              styles.sectionNumber
+            }
+          >
+            03
+          </Text>
+
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
+            {hypeLabel}
+          </Text>
+        </View>
+
+
+        <Text
+          style={
+            styles.prose
+          }
+        >
+          {clean(
+            result.hype_check,
+          )
+          ||
+          'No presentation assessment was returned.'}
         </Text>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    gap: 14,
-  },
-  scoreCard: {
-    padding: 22,
-    borderRadius: 24,
-    backgroundColor: COLORS.accentSoft,
-    borderWidth: 1,
-    borderColor: 'rgba(118, 245, 63, 0.36)',
-  },
-  scoreTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 18,
-  },
-  eyebrow: {
-    color: COLORS.accent,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.4,
-  },
-  scoreRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  score: {
-    color: COLORS.text,
-    fontSize: 52,
-    lineHeight: 56,
-    fontWeight: '900',
-    letterSpacing: -2,
-  },
-  scoreMaximum: {
-    marginBottom: 8,
-    color: COLORS.muted,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  verdictPill: {
-    maxWidth: '48%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceRaised,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  verdictText: {
-    color: COLORS.text,
-    fontSize: 11,
-    lineHeight: 15,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  scoreTrack: {
-    height: 7,
-    marginTop: 18,
-    overflow: 'hidden',
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceRaised,
-  },
-  scoreFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-  },
-  transcriptMeta: {
-    marginTop: 12,
-    color: COLORS.muted,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  claimCard: {
-    padding: 20,
-    borderRadius: 22,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  sectionLabel: {
-    color: COLORS.accent,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1.3,
-  },
-  claimText: {
-    marginTop: 12,
-    color: COLORS.text,
-    fontSize: 19,
-    lineHeight: 28,
-    fontWeight: '700',
-  },
-  contentTypePill: {
-    alignSelf: 'flex-start',
-    marginTop: 16,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: COLORS.surfaceRaised,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  contentTypeText: {
-    color: COLORS.muted,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  metricCard: {
-    flex: 1,
-    padding: 18,
-    borderRadius: 20,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  metricLabel: {
-    color: COLORS.muted,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-  },
-  metricScore: {
-    marginTop: 8,
-    color: COLORS.text,
-    fontSize: 34,
-    lineHeight: 38,
-    fontWeight: '900',
-  },
-  metricMaximum: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  detailCard: {
-    padding: 20,
-    borderRadius: 22,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  detailText: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 14,
-    lineHeight: 22,
-  },
-  evidenceItem: {
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  evidenceDot: {
-    width: 7,
-    height: 7,
-    marginTop: 7,
-    borderRadius: 999,
-    backgroundColor: COLORS.accent,
-  },
-});
 
+const styles =
+  StyleSheet.create({
+    report: {
+      width:
+        '100%',
+    },
+
+    reportHeader: {
+      paddingTop:
+        28,
+
+      paddingBottom:
+        30,
+
+      borderTopWidth:
+        1,
+
+      borderTopColor:
+        COLORS.line,
+
+      borderBottomWidth:
+        1,
+
+      borderBottomColor:
+        COLORS.line,
+    },
+
+    metaRow: {
+      flexDirection:
+        'row',
+
+      flexWrap:
+        'wrap',
+
+      gap:
+        16,
+    },
+
+    metaStrong: {
+      color:
+        COLORS.text,
+
+      fontSize:
+        12,
+
+      fontWeight:
+        '700',
+    },
+
+    metaText: {
+      color:
+        COLORS.muted,
+
+      fontSize:
+        12,
+
+      fontWeight:
+        '500',
+    },
+
+    reportTitle: {
+      maxWidth:
+        940,
+
+      marginTop:
+        20,
+
+      color:
+        COLORS.text,
+
+      fontFamily:
+        DISPLAY_FONT,
+
+      fontSize:
+        38,
+
+      lineHeight:
+        47,
+
+      fontWeight:
+        '400',
+
+      letterSpacing:
+        -0.55,
+    },
+
+    signalGrid: {
+      borderBottomWidth:
+        1,
+
+      borderBottomColor:
+        COLORS.line,
+    },
+
+    signalGridWide: {
+      flexDirection:
+        'row',
+    },
+
+    signalPanel: {
+      flex:
+        1,
+
+      paddingTop:
+        28,
+
+      paddingBottom:
+        30,
+    },
+
+    signalPanelFirst: {
+      paddingRight:
+        36,
+
+      marginRight:
+        36,
+
+      borderRightWidth:
+        1,
+
+      borderRightColor:
+        COLORS.line,
+    },
+
+    signalLabel: {
+      color:
+        COLORS.text,
+
+      fontSize:
+        13,
+
+      fontWeight:
+        '700',
+    },
+
+    signalDescription: {
+      maxWidth:
+        500,
+
+      marginTop:
+        6,
+
+      color:
+        COLORS.muted,
+
+      fontSize:
+        12,
+
+      lineHeight:
+        18,
+    },
+
+    scoreRow: {
+      marginTop:
+        20,
+
+      flexDirection:
+        'row',
+
+      alignItems:
+        'flex-end',
+    },
+
+    score: {
+      color:
+        COLORS.text,
+
+      fontSize:
+        66,
+
+      lineHeight:
+        68,
+
+      fontWeight:
+        '600',
+
+      letterSpacing:
+        -2,
+    },
+
+    scoreMaximum: {
+      marginBottom:
+        8,
+
+      color:
+        COLORS.muted,
+
+      fontSize:
+        14,
+
+      fontWeight:
+        '600',
+    },
+
+    scoreTrack: {
+      height:
+        3,
+
+      marginTop:
+        16,
+
+      flexDirection:
+        'row',
+
+      backgroundColor:
+        COLORS.lineSoft,
+
+      overflow:
+        'hidden',
+    },
+
+    scoreFill: {
+      backgroundColor:
+        COLORS.accent,
+    },
+
+    verdict: {
+      maxWidth:
+        580,
+
+      marginTop:
+        23,
+
+      color:
+        COLORS.text,
+
+      fontFamily:
+        DISPLAY_FONT,
+
+      fontSize:
+        31,
+
+      lineHeight:
+        39,
+
+      fontWeight:
+        '400',
+    },
+
+    metricRow: {
+      flexDirection:
+        'row',
+
+      borderBottomWidth:
+        1,
+
+      borderBottomColor:
+        COLORS.line,
+    },
+
+    metric: {
+      flex:
+        1,
+
+      paddingTop:
+        23,
+
+      paddingBottom:
+        25,
+
+      borderRightWidth:
+        1,
+
+      borderRightColor:
+        COLORS.lineSoft,
+    },
+
+    metricLabel: {
+      color:
+        COLORS.muted,
+
+      fontSize:
+        12,
+
+      fontWeight:
+        '600',
+    },
+
+    metricValueRow: {
+      marginTop:
+        7,
+
+      flexDirection:
+        'row',
+
+      alignItems:
+        'flex-end',
+    },
+
+    metricScore: {
+      color:
+        COLORS.text,
+
+      fontSize:
+        32,
+
+      lineHeight:
+        36,
+
+      fontWeight:
+        '600',
+    },
+
+    metricMaximum: {
+      marginBottom:
+        3,
+
+      color:
+        COLORS.muted,
+
+      fontSize:
+        11,
+
+      fontWeight:
+        '600',
+    },
+
+    detailSection: {
+      paddingTop:
+        29,
+
+      paddingBottom:
+        31,
+
+      borderBottomWidth:
+        1,
+
+      borderBottomColor:
+        COLORS.line,
+    },
+
+    sectionHeading: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'flex-start',
+
+      gap:
+        14,
+    },
+
+    sectionNumber: {
+      width:
+        28,
+
+      color:
+        COLORS.accent,
+
+      fontSize:
+        11,
+
+      fontWeight:
+        '700',
+    },
+
+    sectionTitle: {
+      flex:
+        1,
+
+      color:
+        COLORS.text,
+
+      fontSize:
+        18,
+
+      lineHeight:
+        23,
+
+      fontWeight:
+        '700',
+
+      letterSpacing:
+        -0.25,
+    },
+
+    sectionBody: {
+      marginTop:
+        20,
+
+      marginLeft:
+        42,
+
+      borderTopWidth:
+        1,
+
+      borderTopColor:
+        COLORS.lineSoft,
+    },
+
+    evidenceRow: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'flex-start',
+
+      gap:
+        12,
+
+      paddingTop:
+        14,
+
+      paddingBottom:
+        14,
+
+      borderBottomWidth:
+        1,
+
+      borderBottomColor:
+        COLORS.lineSoft,
+    },
+
+    evidenceMark: {
+      width:
+        7,
+
+      height:
+        2,
+
+      marginTop:
+        9,
+
+      backgroundColor:
+        COLORS.accent,
+    },
+
+    detailText: {
+      flex:
+        1,
+
+      maxWidth:
+        920,
+
+      color:
+        COLORS.mutedStrong,
+
+      fontSize:
+        14,
+
+      lineHeight:
+        23,
+    },
+
+    prose: {
+      maxWidth:
+        920,
+
+      marginTop:
+        20,
+
+      marginLeft:
+        42,
+
+      color:
+        COLORS.mutedStrong,
+
+      fontSize:
+        14,
+
+      lineHeight:
+        23,
+    },
+  });
