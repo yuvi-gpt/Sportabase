@@ -1,57 +1,51 @@
-# Sportabase Expo App — Design Direction
+# Sportabase Expo App - Unified Source Boundary
 
-The Expo application is a first-class Sportabase interface and can run as both a mobile application and a browser application.
+The Expo application now uses one source field and one Analyze action.
 
-## Visual character
+The interface does not ask the user to select Article or Video.
 
-Sportabase should feel like an evidence and sports-intelligence product, not an AI-generated SaaS dashboard.
+Routing is automatic:
 
-The interface should rely on:
+- YouTube URL -> transcript acquisition -> video analysis
+- other supported HTTP(S) URL -> content resolution -> article analysis
 
-- typography;
-- spacing;
-- alignment;
-- information hierarchy;
-- restrained borders;
-- deliberate density;
-- the real Sportabase brand mark.
+The user sees one workflow.
 
-Avoid:
+## Visual framework
 
-- giant rounded cards;
-- decorative green glow;
-- glassmorphism;
-- tiny uppercase labels everywhere;
-- excessive pill UI;
-- card-within-card composition;
-- gradients used merely to make important information feel "AI";
-- decorative visual effects that do not communicate state.
+The previous hero-plus-tool-card layout is retired.
 
-## Wide-screen behavior
+The application now uses:
 
-Expo Web must behave like a real desktop application.
+- editorial lead typography
+- full-width source workspace
+- thin structural rules
+- restrained green signal accents
+- report-oriented information architecture
+- wider desktop composition
+- responsive mobile composition
 
-The page should use available horizontal space rather than rendering a mobile-width application in the center of the browser.
+The design intentionally avoids:
 
-The analysis workflow becomes a two-column editorial layout on wide screens while remaining a single-column interface on phones.
+- floating tool cards
+- mode tabs
+- decorative gradients
+- green glow
+- nested rounded containers
+- component-library dashboard framing
 
-## Product semantics
+## Functional invariants
 
-Merit is informational Merit, not a truth probability.
+This redesign preserves:
 
-Evidence, corroboration and independence remain distinct signals.
+- article resolution
+- article analysis
+- automatic YouTube transcript acquisition
+- automatic YouTube title acquisition
+- video analysis
+- share/deep-link input
+- API health state
+- provider behavior
+- backend API contracts
 
-Article and YouTube analysis keep separate pipelines while sharing one visual language.
-
-## Functional boundary
-
-This visual pass must not change:
-
-- YouTube transcript acquisition;
-- article content resolution;
-- Gemini/provider behavior;
-- backend API contracts;
-- sharing/deep-link behavior;
-- analysis semantics.
-
-Result cards are preserved during the first shell checkpoint and will be redesigned separately.
+Article and video result components are redesigned in the next checkpoint.

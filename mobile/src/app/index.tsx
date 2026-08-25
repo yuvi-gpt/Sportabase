@@ -37,6 +37,7 @@ import {
 
 import {
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -51,84 +52,54 @@ import {
 } from 'react-native-safe-area-context';
 
 
-type AnalysisMode =
-  'article'
-  | 'video';
-
-
 const COLORS = {
-  background:
-    '#0a0c0b',
-
-  surface:
-    '#111411',
-
-  surfaceRaised:
-    '#171a17',
-
-  line:
-    '#303631',
-
-  lineSoft:
-    '#222722',
-
-  text:
-    '#f4f5f1',
-
-  muted:
-    '#a6ada7',
-
-  mutedStrong:
-    '#c5cac6',
-
-  accent:
-    '#b5f36b',
-
-  accentInk:
-    '#13200b',
-
-  warning:
-    '#e5bd68',
-
-  error:
-    '#ef8989',
+  background: '#090b0a',
+  surface: '#0f120f',
+  line: '#2b312c',
+  lineSoft: '#1d221e',
+  text: '#f2f3ef',
+  muted: '#a6ada7',
+  mutedStrong: '#c9ceca',
+  accent: '#b5f36b',
+  accentInk: '#14200c',
+  warning: '#e2b85f',
+  error: '#e77878',
 };
 
 
-const FEATURES = [
-  {
-    number:
-      '01',
+const DISPLAY_FONT =
+  Platform.select({
+    web: 'Georgia',
+    ios: 'Georgia',
+    default: 'serif',
+  }) ?? 'serif';
 
-    title:
-      'Summary',
 
-    description:
-      'The reporting stripped down to the information that matters.',
-  },
+function clean(
+  value: unknown,
+) {
+  return String(
+    value ?? '',
+  ).trim();
+}
 
-  {
-    number:
-      '02',
 
-    title:
-      'Merit',
+function validHttpUrl(
+  value: string,
+) {
+  return /^https?:\/\/\S+$/i.test(
+    value,
+  );
+}
 
-    description:
-      'A structured score for the informational value of the story.',
-  },
 
-  {
-    number:
-      '03',
-
-    title:
-      'Evidence',
-
-    description:
-      'Corroboration and source relationships shown separately from Merit.',
-  },
-];
+function isYouTubeUrl(
+  value: string,
+) {
+  return /(?:youtube(?:-nocookie)?\.com|youtu\.be)/i.test(
+    value,
+  );
+}
 
 
 export default function HomeScreen() {
@@ -137,7 +108,7 @@ export default function HomeScreen() {
   } = useWindowDimensions();
 
   const isWide =
-    width >= 980;
+    width >= 920;
 
   const isCompact =
     width < 620;
@@ -145,23 +116,9 @@ export default function HomeScreen() {
 
   const params =
     useLocalSearchParams<{
-      shared?:
-        string
-        | string[];
-
-      mode?:
-        string
-        | string[];
+      shared?: string | string[];
+      mode?: string | string[];
     }>();
-
-
-  const [
-    mode,
-    setMode,
-  ] =
-    useState<AnalysisMode>(
-      'article'
-    );
 
 
   const [
@@ -190,8 +147,7 @@ export default function HomeScreen() {
     setArticleResult,
   ] =
     useState<
-      ArticleAnalyzeResponse
-      | null
+      ArticleAnalyzeResponse | null
     >(null);
 
 
@@ -200,8 +156,7 @@ export default function HomeScreen() {
     setVideoResult,
   ] =
     useState<
-      VideoAnalyzeResponse
-      | null
+      VideoAnalyzeResponse | null
     >(null);
 
 
@@ -213,7 +168,7 @@ export default function HomeScreen() {
       segmentCount: number;
       characterCount: number;
     } | null>(
-      null
+      null,
     );
 
 
@@ -226,7 +181,7 @@ export default function HomeScreen() {
       | 'online'
       | 'offline'
     >(
-      'checking'
+      'checking',
     );
 
 
@@ -237,7 +192,7 @@ export default function HomeScreen() {
       getApiHealth()
         .then(
           (
-            health
+            health,
           ) => {
             if (!active) {
               return;
@@ -246,25 +201,25 @@ export default function HomeScreen() {
             setApiState(
               health.ok
                 ? 'online'
-                : 'offline'
+                : 'offline',
             );
-          }
+          },
         )
         .catch(
           () => {
             if (active) {
               setApiState(
-                'offline'
+                'offline',
               );
             }
-          }
+          },
         );
 
       return () => {
         active = false;
       };
     },
-    []
+    [],
   );
 
 
@@ -272,352 +227,268 @@ export default function HomeScreen() {
     () => {
       const sharedValue =
         Array.isArray(
-          params.shared
+          params.shared,
         )
           ? params.shared[0]
           : params.shared;
-
-      const sharedMode =
-        Array.isArray(
-          params.mode
-        )
-          ? params.mode[0]
-          : params.mode;
 
       if (!sharedValue) {
         return;
       }
 
       setLink(
-        sharedValue
+        sharedValue,
       );
 
       setMessage(
-        'Shared content is ready for review.'
+        'Shared source ready for analysis.',
       );
 
-      if (
-        sharedMode ===
-        'video'
-      ) {
-        setMode(
-          'video'
-        );
-      } else {
-        setMode(
-          'article'
-        );
-      }
-
-      Sharing
+      void Sharing
         .clearSharedPayloads();
     },
     [
-      params.mode,
       params.shared,
-    ]
+    ],
   );
 
 
-  function selectMode(
-    nextMode:
-      AnalysisMode
-  ) {
-    setMode(
-      nextMode
-    );
+  async function analyzeSource() {
+    const value =
+      clean(link);
 
-    setMessage('');
+    if (
+      !value
+      ||
+      !validHttpUrl(value)
+    ) {
+      setMessage(
+        'Enter a complete http:// or https:// source URL.',
+      );
+
+      return;
+    }
+
 
     setArticleResult(
-      null
+      null,
     );
 
     setVideoResult(
-      null
+      null,
     );
 
     setVideoTranscriptMeta(
-      null
-    );
-  }
-
-
-  async function validateLink() {
-    const value =
-      link.trim();
-
-    if (
-      !/^https?:\/\/\S+$/i
-        .test(value)
-    ) {
-      setMessage(
-        'Enter a complete link beginning with http:// or https://.'
-      );
-
-      return;
-    }
-
-
-    if (
-      mode ===
-        'video'
-      &&
-      !/youtube\.com|youtu\.be/i
-        .test(value)
-    ) {
-      setMessage(
-        'Video analysis currently supports YouTube links.'
-      );
-
-      return;
-    }
-
-
-    if (
-      mode ===
-      'article'
-    ) {
-      setArticleResult(
-        null
-      );
-
-      setIsResolving(
-        true
-      );
-
-      setMessage(
-        'Reading the article…'
-      );
-
-      try {
-        const resolved =
-          await resolveContent(
-            value
-          );
-
-        if (
-          resolved.source !==
-            'article'
-          ||
-          resolved.mode !==
-            'article'
-        ) {
-          throw new Error(
-            'The shared link was not resolved as an article.'
-          );
-        }
-
-        const articleTitle =
-          resolved.title.trim()
-          ||
-          'Untitled article';
-
-        setMessage(
-          `Article ready · `
-          +
-          `${resolved.content_characters.toLocaleString()} characters extracted · analyzing…`
-        );
-
-        const analysisUrl =
-          resolved.normalized_url
-          ||
-          value;
-
-        const fixtureResult =
-          getArticleGradientFixture({
-            url:
-              analysisUrl,
-
-            title:
-              articleTitle,
-
-            text:
-              resolved.content,
-          });
-
-        if (
-          fixtureResult
-        ) {
-          setArticleResult(
-            fixtureResult
-          );
-
-          setMessage(
-            `Gradient test loaded locally · ${fixtureResult.merit_score}/100 · Gemini bypassed.`
-          );
-
-          return;
-        }
-
-        const result =
-          await analyzeArticle({
-            title:
-              articleTitle,
-
-            url:
-              analysisUrl,
-
-            text:
-              resolved.content,
-
-            max_bullets:
-              3,
-          });
-
-        setArticleResult(
-          result
-        );
-
-        setMessage(
-          'Article analysis complete.'
-        );
-      }
-      catch (
-        error
-      ) {
-        setArticleResult(
-          null
-        );
-
-        const detail =
-          error instanceof Error
-            ? error.message
-            : 'The article could not be analyzed.';
-
-        setMessage(
-          `Article analysis unavailable: ${detail}`
-        );
-      }
-      finally {
-        setIsResolving(
-          false
-        );
-      }
-
-      return;
-    }
-
-
-    setVideoResult(
-      null
-    );
-
-    setVideoTranscriptMeta(
-      null
+      null,
     );
 
     setIsResolving(
-      true
-    );
-
-    setMessage(
-      'Locating the YouTube transcript…'
+      true,
     );
 
 
     try {
-      const [
-        transcript,
-        videoTitle,
-      ] =
-        await Promise.all([
-          fetchYouTubeTranscript(
-            value
-          ),
-
-          fetchYouTubeVideoTitle(
-            value
-          ).catch(
-            () =>
-              'Shared YouTube video'
-          ),
-        ]);
+      if (
+        isYouTubeUrl(
+          value,
+        )
+      ) {
+        setMessage(
+          'Preparing the source transcript...',
+        );
 
 
-      setMessage(
-        'Transcript ready · analyzing the video…'
-      );
+        const [
+          transcript,
+          videoTitle,
+        ] =
+          await Promise.all([
+            fetchYouTubeTranscript(
+              value,
+            ),
+
+            fetchYouTubeVideoTitle(
+              value,
+            ).catch(
+              () =>
+                'YouTube source',
+            ),
+          ]);
 
 
-      const result =
-        await analyzeVideo({
-          title:
-            videoTitle,
+        setMessage(
+          'Source resolved - running video intelligence...',
+        );
 
-          transcript:
-            transcript.transcript,
 
-          url:
-            value,
+        const result =
+          await analyzeVideo({
+            title:
+              videoTitle,
 
-          transcript_metadata: {
-            segment_count:
-              transcript.segmentCount,
+            transcript:
+              transcript.transcript,
 
-            character_count:
-              transcript.characterCount,
+            url:
+              value,
 
-            language:
-              transcript.language
-              ||
-              undefined,
+            transcript_metadata: {
+              segment_count:
+                transcript.segmentCount,
 
-            extraction_method:
-              'youtube-transcript-mobile',
-          },
+              character_count:
+                transcript.characterCount,
+
+              language:
+                transcript.language
+                || undefined,
+
+              extraction_method:
+                'youtube-transcript-mobile',
+            },
+          });
+
+
+        setVideoResult(
+          result,
+        );
+
+
+        setVideoTranscriptMeta({
+          segmentCount:
+            transcript.segmentCount,
+
+          characterCount:
+            transcript.characterCount,
         });
 
 
-      setVideoResult(
-        result
-      );
+        setMessage(
+          'Video analysis complete.',
+        );
 
-
-      setVideoTranscriptMeta({
-        segmentCount:
-          transcript.segmentCount,
-
-        characterCount:
-          transcript.characterCount,
-      });
+        return;
+      }
 
 
       setMessage(
-        'Video analysis complete.'
+        'Resolving the source...',
+      );
+
+
+      const resolved =
+        await resolveContent(
+          value,
+        );
+
+
+      if (
+        resolved.source !==
+          'article'
+        ||
+        resolved.mode !==
+          'article'
+      ) {
+        throw new Error(
+          'Sportabase could not resolve this source as a supported article.',
+        );
+      }
+
+
+      const articleTitle =
+        clean(
+          resolved.title,
+        )
+        ||
+        'Untitled article';
+
+
+      setMessage(
+        `Source resolved - ${resolved.content_characters.toLocaleString()} readable characters - analyzing...`,
+      );
+
+
+      const analysisUrl =
+        clean(
+          resolved.normalized_url,
+        )
+        ||
+        value;
+
+
+      const fixtureResult =
+        getArticleGradientFixture({
+          url:
+            analysisUrl,
+
+          title:
+            articleTitle,
+
+          text:
+            resolved.content,
+        });
+
+
+      if (
+        fixtureResult
+      ) {
+        setArticleResult(
+          fixtureResult,
+        );
+
+        setMessage(
+          `Local evaluation fixture - ${fixtureResult.merit_score}/100 - provider bypassed.`,
+        );
+
+        return;
+      }
+
+
+      const result =
+        await analyzeArticle({
+          title:
+            articleTitle,
+
+          url:
+            analysisUrl,
+
+          text:
+            resolved.content,
+
+          max_bullets:
+            3,
+        });
+
+
+      setArticleResult(
+        result,
+      );
+
+
+      setMessage(
+        'Article analysis complete.',
       );
     }
-    catch (
-      error
-    ) {
-      setVideoResult(
-        null
-      );
-
-      setVideoTranscriptMeta(
-        null
-      );
-
+    catch (error) {
       const detail =
         error instanceof Error
           ? error.message
-          : 'The video could not be analyzed.';
+          : 'The source could not be analyzed.';
 
       setMessage(
-        `Video analysis unavailable: ${detail}`
+        `Analysis unavailable: ${detail}`,
       );
     }
     finally {
       setIsResolving(
-        false
+        false,
       );
     }
   }
 
 
   const hasLink =
-    link.trim().length >
-    0;
+    clean(link).length > 0;
 
 
   const hasResults =
@@ -628,15 +499,14 @@ export default function HomeScreen() {
         videoResult
         &&
         videoTranscriptMeta
-      )
+      ),
     );
 
 
   const messageIsError =
-    /unavailable|enter a complete|currently supports|not resolved/i
-      .test(
-        message
-      );
+    /unavailable|enter a complete|could not|not supported|failed/i.test(
+      message,
+    );
 
 
   const apiLabel =
@@ -671,12 +541,12 @@ export default function HomeScreen() {
         >
           <View
             style={
-              styles.content
+              styles.page
             }
           >
             <View
               style={
-                styles.header
+                styles.masthead
               }
             >
               <View
@@ -707,7 +577,7 @@ export default function HomeScreen() {
 
                   <Text
                     style={
-                      styles.brandLabel
+                      styles.brandDescriptor
                     }
                   >
                     Sports intelligence
@@ -744,6 +614,294 @@ export default function HomeScreen() {
                     }
                   >
                     {apiLabel}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
+
+            {!hasResults ? (
+              <View
+                style={
+                  styles.lead
+                }
+              >
+                <Text
+                  style={[
+                    styles.headline,
+
+                    isCompact
+                      &&
+                      styles.headlineCompact,
+                  ]}
+                >
+                  Know what the story
+                  {'\n'}
+                  actually supports.
+                </Text>
+
+
+                <View
+                  style={[
+                    styles.leadLower,
+
+                    isWide
+                      &&
+                      styles.leadLowerWide,
+                  ]}
+                >
+                  <Text
+                    style={
+                      styles.leadCopy
+                    }
+                  >
+                    Sportabase reads sports
+                    reporting for informational
+                    Merit, source support and
+                    evidence before the reaction
+                    becomes the story.
+                  </Text>
+
+
+                  <View
+                    style={
+                      styles.leadPrinciple
+                    }
+                  >
+                    <Text
+                      style={
+                        styles.principleTitle
+                      }
+                    >
+                      Merit and evidence are
+                      different signals.
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.principleCopy
+                      }
+                    >
+                      A useful scoop can still be
+                      unverified. Lack of
+                      corroboration alone is not
+                      treated as falsehood.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
+
+
+            <View
+              style={
+                styles.sourceWorkspace
+              }
+            >
+              <View
+                style={[
+                  styles.workspaceHeading,
+
+                  isWide
+                    &&
+                    styles.workspaceHeadingWide,
+                ]}
+              >
+                <View>
+                  <Text
+                    style={
+                      styles.workspaceTitle
+                    }
+                  >
+                    {hasResults
+                      ? 'Analyze another source'
+                      : 'Analyze a source'}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.workspaceCopy
+                    }
+                  >
+                    Paste a sports article or
+                    YouTube link. Sportabase
+                    routes it automatically.
+                  </Text>
+                </View>
+
+
+                {!isCompact ? (
+                  <Text
+                    style={
+                      styles.workspaceMeta
+                    }
+                  >
+                    Automatic source detection
+                  </Text>
+                ) : null}
+              </View>
+
+
+              <View
+                style={[
+                  styles.sourceBar,
+
+                  isCompact
+                    &&
+                    styles.sourceBarCompact,
+                ]}
+              >
+                <TextInput
+                  value={
+                    link
+                  }
+                  onChangeText={(
+                    value,
+                  ) => {
+                    setLink(
+                      value,
+                    );
+
+                    setMessage('');
+                  }}
+                  placeholder="Paste article or YouTube URL"
+                  placeholderTextColor="#727a73"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={
+                    false
+                  }
+                  style={
+                    styles.sourceInput
+                  }
+                  onSubmitEditing={
+                    () => {
+                      if (
+                        hasLink
+                        &&
+                        !isResolving
+                      ) {
+                        void analyzeSource();
+                      }
+                    }
+                  }
+                />
+
+
+                {hasLink ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear source URL"
+                    onPress={
+                      () => {
+                        setLink('');
+                        setMessage('');
+                      }
+                    }
+                    style={({
+                      pressed,
+                    }) => [
+                      styles.clearButton,
+
+                      pressed
+                        &&
+                        styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        styles.clearText
+                      }
+                    >
+                      Clear
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={
+                    !hasLink
+                    ||
+                    isResolving
+                  }
+                  onPress={
+                    () => {
+                      void analyzeSource();
+                    }
+                  }
+                  style={({
+                    pressed,
+                  }) => [
+                    styles.analyzeButton,
+
+                    (
+                      !hasLink
+                      ||
+                      isResolving
+                    )
+                      &&
+                      styles.analyzeButtonDisabled,
+
+                    (
+                      pressed
+                      &&
+                      hasLink
+                      &&
+                      !isResolving
+                    )
+                      &&
+                      styles.analyzeButtonPressed,
+                  ]}
+                >
+                  <Text
+                    style={
+                      styles.analyzeButtonText
+                    }
+                  >
+                    {isResolving
+                      ? 'Analyzing...'
+                      : 'Analyze source'}
+                  </Text>
+
+                  <Text
+                    style={
+                      styles.analyzeArrow
+                    }
+                  >
+                    →
+                  </Text>
+                </Pressable>
+              </View>
+
+
+              <View
+                style={
+                  styles.workspaceFooter
+                }
+              >
+                <Text
+                  style={[
+                    styles.message,
+
+                    messageIsError
+                      ? styles.errorMessage
+                      : styles.statusMessage,
+                  ]}
+                >
+                  {message
+                    ||
+                    'Analysis begins only after you submit the source.'}
+                </Text>
+
+                {!isCompact ? (
+                  <Text
+                    style={
+                      styles.supportedText
+                    }
+                  >
+                    Article / YouTube
                   </Text>
                 ) : null}
               </View>
@@ -789,448 +947,66 @@ export default function HomeScreen() {
             }
 
 
-            <View
-              style={[
-                styles.heroLayout,
-
-                isWide
-                  &&
-                  styles.heroLayoutWide,
-
-                hasResults
-                  &&
-                  styles.heroLayoutWithResults,
-              ]}
-            >
-              {!hasResults ? (
-                <View
-                  style={[
-                    styles.heroCopy,
-
-                    isWide
-                      &&
-                      styles.heroCopyWide,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.title,
-
-                      isCompact
-                        &&
-                        styles.titleCompact,
-                    ]}
-                  >
-                    Sports reporting,
-                    {'\n'}
-                    scored against
-                    {'\n'}
-                    the evidence.
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.subtitle
-                    }
-                  >
-                    Paste an article or
-                    YouTube video. Sportabase
-                    resolves the source,
-                    analyzes the reporting and
-                    separates informational
-                    Merit from evidence status.
-                  </Text>
-
-                  <View
-                    style={
-                      styles.capabilityList
-                    }
-                  >
-                    {[
-                      'Merit scoring',
-                      'Evidence checks',
-                      'Source analysis',
-                    ].map(
-                      (
-                        capability
-                      ) => (
-                        <View
-                          key={
-                            capability
-                          }
-                          style={
-                            styles.capability
-                          }
-                        >
-                          <View
-                            style={
-                              styles.capabilityMark
-                            }
-                          />
-
-                          <Text
-                            style={
-                              styles.capabilityText
-                            }
-                          >
-                            {capability}
-                          </Text>
-                        </View>
-                      )
-                    )}
-                  </View>
-                </View>
-              ) : null}
-
-
-              <View
-                style={[
-                  styles.analysisPanel,
-
-                  isWide
-                    &&
-                    !hasResults
-                    &&
-                    styles.analysisPanelWide,
-
-                  hasResults
-                    &&
-                    styles.analysisPanelAfterResults,
-                ]}
-              >
-                <View
-                  style={
-                    styles.panelIntro
-                  }
-                >
-                  <Text
-                    style={
-                      styles.panelTitle
-                    }
-                  >
-                    {hasResults
-                      ? 'Analyze another source'
-                      : 'Analyze a source'}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.panelDescription
-                    }
-                  >
-                    Articles and YouTube
-                    videos use their own
-                    analysis pipelines.
-                  </Text>
-                </View>
-
-
-                <View
-                  style={
-                    styles.modeSelector
-                  }
-                >
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={
-                      () =>
-                        selectMode(
-                          'article'
-                        )
-                    }
-                    style={({
-                      pressed,
-                    }) => [
-                      styles.modeButton,
-
-                      mode ===
-                        'article'
-                        &&
-                        styles.modeButtonActive,
-
-                      pressed
-                        &&
-                        styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.modeButtonText,
-
-                        mode ===
-                          'article'
-                          &&
-                          styles.modeButtonTextActive,
-                      ]}
-                    >
-                      Article
-                    </Text>
-                  </Pressable>
-
-
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={
-                      () =>
-                        selectMode(
-                          'video'
-                        )
-                    }
-                    style={({
-                      pressed,
-                    }) => [
-                      styles.modeButton,
-
-                      mode ===
-                        'video'
-                        &&
-                        styles.modeButtonActive,
-
-                      pressed
-                        &&
-                        styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.modeButtonText,
-
-                        mode ===
-                          'video'
-                          &&
-                          styles.modeButtonTextActive,
-                      ]}
-                    >
-                      YouTube
-                    </Text>
-                  </Pressable>
-                </View>
-
-
-                <Text
-                  style={
-                    styles.inputLabel
-                  }
-                >
-                  Source URL
-                </Text>
-
-
-                <View
-                  style={
-                    styles.inputShell
-                  }
-                >
-                  <TextInput
-                    value={
-                      link
-                    }
-                    onChangeText={(
-                      value
-                    ) => {
-                      setLink(
-                        value
-                      );
-
-                      setMessage('');
-                    }}
-                    placeholder={
-                      mode ===
-                        'article'
-                        ? 'https://bbc.com/sport/...'
-                        : 'https://youtube.com/watch?v=...'
-                    }
-                    placeholderTextColor="#737b74"
-                    keyboardType="url"
-                    autoCapitalize="none"
-                    autoCorrect={
-                      false
-                    }
-                    style={
-                      styles.input
-                    }
-                  />
-
-                  {hasLink ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={
-                        () => {
-                          setLink('');
-
-                          setMessage('');
-                        }
-                      }
-                      style={({
-                        pressed,
-                      }) => [
-                        styles.clearButton,
-
-                        pressed
-                          &&
-                          styles.pressed,
-                      ]}
-                    >
-                      <Text
-                        style={
-                          styles.clearText
-                        }
-                      >
-                        Clear
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-
-
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={
-                    !hasLink
-                    ||
-                    isResolving
-                  }
-                  onPress={
-                    validateLink
-                  }
-                  style={({
-                    pressed,
-                  }) => [
-                    styles.analyzeButton,
-
-                    (
-                      !hasLink
-                      ||
-                      isResolving
-                    )
-                      &&
-                      styles.analyzeButtonDisabled,
-
-                    pressed
-                      &&
-                      hasLink
-                      &&
-                      !isResolving
-                      &&
-                      styles.analyzeButtonPressed,
-                  ]}
-                >
-                  <Text
-                    style={
-                      styles.analyzeButtonText
-                    }
-                  >
-                    {
-                      isResolving
-                        ? mode ===
-                            'article'
-                          ? 'Reading article…'
-                          : 'Analyzing video…'
-                        : mode ===
-                            'article'
-                          ? 'Analyze article'
-                          : 'Analyze video'
-                    }
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.arrow
-                    }
-                  >
-                    →
-                  </Text>
-                </Pressable>
-
-
-                {message ? (
-                  <Text
-                    style={[
-                      styles.message,
-
-                      messageIsError
-                        ? styles.errorMessage
-                        : styles.statusMessage,
-                    ]}
-                  >
-                    {message}
-                  </Text>
-                ) : null}
-
-
-                <Text
-                  style={
-                    styles.disclosure
-                  }
-                >
-                  Analysis begins only
-                  after you press the
-                  button.
-                </Text>
-              </View>
-            </View>
-
-
             {!hasResults ? (
               <>
                 <View
-                  style={
-                    styles.shareSection
-                  }
+                  style={[
+                    styles.methodSection,
+
+                    isWide
+                      &&
+                      styles.methodSectionWide,
+                  ]}
                 >
                   <View
                     style={
-                      styles.sectionHeading
+                      styles.methodIntro
                     }
                   >
                     <Text
                       style={
-                        styles.sectionTitle
+                        styles.sectionHeading
                       }
                     >
-                      Share from anywhere
+                      Three questions,
+                      one report.
                     </Text>
 
                     <Text
                       style={
-                        styles.sectionDescription
+                        styles.sectionCopy
                       }
                     >
-                      On supported mobile
-                      platforms, send a sports
-                      story directly to
-                      Sportabase from the
-                      system Share menu.
+                      Sportabase keeps the story,
+                      its informational value and
+                      its evidence state visible
+                      at the same time.
                     </Text>
                   </View>
 
 
                   <View
-                    style={[
-                      styles.shareSteps,
-
-                      isCompact
-                        &&
-                        styles.shareStepsCompact,
-                    ]}
+                    style={
+                      styles.methodRows
+                    }
                   >
                     {[
                       [
                         '01',
-                        'Open',
-                        'Open the story or video.',
+                        'Reporting',
+                        'What is this source actually saying?',
                       ],
 
                       [
                         '02',
-                        'Share',
-                        'Use the platform Share menu.',
+                        'Merit',
+                        'How much informational value does the reporting earn?',
                       ],
 
                       [
                         '03',
-                        'Analyze',
-                        'Choose Sportabase and review.',
+                        'Evidence',
+                        'What does independent or authoritative evidence support?',
                       ],
                     ].map(
                       (
@@ -1238,19 +1014,19 @@ export default function HomeScreen() {
                           number,
                           title,
                           description,
-                        ]
+                        ],
                       ) => (
                         <View
                           key={
                             number
                           }
                           style={
-                            styles.shareStep
+                            styles.methodRow
                           }
                         >
                           <Text
                             style={
-                              styles.shareStepNumber
+                              styles.methodNumber
                             }
                           >
                             {number}
@@ -1258,7 +1034,7 @@ export default function HomeScreen() {
 
                           <Text
                             style={
-                              styles.shareStepTitle
+                              styles.methodTitle
                             }
                           >
                             {title}
@@ -1266,74 +1042,56 @@ export default function HomeScreen() {
 
                           <Text
                             style={
-                              styles.shareStepDescription
+                              styles.methodDescription
                             }
                           >
                             {description}
                           </Text>
                         </View>
-                      )
+                      ),
                     )}
                   </View>
-
-
-                  <Text
-                    style={
-                      styles.sourceLine
-                    }
-                  >
-                    Articles · YouTube · Reddit · X · Instagram · TikTok · Facebook
-                  </Text>
                 </View>
 
 
                 <View
                   style={[
-                    styles.featureGrid,
+                    styles.shareStrip,
 
-                    isCompact
+                    isWide
                       &&
-                      styles.featureGridCompact,
+                      styles.shareStripWide,
                   ]}
                 >
-                  {FEATURES.map(
-                    (
-                      feature
-                    ) => (
-                      <View
-                        key={
-                          feature.number
-                        }
-                        style={
-                          styles.feature
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.featureNumber
-                          }
-                        >
-                          {feature.number}
-                        </Text>
+                  <View>
+                    <Text
+                      style={
+                        styles.shareTitle
+                      }
+                    >
+                      Share directly to Sportabase
+                    </Text>
 
-                        <Text
-                          style={
-                            styles.featureTitle
-                          }
-                        >
-                          {feature.title}
-                        </Text>
+                    <Text
+                      style={
+                        styles.shareCopy
+                      }
+                    >
+                      On supported mobile
+                      platforms, send the source
+                      from the system Share menu
+                      instead of copying its URL.
+                    </Text>
+                  </View>
 
-                        <Text
-                          style={
-                            styles.featureDescription
-                          }
-                        >
-                          {feature.description}
-                        </Text>
-                      </View>
-                    )
-                  )}
+
+                  <Text
+                    style={
+                      styles.shareFlow
+                    }
+                  >
+                    Open source  →  Share  →  Sportabase
+                  </Text>
                 </View>
               </>
             ) : null}
@@ -1354,10 +1112,10 @@ export default function HomeScreen() {
 
               <Text
                 style={
-                  styles.footerText
+                  styles.footerCopy
                 }
               >
-                Article and video intelligence
+                Evidence-first sports intelligence
               </Text>
             </View>
           </View>
@@ -1371,983 +1129,450 @@ export default function HomeScreen() {
 const styles =
   StyleSheet.create({
     screen: {
-      flex:
-        1,
-
+      flex: 1,
       backgroundColor:
         COLORS.background,
     },
 
-
     safeArea: {
-      flex:
-        1,
+      flex: 1,
     },
-
 
     scrollContent: {
-      flexGrow:
-        1,
-
-      alignItems:
-        'center',
-
-      paddingHorizontal:
-        22,
-
-      paddingBottom:
-        48,
+      flexGrow: 1,
+      alignItems: 'center',
+      paddingHorizontal: 22,
+      paddingBottom: 44,
     },
 
-
-    content: {
-      width:
-        '100%',
-
-      maxWidth:
-        1180,
+    page: {
+      width: '100%',
+      maxWidth: 1240,
     },
 
-
-    header: {
-      minHeight:
-        78,
-
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      justifyContent:
-        'space-between',
-
-      gap:
-        24,
-
-      borderBottomWidth:
-        1,
-
+    masthead: {
+      minHeight: 76,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 24,
+      borderBottomWidth: 1,
       borderBottomColor:
         COLORS.lineSoft,
     },
 
-
     brand: {
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      gap:
-        12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 11,
     },
-
 
     logo: {
-      width:
-        46,
-
-      height:
-        46,
+      width: 46,
+      height: 46,
     },
-
 
     brandName: {
-      color:
-        COLORS.text,
-
-      fontSize:
-        20,
-
-      lineHeight:
-        22,
-
-      fontWeight:
-        '700',
-
-      letterSpacing:
-        -0.35,
+      color: COLORS.text,
+      fontSize: 20,
+      lineHeight: 22,
+      fontWeight: '700',
+      letterSpacing: -0.35,
     },
 
-
-    brandLabel: {
-      marginTop:
-        4,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        11,
-
-      lineHeight:
-        13,
-
-      fontWeight:
-        '600',
+    brandDescriptor: {
+      marginTop: 3,
+      color: COLORS.muted,
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '500',
     },
-
 
     apiState: {
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      gap:
-        9,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
 
-
     statusDot: {
-      width:
-        7,
-
-      height:
-        7,
-
-      borderRadius:
-        999,
-
+      width: 7,
+      height: 7,
+      borderRadius: 999,
       backgroundColor:
         COLORS.accent,
     },
-
 
     statusDotOffline: {
       backgroundColor:
         COLORS.error,
     },
 
-
     statusDotChecking: {
       backgroundColor:
         COLORS.warning,
     },
 
-
     apiText: {
       color:
         COLORS.mutedStrong,
-
-      fontSize:
-        12,
-
-      fontWeight:
-        '600',
+      fontSize: 12,
+      fontWeight: '600',
     },
 
-
-    resultsSection: {
-      marginTop:
-        36,
-
-      marginBottom:
-        24,
+    lead: {
+      paddingTop: 82,
+      paddingBottom: 54,
     },
 
-
-    heroLayout: {
-      paddingTop:
-        56,
-
-      paddingBottom:
-        64,
-
-      borderBottomWidth:
-        1,
-
-      borderBottomColor:
-        COLORS.lineSoft,
-
-      gap:
-        42,
+    headline: {
+      maxWidth: 880,
+      color: COLORS.text,
+      fontFamily:
+        DISPLAY_FONT,
+      fontSize: 70,
+      lineHeight: 73,
+      fontWeight: '400',
+      letterSpacing: -1.6,
     },
 
+    headlineCompact: {
+      fontSize: 44,
+      lineHeight: 47,
+      letterSpacing: -0.8,
+    },
 
-    heroLayoutWide: {
-      minHeight:
-        560,
+    leadLower: {
+      marginTop: 38,
+      gap: 28,
+    },
 
-      paddingTop:
-        78,
-
-      paddingBottom:
-        76,
-
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
+    leadLowerWide: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
       justifyContent:
         'space-between',
-
-      gap:
-        74,
     },
 
-
-    heroLayoutWithResults: {
-      minHeight:
-        0,
-
-      paddingTop:
-        18,
-
-      paddingBottom:
-        42,
-    },
-
-
-    heroCopy: {
-      flex:
-        1,
-
-      maxWidth:
-        680,
-    },
-
-
-    heroCopyWide: {
-      flexBasis:
-        0,
-    },
-
-
-    title: {
-      color:
-        COLORS.text,
-
-      fontSize:
-        58,
-
-      lineHeight:
-        61,
-
-      fontWeight:
-        '500',
-
-      letterSpacing:
-        -2.1,
-    },
-
-
-    titleCompact: {
-      fontSize:
-        43,
-
-      lineHeight:
-        46,
-
-      letterSpacing:
-        -1.45,
-    },
-
-
-    subtitle: {
-      marginTop:
-        26,
-
-      maxWidth:
-        610,
-
+    leadCopy: {
+      maxWidth: 650,
       color:
         COLORS.mutedStrong,
-
-      fontSize:
-        17,
-
-      lineHeight:
-        27,
-
-      fontWeight:
-        '400',
+      fontSize: 17,
+      lineHeight: 28,
     },
 
-
-    capabilityList: {
-      marginTop:
-        28,
-
-      flexDirection:
-        'row',
-
-      flexWrap:
-        'wrap',
-
-      gap:
-        20,
+    leadPrinciple: {
+      maxWidth: 360,
     },
 
-
-    capability: {
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      gap:
-        9,
+    principleTitle: {
+      color: COLORS.text,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '700',
     },
 
-
-    capabilityMark: {
-      width:
-        7,
-
-      height:
-        2,
-
-      backgroundColor:
-        COLORS.accent,
+    principleCopy: {
+      marginTop: 8,
+      color: COLORS.muted,
+      fontSize: 13,
+      lineHeight: 21,
     },
 
-
-    capabilityText: {
-      color:
-        COLORS.muted,
-
-      fontSize:
-        13,
-
-      fontWeight:
-        '600',
-    },
-
-
-    analysisPanel: {
-      width:
-        '100%',
-
-      padding:
-        24,
-
-      borderRadius:
-        10,
-
-      backgroundColor:
-        COLORS.surface,
-
-      borderWidth:
-        1,
-
-      borderColor:
+    sourceWorkspace: {
+      paddingTop: 28,
+      paddingBottom: 28,
+      borderTopWidth: 1,
+      borderTopColor:
         COLORS.line,
-    },
-
-
-    analysisPanelWide: {
-      flex:
-        1,
-
-      flexBasis:
-        0,
-
-      maxWidth:
-        500,
-    },
-
-
-    analysisPanelAfterResults: {
-      maxWidth:
-        680,
-
-      alignSelf:
-        'center',
-    },
-
-
-    panelIntro: {
-      marginBottom:
-        24,
-    },
-
-
-    panelTitle: {
-      color:
-        COLORS.text,
-
-      fontSize:
-        23,
-
-      lineHeight:
-        28,
-
-      fontWeight:
-        '700',
-
-      letterSpacing:
-        -0.45,
-    },
-
-
-    panelDescription: {
-      marginTop:
-        7,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        14,
-
-      lineHeight:
-        21,
-    },
-
-
-    modeSelector: {
-      flexDirection:
-        'row',
-
-      borderBottomWidth:
-        1,
-
+      borderBottomWidth: 1,
       borderBottomColor:
         COLORS.line,
     },
 
+    workspaceHeading: {
+      gap: 12,
+      marginBottom: 18,
+    },
 
-    modeButton: {
-      flex:
-        1,
-
-      minHeight:
-        43,
-
-      alignItems:
-        'center',
-
+    workspaceHeadingWide: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
       justifyContent:
-        'center',
-
-      borderBottomWidth:
-        2,
-
-      borderBottomColor:
-        'transparent',
+        'space-between',
     },
 
-
-    modeButtonActive: {
-      borderBottomColor:
-        COLORS.accent,
+    workspaceTitle: {
+      color: COLORS.text,
+      fontSize: 22,
+      lineHeight: 27,
+      fontWeight: '600',
+      letterSpacing: -0.3,
     },
 
-
-    modeButtonText: {
-      color:
-        COLORS.muted,
-
-      fontSize:
-        14,
-
-      fontWeight:
-        '600',
+    workspaceCopy: {
+      marginTop: 5,
+      color: COLORS.muted,
+      fontSize: 13,
+      lineHeight: 20,
     },
 
-
-    modeButtonTextActive: {
-      color:
-        COLORS.text,
+    workspaceMeta: {
+      color: COLORS.muted,
+      fontSize: 12,
     },
 
-
-    inputLabel: {
-      marginTop:
-        24,
-
-      marginBottom:
-        9,
-
-      color:
-        COLORS.mutedStrong,
-
-      fontSize:
-        12,
-
-      fontWeight:
-        '600',
-    },
-
-
-    inputShell: {
-      minHeight:
-        52,
-
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      paddingLeft:
-        14,
-
-      paddingRight:
-        7,
-
-      borderRadius:
-        6,
-
+    sourceBar: {
+      minHeight: 62,
+      flexDirection: 'row',
+      alignItems: 'stretch',
       backgroundColor:
-        '#090b09',
-
-      borderWidth:
-        1,
-
+        '#0c0f0d',
+      borderWidth: 1,
       borderColor:
-        '#495049',
+        '#414941',
+      borderRadius: 4,
+      overflow: 'hidden',
     },
 
-
-    input: {
-      flex:
-        1,
-
-      minHeight:
-        50,
-
-      color:
-        COLORS.text,
-
-      fontSize:
-        15,
-
-      fontWeight:
-        '400',
+    sourceBarCompact: {
+      flexWrap: 'wrap',
     },
 
+    sourceInput: {
+      flex: 1,
+      minWidth: 220,
+      minHeight: 60,
+      paddingHorizontal: 16,
+      color: COLORS.text,
+      fontSize: 15,
+      fontWeight: '400',
+    },
 
     clearButton: {
-      paddingHorizontal:
-        10,
-
-      paddingVertical:
-        8,
+      minHeight: 60,
+      justifyContent: 'center',
+      paddingHorizontal: 13,
     },
-
 
     clearText: {
-      color:
-        COLORS.muted,
-
-      fontSize:
-        12,
-
-      fontWeight:
-        '600',
+      color: COLORS.muted,
+      fontSize: 12,
+      fontWeight: '600',
     },
-
 
     analyzeButton: {
-      minHeight:
-        52,
-
-      marginTop:
-        10,
-
-      paddingHorizontal:
-        18,
-
-      flexDirection:
-        'row',
-
-      alignItems:
-        'center',
-
-      justifyContent:
-        'center',
-
-      gap:
-        10,
-
-      borderRadius:
-        6,
-
+      minHeight: 60,
+      minWidth: 170,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+      paddingHorizontal: 20,
       backgroundColor:
         COLORS.accent,
+      borderLeftWidth: 1,
+      borderLeftColor:
+        COLORS.line,
     },
-
 
     analyzeButtonDisabled: {
-      opacity:
-        0.36,
+      opacity: 0.36,
     },
-
 
     analyzeButtonPressed: {
-      opacity:
-        0.82,
-
-      transform: [
-        {
-          translateY:
-            1,
-        },
-      ],
+      opacity: 0.82,
     },
-
 
     analyzeButtonText: {
       color:
         COLORS.accentInk,
-
-      fontSize:
-        14,
-
-      fontWeight:
-        '800',
+      fontSize: 14,
+      fontWeight: '800',
     },
 
-
-    arrow: {
+    analyzeArrow: {
       color:
         COLORS.accentInk,
-
-      fontSize:
-        18,
-
-      fontWeight:
-        '700',
+      fontSize: 18,
+      fontWeight: '700',
     },
 
-
-    message: {
-      marginTop:
-        13,
-
-      fontSize:
-        13,
-
-      lineHeight:
-        20,
-
-      fontWeight:
-        '500',
-    },
-
-
-    statusMessage: {
-      color:
-        COLORS.mutedStrong,
-    },
-
-
-    errorMessage: {
-      color:
-        COLORS.error,
-    },
-
-
-    disclosure: {
-      marginTop:
-        16,
-
-      paddingTop:
-        14,
-
-      borderTopWidth:
-        1,
-
-      borderTopColor:
-        COLORS.lineSoft,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        12,
-
-      lineHeight:
-        18,
-    },
-
-
-    shareSection: {
-      paddingTop:
-        64,
-
-      paddingBottom:
-        64,
-
-      borderBottomWidth:
-        1,
-
-      borderBottomColor:
-        COLORS.lineSoft,
-    },
-
-
-    sectionHeading: {
-      maxWidth:
-        650,
-    },
-
-
-    sectionTitle: {
-      color:
-        COLORS.text,
-
-      fontSize:
-        30,
-
-      lineHeight:
-        35,
-
-      fontWeight:
-        '600',
-
-      letterSpacing:
-        -0.65,
-    },
-
-
-    sectionDescription: {
-      marginTop:
-        11,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        14,
-
-      lineHeight:
-        22,
-    },
-
-
-    shareSteps: {
-      marginTop:
-        34,
-
-      flexDirection:
-        'row',
-
-      borderTopWidth:
-        1,
-
-      borderTopColor:
-        COLORS.line,
-
-      borderBottomWidth:
-        1,
-
-      borderBottomColor:
-        COLORS.line,
-    },
-
-
-    shareStepsCompact: {
-      flexDirection:
-        'column',
-    },
-
-
-    shareStep: {
-      flex:
-        1,
-
-      paddingVertical:
-        20,
-
-      paddingHorizontal:
-        18,
-
-      borderRightWidth:
-        1,
-
-      borderRightColor:
-        COLORS.lineSoft,
-    },
-
-
-    shareStepNumber: {
-      color:
-        COLORS.accent,
-
-      fontSize:
-        11,
-
-      fontWeight:
-        '700',
-    },
-
-
-    shareStepTitle: {
-      marginTop:
-        18,
-
-      color:
-        COLORS.text,
-
-      fontSize:
-        17,
-
-      fontWeight:
-        '700',
-    },
-
-
-    shareStepDescription: {
-      marginTop:
-        6,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        12,
-
-      lineHeight:
-        18,
-    },
-
-
-    sourceLine: {
-      marginTop:
-        18,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        12,
-
-      lineHeight:
-        20,
-    },
-
-
-    featureGrid: {
-      flexDirection:
-        'row',
-
-      borderBottomWidth:
-        1,
-
-      borderBottomColor:
-        COLORS.lineSoft,
-    },
-
-
-    featureGridCompact: {
-      flexDirection:
-        'column',
-    },
-
-
-    feature: {
-      flex:
-        1,
-
-      minHeight:
-        170,
-
-      paddingVertical:
-        30,
-
-      paddingHorizontal:
-        20,
-
-      borderRightWidth:
-        1,
-
-      borderRightColor:
-        COLORS.lineSoft,
-    },
-
-
-    featureNumber: {
-      color:
-        COLORS.accent,
-
-      fontSize:
-        11,
-
-      fontWeight:
-        '700',
-    },
-
-
-    featureTitle: {
-      marginTop:
-        23,
-
-      color:
-        COLORS.text,
-
-      fontSize:
-        18,
-
-      fontWeight:
-        '700',
-    },
-
-
-    featureDescription: {
-      marginTop:
-        8,
-
-      color:
-        COLORS.muted,
-
-      fontSize:
-        13,
-
-      lineHeight:
-        20,
-    },
-
-
-    footer: {
-      minHeight:
-        84,
-
-      flexDirection:
-        'row',
-
+    workspaceFooter: {
+      marginTop: 12,
+      flexDirection: 'row',
       alignItems:
-        'center',
-
+        'flex-start',
       justifyContent:
         'space-between',
-
-      gap:
-        20,
+      gap: 20,
     },
 
+    message: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: '500',
+    },
+
+    statusMessage: {
+      color: COLORS.muted,
+    },
+
+    errorMessage: {
+      color: COLORS.error,
+    },
+
+    supportedText: {
+      color: COLORS.muted,
+      fontSize: 12,
+    },
+
+    resultsSection: {
+      paddingTop: 52,
+      paddingBottom: 36,
+    },
+
+    methodSection: {
+      paddingTop: 70,
+      paddingBottom: 70,
+      gap: 40,
+      borderBottomWidth: 1,
+      borderBottomColor:
+        COLORS.lineSoft,
+    },
+
+    methodSectionWide: {
+      flexDirection: 'row',
+      alignItems:
+        'flex-start',
+      justifyContent:
+        'space-between',
+      gap: 72,
+    },
+
+    methodIntro: {
+      flex: 1,
+      maxWidth: 440,
+    },
+
+    sectionHeading: {
+      color: COLORS.text,
+      fontFamily:
+        DISPLAY_FONT,
+      fontSize: 32,
+      lineHeight: 39,
+      fontWeight: '400',
+      letterSpacing: -0.35,
+    },
+
+    sectionCopy: {
+      marginTop: 13,
+      color: COLORS.muted,
+      fontSize: 14,
+      lineHeight: 22,
+    },
+
+    methodRows: {
+      flex: 1,
+      maxWidth: 620,
+      borderTopWidth: 1,
+      borderTopColor:
+        COLORS.line,
+    },
+
+    methodRow: {
+      minHeight: 88,
+      flexDirection: 'row',
+      alignItems:
+        'flex-start',
+      gap: 18,
+      paddingVertical: 18,
+      borderBottomWidth: 1,
+      borderBottomColor:
+        COLORS.line,
+    },
+
+    methodNumber: {
+      width: 30,
+      color:
+        COLORS.accent,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    methodTitle: {
+      width: 92,
+      color: COLORS.text,
+      fontSize: 14,
+      fontWeight: '700',
+    },
+
+    methodDescription: {
+      flex: 1,
+      color: COLORS.muted,
+      fontSize: 13,
+      lineHeight: 20,
+    },
+
+    shareStrip: {
+      paddingTop: 34,
+      paddingBottom: 34,
+      gap: 22,
+      borderBottomWidth: 1,
+      borderBottomColor:
+        COLORS.lineSoft,
+    },
+
+    shareStripWide: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'space-between',
+    },
+
+    shareTitle: {
+      color: COLORS.text,
+      fontSize: 17,
+      fontWeight: '700',
+    },
+
+    shareCopy: {
+      maxWidth: 570,
+      marginTop: 6,
+      color: COLORS.muted,
+      fontSize: 13,
+      lineHeight: 20,
+    },
+
+    shareFlow: {
+      color:
+        COLORS.mutedStrong,
+      fontSize: 12,
+      fontWeight: '600',
+    },
+
+    footer: {
+      minHeight: 86,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'space-between',
+      gap: 20,
+    },
 
     footerBrand: {
-      color:
-        COLORS.text,
-
-      fontSize:
-        12,
-
-      fontWeight:
-        '700',
+      color: COLORS.text,
+      fontSize: 12,
+      fontWeight: '700',
     },
 
-
-    footerText: {
-      color:
-        COLORS.muted,
-
-      fontSize:
-        12,
+    footerCopy: {
+      color: COLORS.muted,
+      fontSize: 12,
     },
-
 
     pressed: {
-      opacity:
-        0.72,
+      opacity: 0.72,
     },
   });
