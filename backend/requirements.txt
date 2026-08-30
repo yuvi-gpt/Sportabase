@@ -1,4 +1,4 @@
-﻿fastapi
+fastapi==0.136.3
 uvicorn[standard]
 pydantic
 requests

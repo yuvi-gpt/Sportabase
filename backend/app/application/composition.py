@@ -115,6 +115,15 @@ def register_startup_handler(
         return
 
     legacy_registrar = getattr(app, "add_event_handler", None)
+
+    if not callable(legacy_registrar):
+        router = getattr(app, "router", None)
+        legacy_registrar = getattr(
+            router,
+            "add_event_handler",
+            None,
+        )
+
     if callable(legacy_registrar):
         legacy_registrar("startup", handler)
         return
@@ -139,6 +148,15 @@ def register_shutdown_handler(
         return
 
     legacy_registrar = getattr(app, "add_event_handler", None)
+
+    if not callable(legacy_registrar):
+        router = getattr(app, "router", None)
+        legacy_registrar = getattr(
+            router,
+            "add_event_handler",
+            None,
+        )
+
     if callable(legacy_registrar):
         legacy_registrar("shutdown", handler)
         return
