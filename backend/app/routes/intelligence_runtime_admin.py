@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.application.readiness import build_backend_readiness
 from app.intelligence.claim_evolution import (
-    load_claim_evolution,
     reconcile_claim_evolution_safely,
+)
+from app.intelligence.story_evolution import build_story_evolution
+from app.story.story_claim_graph_materialization import (
+    StoryClaimGraphMaterializationIntegrityError,
 )
 from app.intelligence.readiness import (
     build_backend_intelligence_readiness,
@@ -41,12 +44,22 @@ def build_router(
     def intelligence_claim_evolution(
         claim_id: str,
         request: Request,
+        limit: int = Query(100, ge=1, le=500),
     ):
         require_admin(request)
-        return load_claim_evolution(
-            claim_id=claim_id,
-            connection_factory=connection_factory,
-        )
+        try:
+            result = build_story_evolution(
+                canonical_claim_id=claim_id,
+                connection_factory=connection_factory,
+                limit=limit,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Claim not found.")
+        return result
 
     @router.post("/admin/intelligence/claims/{claim_id}/evolution/reconcile")
     def intelligence_reconcile_claim_evolution(
