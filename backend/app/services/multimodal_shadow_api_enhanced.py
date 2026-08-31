@@ -250,6 +250,7 @@ def execute_multimodal_shadow_api(
     stages = copy.deepcopy(dict(stages)) if isinstance(stages, Mapping) else {}
     stages["canonical_claim_materialization"] = materialization
     stages["claim_evolution_reconciliation"] = finalization
+    stages["canonical_claim_story_materialization"] = finalization.get("story")
     result["stages"] = stages
 
     result["structured_claim_ingestion"] = {

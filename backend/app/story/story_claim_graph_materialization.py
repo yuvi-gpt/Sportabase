@@ -7,6 +7,11 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, Mapping
 
+from app.intelligence.claim_materialization import (
+    CLAIM_MATERIALIZATION_METADATA_VERSION,
+)
+from app.intelligence.claims import identity as claim_identity
+from app.intelligence.claims import repository as claim_repository
 from app.intelligence.stories import story_id_for_canonical_key
 from app.services import inbox_candidate_shadow_orchestration
 from app.services import inbox_story_cluster_orchestration
@@ -36,6 +41,11 @@ STORY_MEDIA_RELATIONSHIP_TYPE = (
 )
 
 STORY_MEDIA_STRUCTURAL_CONFIDENCE = 1.0
+CLAIM_OBSERVATION_MEMBERSHIP_RELATIONSHIP_TYPES = ("reports",)
+
+CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION = (
+    "canonical-claim-story-materialization-v1"
+)
 
 
 class StoryClaimGraphMaterializationError(RuntimeError):
@@ -92,6 +102,39 @@ def _now() -> str:
     return datetime.now(
         timezone.utc
     ).isoformat()
+
+
+def _latest_timestamp(existing: str, incoming: str) -> str:
+    try:
+        incoming_value = datetime.fromisoformat(
+            incoming[:-1] + "+00:00" if incoming.endswith("Z") else incoming
+        )
+    except ValueError as error:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Story timestamp is invalid."
+        ) from error
+    if (
+        incoming_value.tzinfo is None
+        or incoming_value.utcoffset() is None
+    ):
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Story timestamp must include a timezone."
+        )
+    if not existing:
+        return incoming_value.astimezone(timezone.utc).isoformat()
+    try:
+        existing_value = datetime.fromisoformat(
+            existing[:-1] + "+00:00" if existing.endswith("Z") else existing
+        )
+    except ValueError as error:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Story timestamp is invalid."
+        ) from error
+    if existing_value.tzinfo is None or existing_value.utcoffset() is None:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Story timestamp must include a timezone."
+        )
+    return max(existing_value, incoming_value).astimezone(timezone.utc).isoformat()
 
 
 def _one(conn, sql: str, params=()):
@@ -632,6 +675,7 @@ def _upsert_story(
     subject_entity_id: str,
     subject_key: str,
     linked_at: str,
+    materialization_version: str = STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION,
 ) -> Dict[str, Any]:
     claim_id = _clean(claim.get("id"))
     canonical_key = (
@@ -645,21 +689,19 @@ def _upsert_story(
     canonical_title = _clean(
         claim.get("canonical_text")
     )
-    metadata_json = _json({
-        "materialization_version": (
-            STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION
-        ),
+    incoming_metadata = {
         "materialization_basis": (
             STORY_CLAIM_LINK_BASIS
         ),
         "claim_id": claim_id,
-        "subject_entity_id": subject_entity_id,
         "subject_key": subject_key,
         "truth_established": False,
         "authority_established": False,
         "independence_established": False,
         "affects_live_merit": False,
-    })
+    }
+    if subject_entity_id:
+        incoming_metadata["subject_entity_id"] = subject_entity_id
 
     existing_by_key = _one(
         conn,
@@ -699,6 +741,75 @@ def _upsert_story(
             "Deterministic story ID collision detected."
         )
 
+    existing_metadata: Dict[str, Any] = {}
+    if existing_by_key is not None:
+        try:
+            parsed_metadata = json.loads(
+                str(existing_by_key.get("metadata_json") or "{}")
+            )
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise StoryClaimGraphMaterializationIntegrityError(
+                "Existing story metadata is invalid."
+            ) from error
+        if not isinstance(parsed_metadata, dict):
+            raise StoryClaimGraphMaterializationIntegrityError(
+                "Existing story metadata is invalid."
+            )
+        existing_metadata = dict(parsed_metadata)
+        for field, expected in (
+            ("claim_id", claim_id),
+            ("subject_key", subject_key),
+            ("materialization_basis", STORY_CLAIM_LINK_BASIS),
+        ):
+            existing_value = _clean(existing_metadata.get(field))
+            if existing_value and existing_value != expected:
+                raise StoryClaimGraphMaterializationIntegrityError(
+                    "Existing story identity metadata is inconsistent."
+                )
+
+    provenance_field = (
+        "canonical_claim_story_materialization_version"
+        if materialization_version
+        == CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION
+        else "story_claim_graph_materialization_version"
+    )
+    expected_provenance = {
+        "canonical_claim_story_materialization_version": (
+            CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION
+        ),
+        "story_claim_graph_materialization_version": (
+            STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION
+        ),
+    }
+    for field, expected in expected_provenance.items():
+        existing_value = _clean(existing_metadata.get(field))
+        if existing_value and existing_value != expected:
+            raise StoryClaimGraphMaterializationIntegrityError(
+                "Existing story materialization provenance is inconsistent."
+            )
+
+    metadata = dict(existing_metadata)
+    metadata.update(incoming_metadata)
+    if not _clean(metadata.get("materialization_version")):
+        metadata["materialization_version"] = materialization_version
+    generic_version = _clean(metadata.get("materialization_version"))
+    if generic_version == STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION:
+        metadata.setdefault(
+            "story_claim_graph_materialization_version",
+            STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION,
+        )
+    elif generic_version == CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION:
+        metadata.setdefault(
+            "canonical_claim_story_materialization_version",
+            CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION,
+        )
+    metadata[provenance_field] = materialization_version
+    metadata_json = _json(metadata)
+    last_seen_at = _latest_timestamp(
+        _clean((existing_by_key or {}).get("last_seen_at")),
+        linked_at,
+    )
+
     conn.execute(
         """
         INSERT INTO intelligence_stories (
@@ -726,7 +837,7 @@ def _upsert_story(
             canonical_key,
             canonical_title,
             linked_at,
-            linked_at,
+            last_seen_at,
             metadata_json,
         ),
     )
@@ -897,6 +1008,330 @@ def _link_story_media(
         )
 
     return row
+
+
+def _validated_structured_claim(conn, claim_id: str) -> Dict[str, Any]:
+    claim = _one(
+        conn,
+        "SELECT * FROM intelligence_claims WHERE id = ?",
+        (claim_id,),
+    )
+    if claim is None:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim is not persisted."
+        )
+    try:
+        metadata = json.loads(str(claim.get("metadata_json") or "{}"))
+    except (TypeError, ValueError, json.JSONDecodeError) as error:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim metadata is invalid."
+        ) from error
+    candidate = metadata.get("structured_claim") if isinstance(metadata, dict) else None
+    if not isinstance(candidate, Mapping):
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim identity metadata is missing."
+        )
+    try:
+        normalized = claim_identity.normalize_canonical_claim(candidate)
+        canonical_key = claim_identity.canonical_claim_core_key(normalized)
+        core_fingerprint = claim_identity.canonical_claim_core_fingerprint(normalized)
+        specific_fingerprint = (
+            claim_identity.canonical_claim_specific_fingerprint(normalized)
+        )
+        expected_id = claim_repository.claim_id_for_canonical_key(canonical_key)
+    except (TypeError, ValueError) as error:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim identity metadata is invalid."
+        ) from error
+    if (
+        _clean(claim.get("canonical_key")) != canonical_key
+        or _clean(claim.get("id")) != expected_id
+        or _clean(claim.get("subject_key")) != normalized["subject_key"]
+    ):
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim identity is inconsistent."
+        )
+    if (
+        _clean(metadata.get("materialization_version"))
+        != CLAIM_MATERIALIZATION_METADATA_VERSION
+        or _clean(metadata.get("identity_contract_version"))
+        != claim_identity.CANONICAL_CLAIM_CONTRACT_VERSION
+        or _clean(metadata.get("identity_source"))
+        != "deterministic_structured_claim_core"
+        or _clean(metadata.get("core_fingerprint")) != core_fingerprint
+        or _clean(metadata.get("merged_specific_fingerprint"))
+        != specific_fingerprint
+    ):
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim materialization metadata is inconsistent."
+        )
+    return claim
+
+
+def _valid_structured_claim_or_none(conn, claim_id: str) -> Dict[str, Any] | None:
+    if _one(conn, "SELECT id FROM intelligence_claims WHERE id = ?", (claim_id,)) is None:
+        return None
+    try:
+        return _validated_structured_claim(conn, claim_id)
+    except StoryClaimGraphMaterializationIntegrityError:
+        return None
+
+
+def _validated_mapping(conn, production_claim_id: str) -> tuple[str, Dict[str, Any]]:
+    mapping = _one(
+        conn,
+        """
+        SELECT production_claim_id, canonical_claim_id, subject_key, mapping_status
+        FROM claim_identity_mappings
+        WHERE production_claim_id = ?
+        """,
+        (production_claim_id,),
+    )
+    if mapping is None:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical structured claim or verified mapping is unavailable."
+        )
+    canonical_id = _clean(mapping.get("canonical_claim_id"))
+    if (
+        _clean(mapping.get("production_claim_id")) != production_claim_id
+        or _clean(mapping.get("mapping_status")) != "verified_equivalent"
+        or not canonical_id
+        or canonical_id == production_claim_id
+    ):
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Claim identity mapping is malformed or unverified."
+        )
+    if _one(
+        conn,
+        "SELECT production_claim_id FROM claim_identity_mappings WHERE production_claim_id = ?",
+        (canonical_id,),
+    ) is not None:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Claim identity mapping chain or cycle is not allowed."
+        )
+    canonical_claim = _validated_structured_claim(conn, canonical_id)
+    if _clean(mapping.get("subject_key")) != _clean(
+        canonical_claim.get("subject_key")
+    ):
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Claim identity mapping subject is inconsistent."
+        )
+    if _valid_structured_claim_or_none(conn, production_claim_id) is not None:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "A canonical structured claim cannot act as a legacy mapping source."
+        )
+    return canonical_id, canonical_claim
+
+
+def _resolved_canonical_claim(conn, requested_claim_id: str) -> tuple[str, Dict[str, Any]]:
+    direct_claim = _valid_structured_claim_or_none(conn, requested_claim_id)
+    if direct_claim is not None:
+        return requested_claim_id, direct_claim
+    return _validated_mapping(conn, requested_claim_id)
+
+
+def _validated_legacy_ids(conn, canonical_claim: Mapping[str, Any]) -> list[str]:
+    canonical_id = _clean(canonical_claim.get("id"))
+    rows = conn.execute(
+        """
+        SELECT production_claim_id
+        FROM claim_identity_mappings
+        WHERE canonical_claim_id = ?
+        ORDER BY production_claim_id
+        """,
+        (canonical_id,),
+    ).fetchall()
+    legacy_ids = []
+    for row in rows:
+        production_id = _clean(row[0])
+        resolved_id, resolved_claim = _validated_mapping(conn, production_id)
+        if (
+            resolved_id != canonical_id
+            or _clean(resolved_claim.get("subject_key"))
+            != _clean(canonical_claim.get("subject_key"))
+        ):
+            raise StoryClaimGraphMaterializationIntegrityError(
+                "Verified legacy claim mapping changed canonical scope."
+            )
+        legacy_ids.append(production_id)
+    return legacy_ids
+
+
+def _claim_media_ids(conn, canonical_claim: Mapping[str, Any]) -> list[str]:
+    canonical_claim_id = _clean(canonical_claim.get("id"))
+    subject_key = _clean(canonical_claim.get("subject_key"))
+    identity_ids = [canonical_claim_id, *_validated_legacy_ids(conn, canonical_claim)]
+
+    media_ids: set[str] = set()
+    for identity_id in identity_ids:
+        links = conn.execute(
+            """
+            SELECT source_observation_id, reporter_observation_id
+            FROM claim_links
+            WHERE claim_id = ?
+              AND relationship_type = 'reports'
+              AND (source_observation_id IS NOT NULL
+                   OR reporter_observation_id IS NOT NULL)
+            ORDER BY id
+            """,
+            (identity_id,),
+        ).fetchall()
+        for link in links:
+            source_id = _clean(link[0])
+            reporter_id = _clean(link[1])
+            if source_id:
+                observation = _one(
+                    conn,
+                    """
+                    SELECT id, media_item_id, subject_key
+                    FROM source_observations
+                    WHERE id = ?
+                    """,
+                    (source_id,),
+                )
+            else:
+                observation = _one(
+                    conn,
+                    """
+                    SELECT id, media_item_id, subject_key
+                    FROM reporter_observations
+                    WHERE id = ?
+                    """,
+                    (reporter_id,),
+                )
+            if observation is None:
+                raise StoryClaimGraphMaterializationIntegrityError(
+                    "Claim-linked observation is missing."
+                )
+            if _clean(observation.get("subject_key")) != subject_key:
+                raise StoryClaimGraphMaterializationIntegrityError(
+                    "Claim-linked observation subject is inconsistent."
+                )
+            media_id = _clean(observation.get("media_item_id"))
+            if media_id:
+                _assert_media_exists(conn, media_id)
+                media_ids.add(media_id)
+    return sorted(media_ids)
+
+
+def materialize_canonical_claim_story(
+    *,
+    claim_id: str,
+    connection_factory,
+    now_provider=_now,
+) -> Dict[str, Any]:
+    """Materialize one deterministic story from verified canonical claim identity."""
+    requested_id = _clean(claim_id)
+    if not requested_id or connection_factory is None:
+        raise StoryClaimGraphMaterializationInputError(
+            "Claim ID and connection factory are required."
+        )
+    linked_at = _clean(now_provider())
+    if not linked_at:
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Story graph materialization timestamp is unavailable."
+        )
+
+    try:
+        conn = connection_factory()
+    except Exception as error:
+        raise StoryClaimGraphMaterializationPersistenceError(
+            "Story graph database is unavailable."
+        ) from error
+    if conn is None:
+        raise StoryClaimGraphMaterializationPersistenceError(
+            "Story graph database is unavailable."
+        )
+
+    if bool(getattr(conn, "in_transaction", False)):
+        raise StoryClaimGraphMaterializationPersistenceError(
+            "Story graph materialization requires a fresh database connection."
+        )
+
+    transaction_started = False
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        transaction_started = True
+        canonical_id, claim = _resolved_canonical_claim(conn, requested_id)
+        media_ids = _claim_media_ids(conn, claim)
+        story = _upsert_story(
+            conn,
+            claim=claim,
+            subject_entity_id="",
+            subject_key=_clean(claim.get("subject_key")),
+            linked_at=linked_at,
+            materialization_version=(
+                CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION
+            ),
+        )
+        conflicting_claim = _one(
+            conn,
+            """
+            SELECT claim_id
+            FROM story_claim_links
+            WHERE story_id = ?
+              AND claim_id <> ?
+            LIMIT 1
+            """,
+            (story["id"], canonical_id),
+        )
+        if conflicting_claim is not None:
+            raise StoryClaimGraphMaterializationIntegrityError(
+                "Deterministic claim story is linked to another claim."
+            )
+        _link_story_claim(
+            conn,
+            story_id=story["id"],
+            claim_id=canonical_id,
+            linked_at=linked_at,
+        )
+        for media_id in media_ids:
+            _link_story_media(
+                conn,
+                story_id=story["id"],
+                media_item_id=media_id,
+                linked_at=linked_at,
+            )
+        conn.commit()
+        transaction_started = False
+    except StoryClaimGraphMaterializationError:
+        if transaction_started:
+            conn.rollback()
+        raise
+    except sqlite3.Error as error:
+        if transaction_started:
+            conn.rollback()
+        raise StoryClaimGraphMaterializationPersistenceError(
+            "Canonical claim story persistence failed."
+        ) from error
+    except Exception as error:
+        if transaction_started:
+            conn.rollback()
+        raise StoryClaimGraphMaterializationIntegrityError(
+            "Canonical claim story materialization failed closed."
+        ) from error
+    finally:
+        conn.close()
+
+    return {
+        "version": CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION,
+        "status": "materialized",
+        "requested_claim_id": requested_id,
+        "canonical_claim_id": canonical_id,
+        "story_id": story["id"],
+        "canonical_key": story["canonical_key"],
+        "media_item_ids": media_ids,
+        "policy": {
+            "verified_mapping_only": True,
+            "structured_canonical_identity_required": True,
+            "membership_from_claim_links_only": True,
+            "shared_entities_do_not_establish_membership": True,
+            "materialization_is_atomic": True,
+            "materialization_is_idempotent": True,
+            "provider_call_performed": False,
+            "affects_live_merit": False,
+        },
+    }
 
 
 def materialize_story_claim_graph(

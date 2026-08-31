@@ -123,6 +123,39 @@ class RuntimeFinalizationTests(unittest.TestCase):
 
         self.assertIsNotNone(row)
         self.assertEqual(row["relationship_type"], "progresses_to")
+        self.assertEqual(result["story"]["status"], "materialized")
+
+    def test_story_failure_is_advisory_and_preserves_evolution_success(self):
+        order = []
+
+        def evolution(**_kwargs):
+            order.append("evolution")
+            return {"status": "reconciled", "links_written": 0}
+
+        def story(**_kwargs):
+            order.append("story")
+            raise RuntimeError("story unavailable")
+
+        with patch(
+            "app.intelligence.runtime_finalization.reconcile_claim_evolution_safely",
+            side_effect=evolution,
+        ), patch(
+            "app.story.story_claim_graph_materialization.materialize_canonical_claim_story",
+            side_effect=story,
+        ):
+            result = finalize_structured_claim_materialization(
+                materialization={
+                    "status": "materialized",
+                    "canonical_claim_id": "claim-1",
+                },
+                connection_factory=self.factory,
+            )
+
+        self.assertEqual(order, ["evolution", "story"])
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["reason"], "claim_evolution_reconciled")
+        self.assertEqual(result["evolution"]["status"], "reconciled")
+        self.assertEqual(result["story"]["status"], "unavailable")
 
 
 if __name__ == "__main__":
