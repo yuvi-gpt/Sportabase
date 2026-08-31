@@ -734,7 +734,7 @@ Every major scoring change should be tested against the golden set.
 
 ## Backend
 
-- Python
+- Python 3.14.7
 - FastAPI
 - SQLite
 - Requests

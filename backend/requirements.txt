@@ -9,7 +9,7 @@ google-genai
 beautifulsoup4
 lxml
 pandas
-lingua-language-detector==2.1.1
+lingua-language-detector==2.2.0
 faster-whisper==1.2.1
 psycopg[binary]>=3.2,<4
 PyJWT[crypto]==2.13.0
