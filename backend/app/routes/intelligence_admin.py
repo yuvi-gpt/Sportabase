@@ -38,6 +38,9 @@ from app.intelligence.projection import (
 from app.intelligence.reporting_coverage import (
     build_claim_reporting_coverage,
 )
+from app.intelligence.source_dependency_graph import (
+    build_claim_source_dependency_graph,
+)
 from app.intelligence.source_health import (
     build_source_evidence_health,
 )
@@ -241,6 +244,25 @@ def build_router(
         )
         if result.get("status") == "not_found":
             raise HTTPException(status_code=404, detail="Claim not found.")
+        return result
+
+    @router.get(
+        "/admin/intelligence/claims/{canonical_claim_id}/source-dependency-graph"
+    )
+    def intelligence_claim_source_dependency_graph(
+        canonical_claim_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        try:
+            result = build_claim_source_dependency_graph(
+                canonical_claim_id=canonical_claim_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Canonical claim not found.")
         return result
 
     @router.get("/admin/intelligence/claims/{claim_id}/state")
