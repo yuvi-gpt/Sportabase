@@ -257,10 +257,13 @@ def build_router(
         request: Request,
     ):
         require_admin(request)
-        result = build_claim_support_graph(
-            claim_id=claim_id,
-            connection_factory=connection_factory,
-        )
+        try:
+            result = build_claim_support_graph(
+                claim_id=claim_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         if result.get("status") == "not_found":
             raise HTTPException(status_code=404, detail="Claim not found.")
         return result
