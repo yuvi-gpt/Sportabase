@@ -23,6 +23,7 @@ from app.intelligence.claim_support_graph import (
     build_claim_support_graph,
     build_story_support_overview,
 )
+from app.intelligence.homepage_storylines import build_homepage_storylines
 from app.intelligence.claim_state import (
     build_claim_state,
     build_story_claim_state_overview,
@@ -154,6 +155,24 @@ def build_router(
             connection_factory=connection_factory,
             limit=limit,
         )
+
+    @router.get("/admin/intelligence/homepage-storylines")
+    def intelligence_homepage_storylines(
+        request: Request,
+        limit: int = Query(50, ge=1, le=200),
+        cursor: str = Query("", max_length=4096),
+    ):
+        require_admin(request)
+        try:
+            return build_homepage_storylines(
+                connection_factory=connection_factory,
+                limit=limit,
+                cursor=cursor,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.post("/admin/intelligence/claims/materialize-semantic-router")
     def intelligence_materialize_semantic_router(
