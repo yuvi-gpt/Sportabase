@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.intelligence.background_pipeline_runtime import (
@@ -44,6 +44,10 @@ from app.intelligence.source_dependency_graph import (
 )
 from app.intelligence.source_health import (
     build_source_evidence_health,
+)
+from app.intelligence.source_profiles import (
+    build_reporter_profile,
+    build_source_profile,
 )
 from app.intelligence.structured_claim_ingestion import (
     load_claim_identity_mapping,
@@ -87,6 +91,40 @@ def build_router(
             connection_factory=connection_factory,
             days=days,
         )
+
+    @router.get("/admin/intelligence/sources/{source_id}/profile")
+    def intelligence_source_profile(
+        request: Request,
+        source_id: str = Path(..., min_length=1, max_length=128),
+    ):
+        require_admin(request)
+        try:
+            result = build_source_profile(
+                source_id=source_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Source not found.")
+        return result
+
+    @router.get("/admin/intelligence/reporters/{reporter_id}/profile")
+    def intelligence_reporter_profile(
+        request: Request,
+        reporter_id: str = Path(..., min_length=1, max_length=128),
+    ):
+        require_admin(request)
+        try:
+            result = build_reporter_profile(
+                reporter_id=reporter_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Reporter not found.")
+        return result
 
     @router.get("/admin/intelligence/background-jobs/{job_id}")
     def intelligence_background_job(
