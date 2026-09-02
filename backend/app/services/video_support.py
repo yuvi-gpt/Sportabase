@@ -440,86 +440,119 @@ def _video_context_tokens(
     }
 
 
+COVERAGE_BUDGET_RATIO = 60
+MAX_CANDIDATE_CHARS = 360
+COVERAGE_SLOT_CHARS = 440
+
+
+def _video_context_candidate_spans(
+    text: str,
+    max_candidate_chars: int = MAX_CANDIDATE_CHARS,
+) -> List[Dict[str, Any]]:
+    """Return bounded, contiguous verbatim spans with source offsets."""
+    if not text:
+        return []
+
+    rough_spans: List[tuple[int, int]] = []
+    start = 0
+
+    for match in re.finditer(
+        r"[.!?\u2026]+(?=\s+|$)",
+        text,
+    ):
+        end = match.end()
+        if text[start:end].strip():
+            rough_spans.append((start, end))
+        start = end
+
+    if start < len(text) and text[start:].strip():
+        rough_spans.append((start, len(text)))
+
+    if not rough_spans and text.strip():
+        rough_spans = [(0, len(text))]
+
+    # Combine tiny adjacent sentence fragments while retaining the exact
+    # contiguous source slice between them.
+    combined: List[tuple[int, int]] = []
+    for span_start, span_end in rough_spans:
+        while span_start < span_end and text[span_start].isspace():
+            span_start += 1
+        while span_end > span_start and text[span_end - 1].isspace():
+            span_end -= 1
+        if span_start >= span_end:
+            continue
+
+        if (
+            combined
+            and combined[-1][1] <= span_start
+            and combined[-1][1] - combined[-1][0] < 80
+            and span_end - combined[-1][0] <= max_candidate_chars
+        ):
+            combined[-1] = (combined[-1][0], span_end)
+        else:
+            combined.append((span_start, span_end))
+
+    candidates: List[Dict[str, Any]] = []
+    ordinal = 0
+
+    for span_start, span_end in combined:
+        cursor = span_start
+        while cursor < span_end:
+            while cursor < span_end and text[cursor].isspace():
+                cursor += 1
+            if cursor >= span_end:
+                break
+
+            limit = min(span_end, cursor + max_candidate_chars)
+            cut = limit
+            if limit < span_end:
+                whitespace = max(
+                    text.rfind(" ", cursor, limit + 1),
+                    text.rfind("\t", cursor, limit + 1),
+                    text.rfind("\n", cursor, limit + 1),
+                )
+                if whitespace > cursor:
+                    cut = whitespace
+
+            if cut <= cursor:
+                cut = min(span_end, cursor + max_candidate_chars)
+
+            candidate_start = cursor
+            candidate_end = cut
+            while (
+                candidate_end > candidate_start
+                and text[candidate_end - 1].isspace()
+            ):
+                candidate_end -= 1
+
+            if candidate_end > candidate_start:
+                candidates.append(
+                    {
+                        "text": text[candidate_start:candidate_end],
+                        "start_offset": candidate_start,
+                        "end_offset": candidate_end,
+                        "ordinal": ordinal,
+                    }
+                )
+                ordinal += 1
+
+            cursor = max(cut, cursor + 1)
+
+    return candidates
+
+
 def _video_context_sentences(
     text: str,
     max_sentence_chars: int = 420,
 ) -> List[str]:
-    normalized = re.sub(
-        r"\s+",
-        " ",
-        clean_html(text),
-    ).strip()
-
-    if not normalized:
-        return []
-
-    rough_parts = re.split(
-        r"(?<=[.!????])\s+|\n+",
-        normalized,
-    )
-
-    sentences: List[str] = []
-
-    for raw_part in rough_parts:
-        part = re.sub(
-            r"\s+",
-            " ",
-            raw_part,
-        ).strip()
-
-        if not part:
-            continue
-
-        if len(part) <= max_sentence_chars:
-            if len(part) >= 20:
-                sentences.append(part)
-
-            continue
-
-        words = part.split()
-        window: List[str] = []
-        window_chars = 0
-
-        for word in words:
-            projected_chars = (
-                window_chars
-                + len(word)
-                + (1 if window else 0)
-            )
-
-            if (
-                window
-                and projected_chars
-                > max_sentence_chars
-            ):
-                sentence = " ".join(
-                    window
-                ).strip()
-
-                if sentence:
-                    sentences.append(
-                        sentence
-                    )
-
-                window = [word]
-                window_chars = len(word)
-            else:
-                window.append(word)
-                window_chars = (
-                    projected_chars
-                )
-
-        if window:
-            sentence = " ".join(
-                window
-            ).strip()
-
-            if sentence:
-                sentences.append(
-                    sentence
-                )
-
-    return sentences
+    """Compatibility wrapper for callers that need text-only candidates."""
+    return [
+        candidate["text"]
+        for candidate in _video_context_candidate_spans(
+            re.sub(r"\s+", " ", clean_html(text)).strip(),
+            max_candidate_chars=max_sentence_chars,
+        )
+    ]
 
 
 def build_video_transcript_context(
@@ -545,6 +578,11 @@ def build_video_transcript_context(
             "represented_chunk_count": 0,
             "selected_sentence_count": 0,
             "chunk_coverage": 0.0,
+            "coverage_window_count": 0,
+            "represented_window_count": 0,
+            "coverage_anchor_count": 0,
+            "global_salience_count": 0,
+            "window_coverage": 0.0,
         }
 
     chunks = split_video_transcript(
@@ -579,379 +617,313 @@ def build_video_transcript_context(
                 for chunk in chunks
             ),
             "chunk_coverage": 1.0,
+            "coverage_window_count": 1,
+            "represented_window_count": 1,
+            "coverage_anchor_count": 0,
+            "global_salience_count": 0,
+            "window_coverage": 1.0,
         }
 
-    title_tokens = _video_context_tokens(
-        title
+    source_chars = len(cleaned)
+    legacy_chunk_size = max(500, chunk_size)
+    legacy_source_chunk_count = max(
+        1,
+        (source_chars + legacy_chunk_size - 1)
+        // legacy_chunk_size,
+    )
+    coverage_budget = (
+        max_chars * COVERAGE_BUDGET_RATIO // 100
+    )
+    raw_window_capacity = max(
+        1,
+        coverage_budget // COVERAGE_SLOT_CHARS,
+    )
+    window_count = min(
+        raw_window_capacity,
+        legacy_source_chunk_count,
     )
 
-    evidence_markers = (
-        "official",
-        "confirmed",
-        "announced",
-        "according",
-        "reported",
-        "reporting",
-        "source",
-        "sources",
-        "statement",
-        "data",
-        "statistic",
-        "statistics",
-        "result",
-        "results",
-        "points",
-        "goal",
-        "goals",
-        "lap",
-        "laps",
-        "race",
-        "match",
-        "season",
-        "contract",
-        "transfer",
-        "injury",
-        "because",
-        "therefore",
-        "however",
-        "although",
-        "evidence",
-        "analysis",
-    )
+    title_tokens = _video_context_tokens(title)
+    marker_groups = {
+        "attribution": (
+            "according to", "reported by", "reports", "reported",
+            "said", "says", "statement", "official", "confirmed",
+            "announced", "seg\u00fan", "inform\u00f3", "confirm\u00f3",
+            "selon", "rapport\u00e9", "confirm\u00e9", "ke mutabik",
+            "kaha",
+        ),
+        "transfer": (
+            "transfer", "signed", "signing", "bid", "offer", "fee",
+            "contract", "loan", "release clause", "fichaje", "transfert",
+        ),
+        "injury": (
+            "injury", "injured", "fitness", "ruled out", "available",
+            "suspended", "returned", "lesi\u00f3n", "blessure", "chot",
+        ),
+        "event": (
+            "goal", "scored", "wicket", "dismissed", "penalty",
+            "red card", "lap", "pit stop", "result", "won", "lost",
+            "draw", "gol", "resultado", "r\u00e9sultat",
+        ),
+        "argument": (
+            "because", "therefore", "however", "although", "means",
+            "suggests", "shows", "porque", "sin embargo", "parce que",
+            "cependant", "kyunki", "lekin",
+        ),
+    }
 
-    candidates: List[
-        Dict[str, Any]
-    ] = []
+    candidates = _video_context_candidate_spans(cleaned)
 
-    seen_text = set()
+    # This is defensive: non-empty text normally always creates candidates.
+    # Distributed window slices avoid reverting to first-only truncation.
+    if not candidates:
+        for window_index in range(window_count):
+            window_start = window_index * source_chars // window_count
+            window_end = (window_index + 1) * source_chars // window_count
+            excerpt_end = min(window_end, window_start + MAX_CANDIDATE_CHARS)
+            while (
+                excerpt_end < window_end
+                and excerpt_end > window_start
+                and not cleaned[excerpt_end].isspace()
+            ):
+                excerpt_end -= 1
+            if excerpt_end <= window_start:
+                excerpt_end = min(window_end, window_start + MAX_CANDIDATE_CHARS)
+            excerpt = cleaned[window_start:excerpt_end].strip()
+            if excerpt:
+                adjusted_start = cleaned.find(excerpt, window_start, excerpt_end)
+                candidates.append(
+                    {
+                        "text": excerpt,
+                        "start_offset": adjusted_start,
+                        "end_offset": adjusted_start + len(excerpt),
+                        "ordinal": len(candidates),
+                    }
+                )
 
-    for chunk_index, chunk in enumerate(
-        chunks
-    ):
-        sentences = (
-            _video_context_sentences(
-                chunk
+    prepared_candidates: List[Dict[str, Any]] = []
+    seen_by_window: Dict[int, set[str]] = {}
+
+    def contains_marker(
+        value: str,
+        markers: tuple[str, ...],
+    ) -> bool:
+        return any(
+            re.search(
+                rf"(?<!\w){re.escape(marker)}(?!\w)",
+                value,
             )
+            is not None
+            for marker in markers
         )
 
-        if not sentences:
-            fallback_sentence = (
-                chunk[:420].strip()
+    for candidate in candidates:
+        text = candidate["text"]
+        start_offset = int(candidate["start_offset"])
+        end_offset = int(candidate["end_offset"])
+        midpoint = start_offset + (end_offset - start_offset) // 2
+        window_index = min(
+            window_count - 1,
+            midpoint * window_count // source_chars,
+        )
+        normalized_key = re.sub(r"\s+", " ", text).strip().casefold()
+        window_seen = seen_by_window.setdefault(window_index, set())
+        if not normalized_key or normalized_key in window_seen:
+            continue
+        window_seen.add(normalized_key)
+
+        lower_text = text.casefold()
+        text_tokens = _video_context_tokens(text)
+        title_overlap = min(3, len(title_tokens & text_tokens))
+        number_hits = min(
+            3,
+            len(re.findall(r"\b\d+(?:[.,]\d+)?\b", text)),
+        )
+        score_result = bool(
+            re.search(r"\b\d{1,3}\s*[-:]\s*\d{1,3}\b", text)
+        )
+        date_hit = bool(
+            re.search(r"\b(?:19|20)\d{2}\b", text)
+            or re.search(
+                r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b",
+                text,
             )
+        )
+        statistic_hit = bool(
+            re.search(r"\b\d+(?:[.,]\d+)?\s*%", text)
+            or re.search(r"\b(?:statistic|statistics|average|rate)\b", lower_text)
+        )
+        money_duration_hit = bool(
+            re.search(r"(?:[$\u20ac\u00a3\u20b9]\s*\d|\b\d+\s*(?:million|m|crore)\b)", lower_text)
+            or re.search(r"\b\d+[- ]year\b", lower_text)
+        )
+        quotation_hit = bool(
+            re.search(r"[\"\u201c\u201d\u2018\u2019][^\"\u201c\u201d\u2018\u2019]{8,}[\"\u201c\u201d\u2018\u2019]", text)
+        )
+        entity_hits = min(
+            5,
+            len(re.findall(r"\b[A-Z][\w'-]{2,}\b", text)),
+        )
+        preferred_length = 80 <= len(text) <= 320
+        window_start = window_index * source_chars // window_count
+        window_end = (window_index + 1) * source_chars // window_count
+        boundary_distance = min(
+            max(0, midpoint - window_start),
+            max(0, window_end - midpoint),
+        )
+        boundary_bonus = 0.25 if boundary_distance <= MAX_CANDIDATE_CHARS else 0.0
 
-            if fallback_sentence:
-                sentences = [
-                    fallback_sentence
-                ]
+        score = (
+            (4.0 if contains_marker(lower_text, marker_groups["attribution"]) else 0.0)
+            + (3.5 if score_result else 0.0)
+            + (3.0 if date_hit else 0.0)
+            + (3.0 if statistic_hit else 0.0)
+            + (3.0 if money_duration_hit else 0.0)
+            + (3.0 if contains_marker(lower_text, marker_groups["transfer"]) else 0.0)
+            + (3.0 if contains_marker(lower_text, marker_groups["injury"]) else 0.0)
+            + (2.5 if contains_marker(lower_text, marker_groups["event"]) else 0.0)
+            + (2.0 if quotation_hit else 0.0)
+            + (2.0 if contains_marker(lower_text, marker_groups["argument"]) else 0.0)
+            + title_overlap * 1.5
+            + number_hits * 1.0
+            + entity_hits * 0.4
+            + (1.0 if preferred_length else 0.0)
+            + boundary_bonus
+        )
+        prepared_candidates.append(
+            {
+                **candidate,
+                "window_index": window_index,
+                "normalized_key": normalized_key,
+                "preferred_length": preferred_length,
+                "score": score,
+            }
+        )
 
-        for (
-            sentence_index,
-            sentence,
-        ) in enumerate(sentences):
-            normalized_key = re.sub(
-                r"\s+",
-                " ",
-                sentence.lower(),
-            ).strip()
-
-            if (
-                not normalized_key
-                or normalized_key
-                in seen_text
-            ):
-                continue
-
-            seen_text.add(
-                normalized_key
-            )
-
-            sentence_tokens = (
-                _video_context_tokens(
-                    sentence
-                )
-            )
-
-            title_overlap = len(
-                title_tokens
-                & sentence_tokens
-            )
-
-            number_hits = len(
-                re.findall(
-                    r"\b\d+(?:[.,]\d+)?\b",
-                    sentence,
-                )
-            )
-
-            lower_sentence = (
-                sentence.lower()
-            )
-
-            marker_hits = sum(
-                1
-                for marker
-                in evidence_markers
-                if marker in lower_sentence
-            )
-
-            entity_hits = len(
-                re.findall(
-                    r"\b[A-Z][\w'-]{2,}\b",
-                    sentence,
-                )
-            )
-
-            length_score = (
-                2.0
-                if 70 <= len(sentence) <= 360
-                else 1.0
-            )
-
-            boundary_score = 0.0
-
-            if sentence_index == 0:
-                boundary_score += 0.6
-
-            if (
-                sentence_index
-                == len(sentences) - 1
-            ):
-                boundary_score += 0.4
-
-            score = (
-                title_overlap * 4.0
-                + min(number_hits, 4) * 1.3
-                + min(marker_hits, 5) * 1.5
-                + min(entity_hits, 5) * 0.35
-                + length_score
-                + boundary_score
-            )
-
-            candidates.append(
-                {
-                    "chunk_index": (
-                        chunk_index
-                    ),
-                    "sentence_index": (
-                        sentence_index
-                    ),
-                    "text": sentence,
-                    "score": score,
-                }
-            )
-
-    if not candidates:
-        fallback_text = cleaned[
-            :max_chars
-        ]
-
-        return {
-            "text": fallback_text,
-            "strategy": (
-                "deterministic_fallback"
-            ),
-            "compression_applied": True,
-            "source_chars": len(cleaned),
-            "context_chars": len(
-                fallback_text
-            ),
-            "source_chunk_count": (
-                len(chunks)
-            ),
-            "represented_chunk_count": 1,
-            "selected_sentence_count": 1,
-            "chunk_coverage": round(
-                1 / max(1, len(chunks)),
-                3,
-            ),
-        }
-
-    best_by_chunk: Dict[
+    selected: Dict[
         int,
         Dict[str, Any],
     ] = {}
-
-    for candidate in candidates:
-        chunk_index = int(
-            candidate["chunk_index"]
-        )
-
-        current_best = (
-            best_by_chunk.get(
-                chunk_index
-            )
-        )
-
-        if (
-            current_best is None
-            or candidate["score"]
-            > current_best["score"]
-        ):
-            best_by_chunk[
-                chunk_index
-            ] = candidate
-
-    anchor_candidates = [
-        best_by_chunk[index]
-        for index in sorted(
-            best_by_chunk
-        )
-    ]
-
-    average_anchor_chars = max(
-        1,
-        int(
-            sum(
-                len(
-                    candidate["text"]
-                )
-                for candidate
-                in anchor_candidates
-            )
-            / max(
-                1,
-                len(anchor_candidates),
-            )
-        ),
-    )
-
-    anchor_capacity = max(
-        2,
-        int(
-            max_chars * 0.60
-            / (
-                average_anchor_chars
-                + 55
-            )
-        ),
-    )
-
-    anchor_capacity = min(
-        len(anchor_candidates),
-        anchor_capacity,
-    )
-
-    if (
-        len(anchor_candidates)
-        <= anchor_capacity
-    ):
-        selected_anchors = (
-            anchor_candidates
-        )
-    elif anchor_capacity <= 1:
-        selected_anchors = [
-            anchor_candidates[
-                len(anchor_candidates) // 2
-            ]
-        ]
-    else:
-        anchor_positions = {
-            round(
-                position
-                * (
-                    len(anchor_candidates)
-                    - 1
-                )
-                / (
-                    anchor_capacity
-                    - 1
-                )
-            )
-            for position
-            in range(anchor_capacity)
-        }
-
-        selected_anchors = [
-            anchor_candidates[index]
-            for index
-            in sorted(anchor_positions)
-        ]
-
-    selected: Dict[
-        tuple[int, int],
-        Dict[str, Any],
-    ] = {}
-
-    used_chars = 0
+    rendered_length = 0
+    selected_normalized = set()
 
     def add_candidate(
         candidate: Dict[str, Any],
-    ) -> None:
-        nonlocal used_chars
-
-        key = (
-            int(
-                candidate[
-                    "chunk_index"
-                ]
-            ),
-            int(
-                candidate[
-                    "sentence_index"
-                ]
-            ),
-        )
-
+        *,
+        allow_selected_duplicate: bool = False,
+    ) -> bool:
+        nonlocal rendered_length
+        key = int(candidate["ordinal"])
+        normalized_key = candidate["normalized_key"]
         if key in selected:
-            return
+            return False
+        if normalized_key in selected_normalized and not allow_selected_duplicate:
+            return False
 
-        estimated_chars = (
-            len(candidate["text"])
-            + 60
+        marker = (
+            f"[SOURCE WINDOW "
+            f"{candidate['window_index'] + 1} "
+            f"OF {window_count}]"
         )
-
-        if (
-            used_chars
-            + estimated_chars
-            > max_chars
-        ):
-            return
+        part = f"{marker}\n{candidate['text']}"
+        separator = "\n\n" if selected else ""
+        incremental_cost = len(separator) + len(part)
+        if rendered_length + incremental_cost > max_chars:
+            return False
 
         selected[key] = candidate
-        used_chars += estimated_chars
+        selected_normalized.add(normalized_key)
+        rendered_length += incremental_cost
+        return True
 
-    for candidate in selected_anchors:
-        add_candidate(candidate)
+    candidates_by_window: Dict[int, List[Dict[str, Any]]] = {}
+    for candidate in prepared_candidates:
+        candidates_by_window.setdefault(
+            int(candidate["window_index"]),
+            [],
+        ).append(candidate)
+
+    anchor_count = 0
+    represented_windows = set()
+    for window_index in range(window_count):
+        ranked_window = sorted(
+            candidates_by_window.get(window_index, []),
+            key=lambda candidate: (
+                -candidate["score"],
+                -int(candidate["preferred_length"]),
+                -len(candidate["text"]),
+                candidate["start_offset"],
+                candidate["ordinal"],
+            ),
+        )
+        for candidate in ranked_window:
+            if add_candidate(
+                candidate,
+                allow_selected_duplicate=True,
+            ):
+                anchor_count += 1
+                represented_windows.add(window_index)
+                break
 
     ranked_candidates = sorted(
-        candidates,
+        prepared_candidates,
         key=lambda candidate: (
-            candidate["score"],
-            -candidate["chunk_index"],
-            -candidate["sentence_index"],
+            -candidate["score"],
+            candidate["window_index"],
+            candidate["start_offset"],
+            candidate["ordinal"],
         ),
-        reverse=True,
     )
 
+    global_salience_count = 0
     for candidate in ranked_candidates:
-        add_candidate(candidate)
+        if add_candidate(candidate):
+            global_salience_count += 1
+            represented_windows.add(
+                int(candidate["window_index"])
+            )
 
     selected_in_order = sorted(
         selected.values(),
         key=lambda candidate: (
-            candidate["chunk_index"],
-            candidate["sentence_index"],
+            candidate["start_offset"],
+            candidate["end_offset"],
+            candidate["ordinal"],
         ),
     )
 
     context_parts: List[str] = []
-
     represented_chunks = set()
 
     for candidate in selected_in_order:
-        chunk_index = int(
-            candidate["chunk_index"]
+        window_index = int(candidate["window_index"])
+        first_chunk_index = min(
+            len(chunks) - 1,
+            max(
+                0,
+                int(candidate["start_offset"])
+                // legacy_chunk_size,
+            ),
         )
-
-        represented_chunks.add(
-            chunk_index
+        last_chunk_index = min(
+            len(chunks) - 1,
+            max(
+                first_chunk_index,
+                (int(candidate["end_offset"]) - 1)
+                // legacy_chunk_size,
+            ),
         )
-
+        represented_chunks.update(
+            range(
+                first_chunk_index,
+                last_chunk_index + 1,
+            )
+        )
         context_parts.append(
             (
-                f"[SOURCE CHUNK "
-                f"{chunk_index + 1} "
-                f"OF {len(chunks)}]\n"
+                f"[SOURCE WINDOW "
+                f"{window_index + 1} "
+                f"OF {window_count}]\n"
                 f"{candidate['text']}"
             )
         )
@@ -959,6 +931,10 @@ def build_video_transcript_context(
     context_text = "\n\n".join(
         context_parts
     ).strip()
+    if len(context_text) > max_chars:
+        raise AssertionError(
+            "Video transcript context exceeded its character budget."
+        )
 
     return {
         "text": context_text,
@@ -966,13 +942,11 @@ def build_video_transcript_context(
             "all_chunk_extractive_compression"
         ),
         "compression_applied": True,
-        "source_chars": len(cleaned),
+        "source_chars": source_chars,
         "context_chars": len(
             context_text
         ),
-        "source_chunk_count": len(
-            chunks
-        ),
+        "source_chunk_count": len(chunks),
         "represented_chunk_count": len(
             represented_chunks
         ),
@@ -982,6 +956,14 @@ def build_video_transcript_context(
         "chunk_coverage": round(
             len(represented_chunks)
             / max(1, len(chunks)),
+            3,
+        ),
+        "coverage_window_count": window_count,
+        "represented_window_count": len(represented_windows),
+        "coverage_anchor_count": anchor_count,
+        "global_salience_count": global_salience_count,
+        "window_coverage": round(
+            len(represented_windows) / max(1, window_count),
             3,
         ),
     }

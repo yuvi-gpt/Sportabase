@@ -136,6 +136,22 @@ def ai_video_claim_readout_impl(
         )
     )
 
+    transcript_context_disclosure = ""
+
+    if transcript_context.get(
+        "compression_applied"
+    ) is True:
+        transcript_context_disclosure = (
+            "Transcript-context note:\n"
+            "- The context below contains deterministic verbatim excerpts from a longer transcript.\n"
+            "- Excerpts are presented in their original source chronology.\n"
+            "- Some passages were omitted only to satisfy the prompt budget.\n"
+            "- Absence from these excerpts is not evidence that something was absent from the full video.\n"
+            "- Do not assume adjacent excerpts were adjacent in the original transcript.\n"
+            "- Use evidence only when it is explicitly present in a visible excerpt.\n"
+            "- Any uncertain caption correction must be supported by the visible excerpt, the video title, and clear local context.\n\n"
+        )
+
     current_date_utc = (
         datetime.now(timezone.utc)
         .date()
@@ -292,6 +308,7 @@ def ai_video_claim_readout_impl(
         "- not_sports_content\n\n"
         f"Video title: {title}\n"
         f"URL: {url}\n\n"
+        f"{transcript_context_disclosure}"
         "<UNTRUSTED_VIDEO_TRANSCRIPT>\n"
         f"{clipped_transcript}\n"
         "</UNTRUSTED_VIDEO_TRANSCRIPT>\n"
