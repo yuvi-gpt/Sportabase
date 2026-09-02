@@ -11,9 +11,9 @@ from evals.golden_v1.loader import load_corpus
 CORPUS = Path(__file__).parents[1] / "evals" / "golden_v1" / "corpus"
 
 
-def test_valid_manifest_loads_six_cases():
+def test_valid_manifest_loads_curated_corpus():
     loaded = load_corpus(CORPUS)
-    assert len(loaded.cases) == 6
+    assert len(loaded.cases) == 24
 
 
 def test_duplicate_case_id_and_path_are_rejected(tmp_path):

@@ -89,3 +89,12 @@ Fact alternatives use Unicode-normalized, case-folded literal substring
 matching. Authors must use sufficiently specific phrases and avoid short,
 ambiguous tokens: a short token can occur inside an unrelated longer word.
 V1 deliberately provides neither fixture regexes nor semantic matching.
+
+## Curated corpus coverage
+
+The initial curated corpus contains 24 approved cases: 12 article, 8 video,
+and 4 intelligence cases. It covers English, Spanish, French, and
+Hindi-English mixed material. All inputs are short synthetic/manual works;
+candidate artifacts are frozen evaluation inputs, never automatically correct
+goldens. Future growth requires intentionally authored expectations and human
+repository review.

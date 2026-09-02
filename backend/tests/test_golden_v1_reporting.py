@@ -14,8 +14,8 @@ CORPUS = Path(__file__).parents[1] / "evals/golden_v1/corpus"
 def test_status_counts_metrics_digest_and_byte_stability():
     first = evaluate_corpus(CORPUS)
     second = evaluate_corpus(CORPUS)
-    assert first["totals"] == {"cases": 6, "passed": 6, "warned": 0, "failed": 0, "invalid": 0, "skipped": 0}
-    assert first["metrics"]["required_facts"]["required"] == 4
+    assert first["totals"] == {"cases": 24, "passed": 24, "warned": 0, "failed": 0, "invalid": 0, "skipped": 0}
+    assert first["metrics"]["required_facts"]["required"] == 27
     assert first["deterministic_digest"] == second["deterministic_digest"]
     assert deterministic_json(first, pretty=True).encode() == deterministic_json(second, pretty=True).encode()
 
