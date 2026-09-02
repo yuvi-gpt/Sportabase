@@ -1,0 +1,24 @@
+{
+  "annotation": {"accepted_alternatives": [], "ambiguity": [], "annotation_version": 1, "notes": "Approved synthetic contract: hedging and absence of confirmation are material.", "provenance_type": "synthetic", "review_status": "approved"},
+  "case_id": "article.transfer.rumor.synthetic-001",
+  "case_version": "golden-case-v1",
+  "description": "Synthetic hedged transfer report with no bid, agreement, or confirmation.",
+  "expected": {
+    "checks": [
+      {"dimension": "classification", "evaluator": "exact", "path": "article_type", "value": "transfer_rumor"},
+      {"dimension": "classification_safety", "evaluator": "forbidden_values", "path": "article_type", "values": ["transfer_official", "official_announcement"]},
+      {"dimension": "merit", "evaluator": "numeric_range", "max": 48, "min": 15, "path": "merit_score"},
+      {"dimension": "merit_badge", "evaluator": "allowed_values", "path": "badge", "values": ["Unverified Rumor", "Speculative", "Low Evidence"]},
+      {"dimension": "summary_structure", "evaluator": "structure", "list": true, "max_item_length": 220, "max_items": 3, "max_total_length": 500, "min_items": 2, "non_empty_strings": true, "path": "tldr", "unique_normalized": true},
+      {"dimension": "summary_facts", "evaluator": "required_facts", "facts": [{"any_phrases": ["may consider", "possible summer"], "id": "hedging"}, {"any_phrases": ["no bid", "no agreement"], "id": "no_agreement"}], "path": "tldr"},
+      {"dimension": "summary_hallucination", "evaluator": "forbidden_facts", "facts": [{"id": "invented_confirmation", "phrases": ["completed the signing", "officially announced", "signed a contract"]}], "path": "tldr"}
+    ],
+    "human_review_required": false,
+    "review_focus": ""
+  },
+  "input": {"article_text": "article.txt", "max_bullets": 3, "title": "Eastport may consider Keller", "url": "https://harborgazette.example/transfers/keller"},
+  "language": {"mixed": false, "primary": "English"},
+  "mode": "article",
+  "replay": {"artifact": "candidate.json", "kind": "final_output"},
+  "tags": ["article", "classification", "merit", "summary", "transfer", "rumor"]
+}

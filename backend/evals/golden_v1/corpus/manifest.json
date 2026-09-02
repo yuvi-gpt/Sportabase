@@ -1,0 +1,12 @@
+{
+  "case_schema_version": "golden-case-v1",
+  "cases": [
+    {"case_id": "article.transfer.official.synthetic-001", "path": "article/article.transfer.official.synthetic-001/case.json"},
+    {"case_id": "article.transfer.rumor.synthetic-001", "path": "article/article.transfer.rumor.synthetic-001/case.json"},
+    {"case_id": "intelligence.claim.transfer-equivalence.synthetic-001", "path": "intelligence/intelligence.claim.transfer-equivalence.synthetic-001/case.json"},
+    {"case_id": "intelligence.dependency-blocks-independence.synthetic-001", "path": "intelligence/intelligence.dependency-blocks-independence.synthetic-001/case.json"},
+    {"case_id": "video.captions.high-confidence.synthetic-001", "path": "video/video.captions.high-confidence.synthetic-001/case.json"},
+    {"case_id": "video.captions.low-confidence.synthetic-001", "path": "video/video.captions.low-confidence.synthetic-001/case.json"}
+  ],
+  "golden_set_version": "sportabase-golden-set-v1"
+}

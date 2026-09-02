@@ -1127,6 +1127,150 @@ def normalize_video_transcript_metadata(
     }
 
 
+def apply_video_extraction_confidence_policy(
+    payload: Dict[str, Any],
+    transcript_metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Apply the provider-free transcript extraction confidence policy."""
+    data = dict(payload or {})
+    transcript_extraction = normalize_video_transcript_metadata(
+        transcript_metadata
+    )
+    limiting_warnings = {
+        "very_few_segments",
+        "very_short_transcript",
+    }
+    transcript_extraction_limited = bool(
+        transcript_extraction.get("provided", False)
+        and (
+            float(transcript_extraction.get("extraction_confidence", 0.0))
+            < 0.55
+            or any(
+                warning in limiting_warnings
+                for warning in transcript_extraction.get(
+                    "extraction_warnings", []
+                )
+            )
+        )
+    )
+
+    try:
+        model_transcript_confidence = float(
+            data.get("transcript_confidence", 0.0)
+        )
+    except Exception:
+        model_transcript_confidence = 0.0
+    model_transcript_confidence = round(
+        max(0.0, min(1.0, model_transcript_confidence)),
+        2,
+    )
+
+    extraction_confidence = float(
+        transcript_extraction.get("extraction_confidence", 1.0)
+    )
+    if transcript_extraction.get("provided", False):
+        effective_transcript_confidence = min(
+            model_transcript_confidence,
+            extraction_confidence,
+        )
+    else:
+        effective_transcript_confidence = model_transcript_confidence
+    effective_transcript_confidence = round(
+        effective_transcript_confidence,
+        2,
+    )
+
+    evidence_score = int(float(data.get("evidence_score", 0)))
+    logic_score = int(float(data.get("logic_score", 0)))
+    evidence_score = max(0, min(100, evidence_score))
+    logic_score = max(0, min(100, logic_score))
+
+    evidence_used = data.get("evidence_used", [])
+    if not isinstance(evidence_used, list):
+        evidence_used = [str(evidence_used)]
+    evidence_used = [
+        clean_html(str(item)).strip()
+        for item in evidence_used
+        if str(item).strip()
+    ][:8]
+
+    allowed_content_types = {
+        "confirmed_news",
+        "sports_report",
+        "rumor",
+        "sports_analysis",
+        "sports_opinion",
+        "engagement_bait",
+        "not_sports_content",
+    }
+    content_type = str(data.get("content_type", "unknown")).strip().lower()
+    if content_type not in allowed_content_types:
+        content_type = "unknown"
+
+    allowed_verdicts = {
+        "confirmed",
+        "well_supported_report",
+        "well_supported_analysis",
+        "reasonable_opinion",
+        "plausible_rumor",
+        "weakly_supported",
+        "misleading",
+        "engagement_bait",
+        "not_sports_content",
+    }
+    verdict = str(data.get("verdict", "weakly_supported")).strip().lower()
+    if verdict not in allowed_verdicts:
+        verdict = "weakly_supported"
+    if content_type == "unknown":
+        content_type = {
+            "confirmed": "confirmed_news",
+            "well_supported_report": "sports_report",
+            "well_supported_analysis": "sports_analysis",
+            "reasonable_opinion": "sports_opinion",
+            "plausible_rumor": "rumor",
+            "engagement_bait": "engagement_bait",
+            "not_sports_content": "not_sports_content",
+        }.get(verdict, "unknown")
+
+    strong_verdicts = {
+        "confirmed",
+        "well_supported_report",
+        "well_supported_analysis",
+    }
+    if not evidence_used:
+        evidence_score = min(evidence_score, 35)
+        if verdict in strong_verdicts:
+            verdict = "weakly_supported"
+    if transcript_extraction_limited:
+        evidence_score = min(evidence_score, 55)
+        if verdict in strong_verdicts:
+            verdict = "weakly_supported"
+            data["localized_verdict"] = ""
+
+    data.update(
+        {
+            "content_type": content_type,
+            "evidence_used": evidence_used,
+            "evidence_score": evidence_score,
+            "logic_score": logic_score,
+            "verdict": verdict,
+            "transcript_confidence": effective_transcript_confidence,
+        }
+    )
+    return {
+        "data": data,
+        "transcript_extraction": transcript_extraction,
+        "transcript_extraction_limited": transcript_extraction_limited,
+        "model_transcript_confidence": model_transcript_confidence,
+        "transcript_confidence": effective_transcript_confidence,
+        "evidence_score": evidence_score,
+        "logic_score": logic_score,
+        "verdict": verdict,
+        "localized_verdict": data.get("localized_verdict"),
+        "evidence_used": evidence_used,
+    }
+
+
 VIDEO_MODEL_UI_LABEL_KEYS = {
     "video_intelligence",
     "main_claim",

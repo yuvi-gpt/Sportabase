@@ -1,0 +1,24 @@
+{
+  "annotation": {"accepted_alternatives": [], "ambiguity": ["Partial captions cannot establish the complete argument."], "annotation_version": 1, "notes": "Approved synthetic limited-extraction contract; no correction is justified by available context.", "provenance_type": "synthetic", "review_status": "approved"},
+  "case_id": "video.captions.low-confidence.synthetic-001",
+  "case_version": "golden-case-v1",
+  "description": "Partial low-confidence captions must remain weak and avoid invented corrections.",
+  "expected": {
+    "checks": [
+      {"dimension": "classification", "evaluator": "exact", "path": "content_type", "value": "rumor"},
+      {"dimension": "video_evidence_score", "evaluator": "numeric_range", "max": 55, "min": 0, "path": "evidence_score"},
+      {"dimension": "video_logic_score", "evaluator": "numeric_range", "max": 92, "min": 90, "path": "logic_score"},
+      {"dimension": "verdict", "evaluator": "exact", "path": "verdict", "value": "weakly_supported"},
+      {"dimension": "transcript_confidence", "evaluator": "numeric_range", "max": 0.54, "min": 0.0, "path": "transcript_confidence"},
+      {"dimension": "limited_localized_verdict", "evaluator": "exact", "path": "localized_verdict", "value": ""},
+      {"dimension": "caption_corrections", "evaluator": "exact", "path": "uncertain_corrections", "value": []}
+    ],
+    "human_review_required": false,
+    "review_focus": ""
+  },
+  "input": {"title": "Keller update", "transcript": "transcript.txt", "transcript_metadata": {"extraction_confidence": 0.42, "extraction_warnings": ["very_short_transcript"], "provided": true, "segment_count": 2}},
+  "language": {"mixed": false, "primary": "English"},
+  "mode": "video",
+  "replay": {"artifact": "provider-output.json", "kind": "provider_raw", "model": "gemini-3.5-flash", "normalization_contract": "video-output-v1", "prompt_contract_version": "video-analysis-prompt-v1", "provider": "google", "task": "video_analysis"},
+  "tags": ["video", "classification", "low-confidence", "transcript", "scores", "replay"]
+}

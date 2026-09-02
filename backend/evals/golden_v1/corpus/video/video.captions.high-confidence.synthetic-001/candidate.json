@@ -1,0 +1,7 @@
+{
+  "content_type": "sports_report",
+  "evidence_score": 78,
+  "logic_score": 81,
+  "verdict": "well_supported_report",
+  "language": {"detected_language": "English", "language_confidence": 0.97, "mixed_language": false, "transcript_confidence": 0.94, "uncertain_corrections": []}
+}

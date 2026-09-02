@@ -1,0 +1,19 @@
+{
+  "annotation": {"accepted_alternatives": ["Optional origin and period may differ without changing the transfer core."], "ambiguity": [], "annotation_version": 1, "notes": "Approved against the authoritative canonical claim contract.", "provenance_type": "synthetic", "review_status": "approved"},
+  "case_id": "intelligence.claim.transfer-equivalence.synthetic-001",
+  "case_version": "golden-case-v1",
+  "description": "Two transfer representations share canonical core identity and have no material conflict.",
+  "expected": {
+    "checks": [
+      {"claim": {"event_type": "transfer", "facets": {"effective_period": "2030"}, "negated": false, "roles": {"destination": "football|club|northbridge"}, "state": "completed", "subject_key": "football|player|mateo-silva", "version": "canonical-claim-contract-v1"}, "dimension": "canonical_claim", "evaluator": "canonical_claim", "match": "core_compatible", "path": "claim"},
+      {"dimension": "claim_subject", "evaluator": "exact", "path": "claim.subject_key", "value": "football|player|mateo-silva"}
+    ],
+    "human_review_required": false,
+    "review_focus": ""
+  },
+  "input": {"description": "Synthetic structured claim pair; no provider input."},
+  "language": {"mixed": false, "primary": "English"},
+  "mode": "intelligence",
+  "replay": {"artifact": "candidate.json", "kind": "final_output"},
+  "tags": ["intelligence", "claims", "canonicalization", "transfer"]
+}

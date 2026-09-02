@@ -1,0 +1,3 @@
+{
+  "text": "{\"detected_language\":\"English\",\"languages\":[\"English\"],\"mixed_language\":false,\"language_confidence\":0.74,\"transcript_confidence\":0.96,\"uncertain_corrections\":[],\"content_type\":\"rumor\",\"localized_content_type\":\"Rumor\",\"localized_verdict\":\"Well-Supported Report\",\"ui_labels\":{},\"claim\":\"The partial captions suggest Keller may be linked with Eastport.\",\"evidence_used\":[\"The captions mention that no bid exists.\"],\"logic_check\":\"The incomplete captions support only a tentative link.\",\"hype_check\":\"The presentation cannot be assessed fully.\",\"evidence_score\":92,\"logic_score\":91,\"verdict\":\"well_supported_report\"}"
+}
