@@ -8,6 +8,8 @@ import "../styles/article-mode.css";
 
 import "../styles/persistent-intelligence.css";
 
+import "../styles/reporting-profiles.css";
+
 import {
   openSportabaseShell,
 } from "../ui/overlay-shell.js";
@@ -27,6 +29,10 @@ import {
 import {
   createPersistentIntelligenceIntegration,
 } from "./persistent-intelligence.js";
+
+import {
+  createReportingProfilesIntegration,
+} from "./reporting-profiles.js";
 
 import {
   extractArticlePage,
@@ -82,21 +88,31 @@ const shell = openSportabaseShell({
     runtimeConfig.preferences || {},
 });
 
+const apiBase = String(
+  runtimeConfig.api ||
+  "https://sportabase-api.onrender.com"
+).replace(/\/+$/, "");
+
 const persistentIntelligence =
   createPersistentIntelligenceIntegration({
     root: shell.content,
-    apiBase: String(
-      runtimeConfig.api ||
-      "https://sportabase-api.onrender.com"
-    ).replace(/\/+$/, ""),
+    apiBase,
     sourceUrl: window.location.href,
     mode: isYouTubeVideo
       ? "video"
       : "article",
   });
 
+const reportingProfiles =
+  createReportingProfilesIntegration({
+    root: shell.content,
+    apiBase,
+    sourceUrl: window.location.href,
+  });
+
 shell.onClose?.(() => {
   persistentIntelligence.destroy();
+  reportingProfiles.destroy();
 });
 
 if (isYouTubeVideo) {

@@ -3,7 +3,11 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { IntelligenceDetailScreen } from '../components/intelligence-detail-screen';
-import { isWatchTargetKind } from '../lib/intelligence-history';
+import { SourceReporterDetailScreen } from '../components/source-reporter-detail-screen';
+import {
+  isIntelligenceKind,
+  isWatchableIntelligenceKind,
+} from '../lib/intelligence-kinds';
 
 export default function IntelligenceDetailRoute() {
   const params = useLocalSearchParams<{
@@ -18,7 +22,7 @@ export default function IntelligenceDetailRoute() {
     ? params.id[0]
     : params.id;
 
-  if (!isWatchTargetKind(kind) || !id?.trim()) {
+  if (!isIntelligenceKind(kind) || !id?.trim()) {
     return (
       <View style={styles.screen}>
         <SafeAreaView style={styles.safeArea}>
@@ -27,19 +31,32 @@ export default function IntelligenceDetailRoute() {
           </Text>
           <Text style={styles.copy}>
             This route does not identify a supported entity,
-            story, claim or media object.
+            story, claim, media, source or reporter object.
           </Text>
         </SafeAreaView>
       </View>
     );
   }
 
-  return (
-    <IntelligenceDetailScreen
-      kind={kind}
-      id={id.trim()}
-    />
-  );
+  if (kind === 'source' || kind === 'reporter') {
+    return (
+      <SourceReporterDetailScreen
+        kind={kind}
+        id={id.trim()}
+      />
+    );
+  }
+
+  if (isWatchableIntelligenceKind(kind)) {
+    return (
+      <IntelligenceDetailScreen
+        kind={kind}
+        id={id.trim()}
+      />
+    );
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({

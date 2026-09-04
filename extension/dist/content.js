@@ -46,6 +46,12 @@
     }
   });
 
+  // src/styles/reporting-profiles.css
+  var init_reporting_profiles = __esm({
+    "src/styles/reporting-profiles.css"() {
+    }
+  });
+
   // src/ui/logo.js
   function getSportabaseLogoMarkup({
     className = ""
@@ -7261,6 +7267,373 @@
     }
   });
 
+  // src/content/reporting-profiles.js
+  function escapeHtml5(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function humanize3(value) {
+    return String(value || "").replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+  function formatTime2(value) {
+    const text2 = String(value || "").trim();
+    if (!text2) return "Not recorded";
+    const parsed = new Date(text2);
+    return Number.isNaN(parsed.getTime()) ? text2 : parsed.toLocaleString();
+  }
+  async function requestJson2(apiBase, path) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      REQUEST_TIMEOUT_MS2
+    );
+    try {
+      const response = await fetch(`${apiBase}${path}`, {
+        headers: { Accept: "application/json" },
+        signal: controller.signal
+      });
+      const text2 = await response.text();
+      let payload = null;
+      try {
+        payload = text2 ? JSON.parse(text2) : null;
+      } catch {
+        payload = null;
+      }
+      if (!response.ok) {
+        const error = new Error(
+          String(payload?.detail || text2 || `HTTP ${response.status}`)
+        );
+        error.status = response.status;
+        throw error;
+      }
+      return payload;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("Reporting profile request timed out.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+  function profileIdentity(kind, data) {
+    if (kind === "source") {
+      const source = data?.source || {};
+      return {
+        title: String(source.display_name || source.canonical_domain || "Persisted source"),
+        subtitle: [source.source_type, source.canonical_domain].filter(Boolean).join(" \xB7 "),
+        firstSeenAt: source.first_seen_at,
+        lastSeenAt: source.last_seen_at
+      };
+    }
+    const reporter = data?.reporter || {};
+    return {
+      title: String(reporter.display_name || "Persisted reporter"),
+      subtitle: String(reporter.identity_key || "Persisted reporter"),
+      firstSeenAt: reporter.first_seen_at,
+      lastSeenAt: reporter.last_seen_at
+    };
+  }
+  function policyMarkup(policy) {
+    return Object.entries(policy || {}).filter(([, enabled]) => Boolean(enabled)).map(
+      ([key]) => `
+        <p>
+          <i></i>
+          ${escapeHtml5(POLICY_COPY2[key] || key.replaceAll("_", " "))}
+        </p>
+      `
+    ).join("");
+  }
+  function eventMarkup2(event) {
+    const detail = event?.claim_summary || event?.canonical_text || event?.title || event?.relationship_type || event?.verification_status || "Persisted reporting activity";
+    return `
+    <article class="sb-rp-event">
+      <div>
+        <strong>${escapeHtml5(humanize3(event?.type || "event"))}</strong>
+        <small>${escapeHtml5(formatTime2(event?.occurred_at))}</small>
+      </div>
+      <p>${escapeHtml5(detail)}</p>
+    </article>
+  `;
+  }
+  function countsMarkup(counts) {
+    return Object.entries(counts || {}).map(
+      ([key, value]) => `
+        <div class="sb-rp-count">
+          <strong>${escapeHtml5(value)}</strong>
+          <span>${escapeHtml5(humanize3(key))}</span>
+        </div>
+      `
+    ).join("");
+  }
+  function relationMarkup2(kind, item) {
+    const title = item?.display_name || item?.canonical_title || item?.canonical_text || item?.title || item?.canonical_domain || `${humanize3(kind)} ${item?.id || ""}`;
+    const subtitle = item?.source_type || item?.identity_key || item?.status || item?.claim_type || item?.mode || "";
+    const navigable = kind === "source" || kind === "reporter";
+    return `
+    <${navigable ? "button" : "div"}
+      class="sb-rp-relation"
+      ${navigable ? `type="button" data-sb-rp-kind="${kind}" data-sb-rp-id="${escapeHtml5(item?.id)}"` : ""}
+    >
+      <span>${escapeHtml5(kind.toUpperCase())}</span>
+      <strong>${escapeHtml5(title)}</strong>
+      ${subtitle ? `<small>${escapeHtml5(subtitle)}</small>` : ""}
+    </${navigable ? "button" : "div"}>
+  `;
+  }
+  function profileRelations(kind, data) {
+    const groups = [
+      ["media", data?.media || []],
+      ["story", data?.stories || []],
+      ["claim", data?.claims || []]
+    ];
+    if (kind === "source") {
+      groups.push(["reporter", data?.reporters || []]);
+    } else {
+      groups.push(["source", data?.sources || []]);
+    }
+    return groups.flatMap(
+      ([relationKind, items]) => items.slice(0, 8).map((item) => relationMarkup2(relationKind, item))
+    ).join("");
+  }
+  function createReportingProfilesPanel({ host, apiBase, sourceUrl }) {
+    let destroyed = false;
+    let attribution = null;
+    function renderLoading() {
+      host.innerHTML = `
+      <section class="sb-rp-card">
+        <div class="sb-rp-eyebrow">REPORTING PROFILES</div>
+        <p class="sb-rp-muted">Resolving persisted source and reporter attribution\u2026</p>
+      </section>
+    `;
+    }
+    function renderSummary() {
+      if (destroyed || !attribution) return;
+      const items = [
+        attribution.sourceId ? { kind: "source", id: attribution.sourceId, label: "Source profile" } : null,
+        attribution.reporterId ? { kind: "reporter", id: attribution.reporterId, label: "Reporter profile" } : null
+      ].filter(Boolean);
+      if (!items.length) {
+        host.innerHTML = "";
+        return;
+      }
+      host.innerHTML = `
+      <section class="sb-rp-card">
+        <div class="sb-rp-head">
+          <div>
+            <div class="sb-rp-eyebrow">REPORTING PROFILES</div>
+            <h3>Who produced this reporting?</h3>
+          </div>
+          <span>${items.length}</span>
+        </div>
+        <p class="sb-rp-copy">
+          Open persisted source/reporter history. These profiles describe recorded activity and relationships; they do not assign a reliability score.
+        </p>
+        <div class="sb-rp-profile-buttons">
+          ${items.map(
+        (item) => `
+                <button
+                  type="button"
+                  class="sb-rp-profile-button"
+                  data-sb-rp-kind="${item.kind}"
+                  data-sb-rp-id="${escapeHtml5(item.id)}"
+                >
+                  <span>${escapeHtml5(item.kind.toUpperCase())}</span>
+                  <strong>${escapeHtml5(item.label)}</strong>
+                  <small>Open persisted history \u2192</small>
+                </button>
+              `
+      ).join("")}
+        </div>
+      </section>
+    `;
+      bindProfileLinks();
+    }
+    function bindProfileLinks() {
+      host.querySelectorAll("[data-sb-rp-kind]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const kind = button.getAttribute("data-sb-rp-kind");
+          const id = button.getAttribute("data-sb-rp-id");
+          if ((kind === "source" || kind === "reporter") && id) {
+            void openProfile(kind, id);
+          }
+        });
+      });
+    }
+    async function openProfile(kind, id) {
+      if (destroyed) return;
+      host.innerHTML = `
+      <section class="sb-rp-card">
+        <div class="sb-rp-eyebrow">REPORTING PROFILE \xB7 ${kind.toUpperCase()}</div>
+        <p class="sb-rp-muted">Loading persisted profile\u2026</p>
+      </section>
+    `;
+      try {
+        const segment = kind === "source" ? "sources" : "reporters";
+        const data = await requestJson2(
+          apiBase,
+          `/intelligence/${segment}/${encodeURIComponent(id)}/history?limit=30`
+        );
+        if (destroyed) return;
+        const identity = profileIdentity(kind, data);
+        const relations = profileRelations(kind, data);
+        host.innerHTML = `
+        <section class="sb-rp-card">
+          <button type="button" class="sb-rp-back" data-sb-rp-back>\u2190 Reporting profiles</button>
+          <div class="sb-rp-head sb-rp-profile-head">
+            <div>
+              <div class="sb-rp-eyebrow">PERSISTED ${kind.toUpperCase()} PROFILE</div>
+              <h3>${escapeHtml5(identity.title)}</h3>
+              <p class="sb-rp-muted">${escapeHtml5(identity.subtitle)}</p>
+            </div>
+          </div>
+          <div class="sb-rp-time-grid">
+            <div><span>FIRST SEEN</span><strong>${escapeHtml5(formatTime2(identity.firstSeenAt))}</strong></div>
+            <div><span>LAST SEEN</span><strong>${escapeHtml5(formatTime2(identity.lastSeenAt))}</strong></div>
+          </div>
+          <div class="sb-rp-boundary">
+            <strong>NO RELIABILITY SCORE</strong>
+            <p>This profile exposes persisted observations, relationships, dependencies, independence assertions and evidence links as separate facts.</p>
+          </div>
+          <div class="sb-rp-count-grid">${countsMarkup(data?.counts)}</div>
+          <section class="sb-rp-policy">
+            <span>INTERPRETATION BOUNDARIES</span>
+            ${policyMarkup(data?.policy)}
+          </section>
+          <section class="sb-rp-section">
+            <div class="sb-rp-section-head"><h4>Related intelligence</h4></div>
+            <div class="sb-rp-relations">${relations || '<p class="sb-rp-muted">No related objects exposed yet.</p>'}</div>
+          </section>
+          <section class="sb-rp-section">
+            <div class="sb-rp-section-head"><h4>Persisted chronology</h4><span>${data?.events?.length || 0}</span></div>
+            <p class="sb-rp-muted">Ordering is descriptive. It does not imply truth, reliability, novelty or independent corroboration.</p>
+            <div class="sb-rp-events">
+              ${(data?.events || []).map(eventMarkup2).join("") || '<p class="sb-rp-muted">No persisted profile events yet.</p>'}
+            </div>
+          </section>
+        </section>
+      `;
+        host.querySelector("[data-sb-rp-back]")?.addEventListener("click", renderSummary);
+        bindProfileLinks();
+      } catch (error) {
+        if (destroyed) return;
+        host.innerHTML = `
+        <section class="sb-rp-card is-error">
+          <button type="button" class="sb-rp-back" data-sb-rp-back>\u2190 Reporting profiles</button>
+          <div class="sb-rp-eyebrow">REPORTING PROFILE</div>
+          <h3>Profile temporarily unavailable</h3>
+          <p class="sb-rp-copy">${escapeHtml5(error?.message || error)}</p>
+        </section>
+      `;
+        host.querySelector("[data-sb-rp-back]")?.addEventListener("click", renderSummary);
+      }
+    }
+    async function initialize() {
+      renderLoading();
+      try {
+        const mediaId = await mediaItemIdForUrl(sourceUrl);
+        const mediaHistory = await requestJson2(
+          apiBase,
+          `/intelligence/media/${encodeURIComponent(mediaId)}/history?limit=1`
+        );
+        if (destroyed) return;
+        attribution = {
+          sourceId: String(mediaHistory?.media?.source_id || "").trim(),
+          reporterId: String(mediaHistory?.media?.reporter_id || "").trim()
+        };
+        renderSummary();
+      } catch (error) {
+        if (destroyed) return;
+        if (error?.status === 404) {
+          host.innerHTML = "";
+          return;
+        }
+        host.innerHTML = `
+        <section class="sb-rp-card is-error">
+          <div class="sb-rp-eyebrow">REPORTING PROFILES</div>
+          <p class="sb-rp-copy">${escapeHtml5(error?.message || error)}</p>
+        </section>
+      `;
+      }
+    }
+    void initialize();
+    return {
+      destroy() {
+        destroyed = true;
+        host.innerHTML = "";
+      }
+    };
+  }
+  function createReportingProfilesIntegration({
+    root,
+    apiBase,
+    sourceUrl
+  } = {}) {
+    if (!root) return { destroy() {
+    } };
+    const normalizedApiBase = String(
+      apiBase || "https://sportabase-api.onrender.com"
+    ).replace(/\/+$/, "");
+    let activePanel = null;
+    let activeResults = null;
+    function sync() {
+      const results = root.querySelector(
+        ".sb-article-results, .sb-video-results"
+      );
+      if (!results) {
+        activePanel?.destroy();
+        activePanel = null;
+        activeResults = null;
+        return;
+      }
+      if (results === activeResults && results.querySelector("[data-sb-reporting-profiles-host]")) {
+        return;
+      }
+      activePanel?.destroy();
+      const host = document.createElement("div");
+      host.setAttribute("data-sb-reporting-profiles-host", "");
+      const actions = results.querySelector(
+        ".sb-article-result-actions, .sb-result-actions"
+      );
+      if (actions?.parentNode === results) {
+        results.insertBefore(host, actions);
+      } else {
+        results.append(host);
+      }
+      activeResults = results;
+      activePanel = createReportingProfilesPanel({
+        host,
+        apiBase: normalizedApiBase,
+        sourceUrl: sourceUrl || window.location.href
+      });
+    }
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { childList: true, subtree: true });
+    sync();
+    return {
+      destroy() {
+        observer.disconnect();
+        activePanel?.destroy();
+        activePanel = null;
+        activeResults = null;
+      }
+    };
+  }
+  var REQUEST_TIMEOUT_MS2, POLICY_COPY2;
+  var init_reporting_profiles2 = __esm({
+    "src/content/reporting-profiles.js"() {
+      init_persistent_intelligence_core();
+      REQUEST_TIMEOUT_MS2 = 22e3;
+      POLICY_COPY2 = {
+        chronology_is_not_truth: "Chronology is descriptive activity, not a truth or credibility score.",
+        reporting_volume_is_not_reliability: "Reporting volume is not a reliability rating.",
+        source_count_is_not_independence: "Multiple sources do not automatically represent independent corroboration.",
+        dependency_is_not_falsehood: "A persisted dependency relationship does not mean the reporting is false.",
+        absence_of_verified_independence_is_not_dependence: "Missing verified independence evidence is not evidence of dependence.",
+        evidence_quantity_is_not_probability: "More evidence records do not automatically increase truth probability."
+      };
+    }
+  });
+
   // src/content/index.js
   var require_index = __commonJS({
     "src/content/index.js"() {
@@ -7269,11 +7642,13 @@
       init_video_results();
       init_article_mode();
       init_persistent_intelligence();
+      init_reporting_profiles();
       init_overlay_shell();
       init_article_mode2();
       init_video_mode();
       init_browser_capture_session();
       init_persistent_intelligence2();
+      init_reporting_profiles2();
       init_article_extractor();
       init_youtube_transcript();
       init_api();
@@ -7299,16 +7674,23 @@
         mode: isYouTubeVideo ? "video" : "article",
         preferences: runtimeConfig.preferences || {}
       });
+      var apiBase = String(
+        runtimeConfig.api || "https://sportabase-api.onrender.com"
+      ).replace(/\/+$/, "");
       var persistentIntelligence = createPersistentIntelligenceIntegration({
         root: shell.content,
-        apiBase: String(
-          runtimeConfig.api || "https://sportabase-api.onrender.com"
-        ).replace(/\/+$/, ""),
+        apiBase,
         sourceUrl: window.location.href,
         mode: isYouTubeVideo ? "video" : "article"
       });
+      var reportingProfiles = createReportingProfilesIntegration({
+        root: shell.content,
+        apiBase,
+        sourceUrl: window.location.href
+      });
       shell.onClose?.(() => {
         persistentIntelligence.destroy();
+        reportingProfiles.destroy();
       });
       if (isYouTubeVideo) {
         openVideoMode({
