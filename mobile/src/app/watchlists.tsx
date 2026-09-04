@@ -215,7 +215,7 @@ export default function WatchlistsScreen() {
                     ]}
                   >
                     <Text style={styles.cardActionText}>
-                      View alerts
+                      View {item.target_kind} alerts
                     </Text>
                   </Pressable>
 
