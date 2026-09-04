@@ -21,6 +21,7 @@ from app.operations.persistent_runtime import (
 from app.routes import (
     control_room_admin,
     intelligence_admin,
+    intelligence_product,
     intelligence_runtime_admin,
     multimodal_admin,
     operations_admin,
@@ -256,6 +257,12 @@ def compose_application(
             analyze_video_handler=analyze_video_handler,
             analyze_handler=analyze_handler,
             operational_event_recorder=persistent_event_recorder,
+            connection_factory=connection_factory,
+        )
+    )
+
+    app.include_router(
+        intelligence_product.build_router(
             connection_factory=connection_factory,
         )
     )
