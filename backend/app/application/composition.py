@@ -27,6 +27,7 @@ from app.routes import (
     operations_admin,
     product_api,
     usage_admin,
+    watchlists_product,
 )
 from app.security.control_room_runtime import (
     build_default_control_room_guard,
@@ -263,6 +264,12 @@ def compose_application(
 
     app.include_router(
         intelligence_product.build_router(
+            connection_factory=connection_factory,
+        )
+    )
+
+    app.include_router(
+        watchlists_product.build_router(
             connection_factory=connection_factory,
         )
     )

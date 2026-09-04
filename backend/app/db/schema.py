@@ -1190,4 +1190,117 @@ ON browser_capture_automation_jobs(
   status
 );
 
+-- Product watchlists consume, but never mutate, canonical intelligence.  This
+-- ledger gives heterogeneous persisted history records one insertion order.
+CREATE TABLE IF NOT EXISTS product_intelligence_events (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_event_key TEXT NOT NULL UNIQUE,
+  source_table TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  source_related_id TEXT NOT NULL DEFAULT '',
+  event_type TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  discovered_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_intelligence_events_source
+ON product_intelligence_events(source_table, source_id, sequence);
+
+CREATE TABLE IF NOT EXISTS product_watchlist_items (
+  id TEXT PRIMARY KEY,
+  client_key TEXT NOT NULL,
+  target_kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  event_watermark INTEGER NOT NULL DEFAULT 0,
+  last_reconciled_at TEXT,
+  CHECK (target_kind IN ('entity', 'story', 'claim', 'media')),
+  CHECK (event_watermark >= 0),
+  UNIQUE (client_key, target_kind, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_watchlist_items_client
+ON product_watchlist_items(client_key, created_at, id);
+
+CREATE TABLE IF NOT EXISTS product_alert_events (
+  id TEXT PRIMARY KEY,
+  client_key TEXT NOT NULL,
+  watch_id TEXT NOT NULL,
+  target_kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  source_event_key TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  related_kind TEXT,
+  related_id TEXT,
+  summary TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  detected_at TEXT NOT NULL,
+  read_at TEXT,
+  CHECK (target_kind IN ('entity', 'story', 'claim', 'media')),
+  UNIQUE (watch_id, source_event_key),
+  FOREIGN KEY(watch_id) REFERENCES product_watchlist_items(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_alert_events_inbox
+ON product_alert_events(client_key, detected_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_product_alert_events_unread
+ON product_alert_events(client_key, read_at, detected_at DESC, id DESC);
+
+CREATE TRIGGER IF NOT EXISTS product_event_verified_participant
+AFTER INSERT ON verified_claim_entity_participants BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events
+  (source_event_key,source_table,source_id,source_related_id,event_type,occurred_at,discovered_at)
+  VALUES ('verified_claim_entity_participants:'||NEW.id,'verified_claim_entity_participants',NEW.id,'','verified_claim_participation',NEW.observed_at,NEW.recorded_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_story_claim
+AFTER INSERT ON story_claim_links BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events
+  (source_event_key,source_table,source_id,source_related_id,event_type,occurred_at,discovered_at)
+  VALUES ('story_claim_links:'||length(NEW.story_id)||':'||NEW.story_id||NEW.claim_id,'story_claim_links',NEW.story_id,NEW.claim_id,'story_link',NEW.linked_at,NEW.linked_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_story_media
+AFTER INSERT ON story_media_links BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events
+  (source_event_key,source_table,source_id,source_related_id,event_type,occurred_at,discovered_at)
+  VALUES ('story_media_links:'||length(NEW.story_id)||':'||NEW.story_id||NEW.media_item_id,'story_media_links',NEW.story_id,NEW.media_item_id,'media_link',NEW.linked_at,NEW.linked_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_source_observation
+AFTER INSERT ON source_observations BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'source_observations:'||NEW.id,'source_observations',NEW.id,'','source_observation',NEW.observed_at,NEW.recorded_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_reporter_observation
+AFTER INSERT ON reporter_observations BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'reporter_observations:'||NEW.id,'reporter_observations',NEW.id,'','reporter_observation',NEW.observed_at,NEW.recorded_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_evidence_link
+AFTER INSERT ON evidence_links BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'evidence_links:'||NEW.id,'evidence_links',NEW.id,'','evidence',(SELECT observed_at FROM evidence_records WHERE id=NEW.evidence_id),NEW.linked_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_claim_link
+AFTER INSERT ON claim_links BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'claim_links:'||NEW.id,'claim_links',NEW.id,'','claim_link',NEW.observed_at,NEW.recorded_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_adjudication_revision
+AFTER INSERT ON adjudication_state_revisions BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'adjudication_state_revisions:'||NEW.id,'adjudication_state_revisions',NEW.id,'','adjudication_revision',NEW.as_of,NEW.recorded_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_adjudication_transition
+AFTER INSERT ON adjudication_state_transitions BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'adjudication_state_transitions:'||NEW.id,'adjudication_state_transitions',NEW.id,'','adjudication_transition',NEW.recorded_at,NEW.recorded_at);
+END;
+
+CREATE TRIGGER IF NOT EXISTS product_event_analysis_snapshot
+AFTER INSERT ON analysis_snapshots BEGIN
+  INSERT OR IGNORE INTO product_intelligence_events VALUES (NULL,'analysis_snapshots:'||NEW.id,'analysis_snapshots',CAST(NEW.id AS TEXT),'','analysis_snapshot',NEW.analyzed_at,NEW.analyzed_at);
+END;
+
 """
