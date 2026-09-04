@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Pressable,
@@ -64,9 +65,11 @@ export default function ExploreScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    void loadWatches();
-  }, [loadWatches]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadWatches();
+    }, [loadWatches]),
+  );
 
   async function runSearch() {
     const value = query.trim();
