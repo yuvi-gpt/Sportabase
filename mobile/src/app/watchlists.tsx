@@ -16,6 +16,7 @@ import {
   listWatches,
   type WatchItem,
 } from '../lib/api';
+import { intelligenceRoute } from '../lib/intelligence-history';
 
 const COLORS = {
   background: '#050807',
@@ -199,6 +200,26 @@ export default function WatchlistsScreen() {
                 </Text>
 
                 <View style={styles.cardActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      router.push(
+                        intelligenceRoute(
+                          item.target_kind,
+                          item.target_id,
+                        ),
+                      )
+                    }
+                    style={({ pressed }) => [
+                      styles.cardAction,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={styles.cardActionText}>
+                      Open intelligence
+                    </Text>
+                  </Pressable>
+
                   <Pressable
                     accessibilityRole="button"
                     onPress={() =>
@@ -413,7 +434,8 @@ const styles = StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 9,
     marginTop: 15,
   },
   cardAction: {
@@ -421,6 +443,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     flex: 1,
+    minWidth: 140,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
