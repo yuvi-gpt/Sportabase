@@ -6,8 +6,10 @@ import {
   useRouter,
 } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
+import { ProductNav } from '../components/product-nav';
 
 function IncomingShareRedirector() {
   const router = useRouter();
@@ -46,6 +48,28 @@ function IncomingShareRedirector() {
   return null;
 }
 
+function AppFrame() {
+  const pathname = usePathname();
+  const showProductNav = pathname !== '/handle-share';
+
+  return (
+    <View style={styles.frame}>
+      <View style={styles.stack}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: {
+              backgroundColor: '#050807',
+            },
+          }}
+        />
+      </View>
+
+      {showProductNav ? <ProductNav /> : null}
+    </View>
+  );
+}
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
@@ -55,14 +79,17 @@ export default function RootLayout() {
         <IncomingShareRedirector />
       ) : null}
 
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: {
-            backgroundColor: '#050807',
-          },
-        }}
-      />
+      <AppFrame />
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  frame: {
+    backgroundColor: '#050807',
+    flex: 1,
+  },
+  stack: {
+    flex: 1,
+  },
+});
