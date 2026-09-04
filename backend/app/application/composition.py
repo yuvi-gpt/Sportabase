@@ -13,6 +13,7 @@ from app.application.config import (
     PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
     PERSISTENT_OPERATIONS_SERVICE_NAME,
 )
+from app.notifications import runtime as notification_runtime
 from app.operations import job_worker_runtime as browser_capture_automation
 from app.operations.persistent_runtime import (
     build_persistent_operations_event_recorder,
@@ -24,6 +25,7 @@ from app.routes import (
     intelligence_product,
     intelligence_runtime_admin,
     multimodal_admin,
+    notifications_product,
     operations_admin,
     product_api,
     usage_admin,
@@ -275,6 +277,12 @@ def compose_application(
     )
 
     app.include_router(
+        notifications_product.build_router(
+            connection_factory=connection_factory,
+        )
+    )
+
+    app.include_router(
         usage_admin.build_router(
             usage_summary_handler=usage_summary_handler,
         )
@@ -340,4 +348,15 @@ def compose_application(
         gemini_client_factory=gemini_client_factory,
         gemini_generator=gemini_generator,
         operational_event_recorder=persistent_event_recorder,
+    )
+
+    register_startup_handler(
+        app,
+        lambda: notification_runtime.start_notification_worker(
+            connection_factory=connection_factory,
+        ),
+    )
+    register_shutdown_handler(
+        app,
+        notification_runtime.stop_notification_worker,
     )

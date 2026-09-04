@@ -12,6 +12,7 @@ const ITEMS = [
   { label: 'Discover', route: '/explore' },
   { label: 'Watches', route: '/watchlists' },
   { label: 'Alerts', route: '/alerts' },
+  { label: 'Notify', route: '/notifications' },
 ] as const;
 
 export function ProductNav() {
@@ -84,7 +85,7 @@ const styles = StyleSheet.create({
   inner: {
     alignSelf: 'center',
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
     maxWidth: 720,
     width: '100%',
   },
@@ -94,7 +95,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 5,
     minHeight: 44,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     paddingVertical: 7,
   },
   itemActive: {
@@ -107,17 +108,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#59635c',
     borderRadius: 999,
     height: 4,
-    width: 18,
+    width: 16,
   },
   dotActive: {
     backgroundColor: '#76f53f',
-    width: 28,
+    width: 24,
   },
   label: {
     color: '#8e9991',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.45,
+    letterSpacing: 0.35,
   },
   labelActive: {
     color: '#f4f7f4',

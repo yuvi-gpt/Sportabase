@@ -10,6 +10,9 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ProductNav } from '../components/product-nav';
+import { markAlertRead } from '../lib/api';
+import { intelligenceRoute } from '../lib/intelligence-history';
+import { subscribeToPushNavigation } from '../lib/push-notifications';
 
 function IncomingShareRedirector() {
   const router = useRouter();
@@ -48,6 +51,44 @@ function IncomingShareRedirector() {
   return null;
 }
 
+function PushNotificationRedirector() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    let disposed = false;
+    let unsubscribe: (() => void) | null = null;
+
+    void subscribeToPushNavigation((target) => {
+      if (disposed) return;
+
+      void markAlertRead(target.alertId).catch((error) => {
+        console.warn('[sportabase] Could not mark pushed alert read:', error);
+      });
+
+      router.push(intelligenceRoute(target.kind, target.id));
+    })
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+        } else {
+          unsubscribe = cleanup;
+        }
+      })
+      .catch((error) => {
+        console.warn('[sportabase] Push navigation unavailable:', error);
+      });
+
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, [router]);
+
+  return null;
+}
+
 function AppFrame() {
   const pathname = usePathname();
   const showProductNav = pathname !== '/handle-share';
@@ -76,7 +117,10 @@ export default function RootLayout() {
       <StatusBar style="light" />
 
       {Platform.OS !== 'web' ? (
-        <IncomingShareRedirector />
+        <>
+          <IncomingShareRedirector />
+          <PushNotificationRedirector />
+        </>
       ) : null}
 
       <AppFrame />

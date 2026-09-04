@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from app.notifications.schema import NOTIFICATION_SCHEMA
+
 
 _PROVIDER_TIMEZONE = ZoneInfo(
     "America/Los_Angeles"
@@ -120,6 +122,19 @@ def initialize_database(
             + "\n"
             + _CLAIM_EVOLUTION_SCHEMA
         )
+
+        notification_schema_ready = (
+            conn.execute(
+                """
+                SELECT 1
+                FROM sqlite_master
+                WHERE type='table' AND name='product_alert_events'
+                """
+            ).fetchone()
+            is not None
+        )
+        if notification_schema_ready:
+            conn.executescript(NOTIFICATION_SCHEMA)
 
         existing_columns = {
             str(row["name"])
@@ -273,6 +288,8 @@ def initialize_database(
             + "\n"
             + _CLAIM_EVOLUTION_SCHEMA
         )
+        if notification_schema_ready:
+            conn.executescript(NOTIFICATION_SCHEMA)
 
         conn.commit()
 

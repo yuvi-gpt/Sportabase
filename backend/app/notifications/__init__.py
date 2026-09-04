@@ -1,0 +1,1 @@
+"""Sportabase product notification delivery."""
