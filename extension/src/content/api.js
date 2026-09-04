@@ -16,42 +16,124 @@ export class SportabaseApiError extends Error {
   }
 }
 
-async function getSportabaseClientId() {
-  const storageKey = "sportabaseClientId";
+const CLIENT_ID_STORAGE_KEY =
+  "sportabaseClientId";
+
+let clientIdentityPromise = null;
+
+function createRandomClientId() {
+  if (
+    typeof crypto?.randomUUID ===
+    "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  if (
+    typeof crypto?.getRandomValues ===
+    "function"
+  ) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+
+    bytes[6] =
+      (bytes[6] & 0x0f) | 0x40;
+    bytes[8] =
+      (bytes[8] & 0x3f) | 0x80;
+
+    const hex = Array.from(
+      bytes,
+      (value) =>
+        value
+          .toString(16)
+          .padStart(2, "0")
+    );
+
+    return [
+      hex.slice(0, 4).join(""),
+      hex.slice(4, 6).join(""),
+      hex.slice(6, 8).join(""),
+      hex.slice(8, 10).join(""),
+      hex.slice(10, 16).join(""),
+    ].join("-");
+  }
+
+  throw new SportabaseApiError(
+    "Sportabase could not create a private installation identity."
+  );
+}
+
+async function loadClientIdentity() {
+  const generatedId =
+    createRandomClientId();
 
   try {
     const stored =
-      await chrome.storage.local.get(storageKey);
+      await chrome.storage.local.get(
+        CLIENT_ID_STORAGE_KEY
+      );
 
     const existing = String(
-      stored?.[storageKey] || ""
+      stored?.[
+        CLIENT_ID_STORAGE_KEY
+      ] || ""
     ).trim();
 
     if (existing) {
-      return existing;
+      return {
+        id: existing,
+        persisted: true,
+      };
     }
 
-    const clientId =
-      typeof crypto.randomUUID === "function"
-        ? crypto.randomUUID()
-        : [
-            Date.now().toString(36),
-            Math.random().toString(36).slice(2),
-          ].join("-");
-
     await chrome.storage.local.set({
-      [storageKey]: clientId,
+      [CLIENT_ID_STORAGE_KEY]:
+        generatedId,
     });
 
-    return clientId;
+    return {
+      id: generatedId,
+      persisted: true,
+    };
   } catch (error) {
     console.warn(
-      "[sportabase] Client ID unavailable:",
+      "[sportabase] Persistent client identity unavailable:",
       error
     );
 
-    return "anonymous";
+    return {
+      id: generatedId,
+      persisted: false,
+    };
   }
+}
+
+export async function getSportabaseClientId({
+  requirePersistent = false,
+} = {}) {
+  if (!clientIdentityPromise) {
+    clientIdentityPromise =
+      loadClientIdentity().catch(
+        (error) => {
+          clientIdentityPromise = null;
+          throw error;
+        }
+      );
+  }
+
+  const identity =
+    await clientIdentityPromise;
+
+  if (
+    requirePersistent &&
+    !identity.persisted
+  ) {
+    throw new SportabaseApiError(
+      "Watchlists and alerts require Chrome extension storage. Persistent storage is unavailable in this browser session."
+    );
+  }
+
+  return identity.id;
 }
 
 
