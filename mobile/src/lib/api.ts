@@ -1,3 +1,5 @@
+import { getSportabaseClientId } from './client-identity';
+
 const API_BASE_URL =
   'https://sportabase-api.onrender.com';
 
@@ -74,6 +76,7 @@ export type ArticleAnalyzeResponse = {
 
   debug: Record<string, unknown>;
 };
+
 export type VideoAnalyzeRequest = {
   title: string;
   transcript: string;
@@ -103,6 +106,85 @@ export type VideoAnalyzeResponse = {
   debug: Record<string, unknown>;
 };
 
+export type WatchTargetKind =
+  | 'entity'
+  | 'story'
+  | 'claim'
+  | 'media';
+
+export type IntelligenceSearchResult = {
+  kind: WatchTargetKind;
+  id: string;
+  title: string;
+  subtitle?: string;
+  matched_field: string;
+  match_type: string;
+  first_seen_at: string;
+  last_seen_at: string;
+  sport_key?: string;
+  canonical_url?: string;
+  source_type?: string;
+};
+
+export type IntelligenceSearchResponse = {
+  version: string;
+  query: string;
+  results: IntelligenceSearchResult[];
+  pagination: {
+    limit: number;
+    next_cursor: string | null;
+  };
+};
+
+export type WatchItem = {
+  id: string;
+  target_kind: WatchTargetKind;
+  target_id: string;
+  target_label: string;
+  created_at: string;
+  last_reconciled_at: string | null;
+};
+
+export type WatchListResponse = {
+  version: string;
+  items: WatchItem[];
+  count: number;
+  limit: number;
+};
+
+export type WatchCreateResponse = {
+  watch: WatchItem;
+  created: boolean;
+};
+
+export type AlertItem = {
+  id: string;
+  target_kind: WatchTargetKind;
+  target_id: string;
+  event_type: string;
+  related_kind: string | null;
+  related_id: string | null;
+  summary: string;
+  occurred_at: string;
+  detected_at: string;
+  read_at: string | null;
+};
+
+export type AlertListResponse = {
+  version: string;
+  items: AlertItem[];
+  pagination: {
+    limit: number;
+    next_cursor: string | null;
+  };
+};
+
+export type AlertReconcileResponse = {
+  watches_checked: number;
+  new_alerts: number;
+  unchanged_watches: number;
+};
+
 export class SportabaseApiError extends Error {
   status: number | null;
 
@@ -113,6 +195,22 @@ export class SportabaseApiError extends Error {
     super(message);
     this.name = 'SportabaseApiError';
     this.status = status;
+  }
+}
+
+async function readErrorDetail(
+  response: Response,
+): Promise<string> {
+  try {
+    const payload = (await response.json()) as {
+      detail?: unknown;
+    };
+
+    return typeof payload.detail === 'string'
+      ? payload.detail
+      : '';
+  } catch {
+    return '';
   }
 }
 
@@ -141,10 +239,17 @@ async function requestJson<T>(
     );
 
     if (!response.ok) {
+      const detail = await readErrorDetail(response);
+
       throw new SportabaseApiError(
-        `Sportabase API returned HTTP ${response.status}.`,
+        detail ||
+          `Sportabase API returned HTTP ${response.status}.`,
         response.status,
       );
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
     }
 
     return (await response.json()) as T;
@@ -170,6 +275,26 @@ async function requestJson<T>(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function requestPrivateJson<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  const clientId = await getSportabaseClientId();
+
+  return requestJson<T>(
+    path,
+    {
+      ...init,
+      headers: {
+        ...init.headers,
+        'x-sportabase-client-id': clientId,
+      },
+    },
+    timeoutMs,
+  );
 }
 
 export function getApiHealth() {
@@ -220,5 +345,127 @@ export function analyzeVideo(
       body: JSON.stringify(request),
     },
     ANALYSIS_TIMEOUT_MS,
+  );
+}
+
+export function searchIntelligence(
+  query: string,
+  options: {
+    limit?: number;
+    cursor?: string;
+    sportKey?: string;
+  } = {},
+) {
+  const params = [
+    `q=${encodeURIComponent(query.trim())}`,
+    'kind=entity',
+    'kind=story',
+    'kind=claim',
+    'kind=media',
+    `limit=${options.limit ?? 30}`,
+  ];
+
+  if (options.cursor) {
+    params.push(
+      `cursor=${encodeURIComponent(options.cursor)}`,
+    );
+  }
+
+  if (options.sportKey?.trim()) {
+    params.push(
+      `sport_key=${encodeURIComponent(
+        options.sportKey.trim(),
+      )}`,
+    );
+  }
+
+  return requestJson<IntelligenceSearchResponse>(
+    `/intelligence/search?${params.join('&')}`,
+  );
+}
+
+export function listWatches() {
+  return requestPrivateJson<WatchListResponse>(
+    '/watchlists',
+  );
+}
+
+export function createWatch(
+  targetKind: WatchTargetKind,
+  targetId: string,
+) {
+  return requestPrivateJson<WatchCreateResponse>(
+    '/watchlists',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        target_kind: targetKind,
+        target_id: targetId,
+      }),
+    },
+  );
+}
+
+export function deleteWatch(watchId: string) {
+  return requestPrivateJson<void>(
+    `/watchlists/${encodeURIComponent(watchId)}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
+export function reconcileAlerts() {
+  return requestPrivateJson<AlertReconcileResponse>(
+    '/watchlists/alerts/reconcile',
+    {
+      method: 'POST',
+    },
+  );
+}
+
+export function listAlerts(
+  options: {
+    unreadOnly?: boolean;
+    targetKind?: WatchTargetKind | '';
+    limit?: number;
+    cursor?: string;
+  } = {},
+) {
+  const params = [
+    `unread_only=${options.unreadOnly ? 'true' : 'false'}`,
+    `limit=${options.limit ?? 50}`,
+  ];
+
+  if (options.targetKind) {
+    params.push(
+      `target_kind=${encodeURIComponent(
+        options.targetKind,
+      )}`,
+    );
+  }
+
+  if (options.cursor) {
+    params.push(
+      `cursor=${encodeURIComponent(options.cursor)}`,
+    );
+  }
+
+  return requestPrivateJson<AlertListResponse>(
+    `/watchlists/alerts?${params.join('&')}`,
+  );
+}
+
+export function markAlertRead(alertId: string) {
+  return requestPrivateJson<AlertItem>(
+    `/watchlists/alerts/${encodeURIComponent(
+      alertId,
+    )}/read`,
+    {
+      method: 'POST',
+    },
   );
 }
