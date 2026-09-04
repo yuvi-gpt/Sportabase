@@ -1,6 +1,13 @@
 import {
   normalizeArticleIntelligence,
 } from "./article-intelligence.mjs";
+import {
+  canonicalTargetUrl,
+  notificationCapability,
+  persistentClientId,
+  serializePushSubscription,
+  urlBase64ToUint8Array,
+} from "./web-push-helpers.mjs";
 
 
 const DEFAULT_API =
@@ -103,39 +110,7 @@ function stringList(value) {
 
 
 function getClientId() {
-  const key =
-    "sportabaseWebClientId";
-
-  try {
-    const existing =
-      clean(
-        localStorage.getItem(key)
-      );
-
-    if (existing) {
-      return existing;
-    }
-
-    const created =
-      typeof crypto.randomUUID ===
-      "function"
-        ? crypto.randomUUID()
-        : [
-            Date.now().toString(36),
-            Math.random()
-              .toString(36)
-              .slice(2),
-          ].join("-");
-
-    localStorage.setItem(
-      key,
-      created
-    );
-
-    return created;
-  } catch (_) {
-    return "web-anonymous";
-  }
+  return persistentClientId(localStorage, crypto);
 }
 
 
@@ -146,8 +121,13 @@ async function fetchJson(
     body = undefined,
     timeoutMs = 30000,
     signal = null,
+    privateRequest = false,
   } = {}
 ) {
+  const privateClientId = privateRequest ? getClientId() : null;
+  if (privateRequest && !privateClientId) {
+    throw new Error("Persistent browser storage is required for this private feature.");
+  }
   const controller =
     new AbortController();
 
@@ -201,8 +181,9 @@ async function fetchJson(
                     "application/json",
                 }
               : {}),
-            "X-Sportabase-Client-ID":
-              getClientId(),
+            ...(privateRequest
+              ? { "X-Sportabase-Client-ID": privateClientId }
+              : {}),
           },
           body:
             body === undefined
@@ -1156,6 +1137,165 @@ function initialize() {
 
   checkHealth();
   loadCricketInsight();
+  initializeWebPush();
+  loadIntelligenceLanding();
+}
+
+
+function setNotificationState(message, { enable = false, disable = false, busy = false } = {}) {
+  byId("notification-status").textContent = message;
+  const enableButton = byId("enable-notifications");
+  const disableButton = byId("disable-notifications");
+  enableButton.hidden = !enable;
+  enableButton.disabled = busy;
+  disableButton.hidden = !disable;
+  disableButton.disabled = busy;
+}
+
+
+async function backendSubscriptions() {
+  return fetchJson("/notifications/web/subscriptions", { privateRequest: true });
+}
+
+
+async function removeBackendSubscriptions(items) {
+  await Promise.all((items || []).map((item) =>
+    fetchJson(`/notifications/web/subscriptions/${encodeURIComponent(item.id)}`, {
+      method: "DELETE", privateRequest: true,
+    })
+  ));
+}
+
+
+async function registerBrowserSubscription(subscription, knownBackendItems = null) {
+  const response = await fetchJson("/notifications/web/subscriptions", {
+    method: "POST", privateRequest: true,
+    body: serializePushSubscription(subscription),
+  });
+  const backend = knownBackendItems === null ? await backendSubscriptions() : { items: knownBackendItems };
+  const stale = (backend?.items || []).filter((item) => item.id !== response?.subscription?.id);
+  if (stale.length) await removeBackendSubscriptions(stale);
+  return response;
+}
+
+
+async function reconcileWebPushState() {
+  const capability = notificationCapability(window);
+  if (capability === "insecure") {
+    setNotificationState("Browser notifications require HTTPS (localhost is allowed for development).");
+    return;
+  }
+  if (capability === "unsupported") {
+    setNotificationState("This browser does not support Web Push.");
+    return;
+  }
+  if (!getClientId()) {
+    setNotificationState("Persistent browser storage is unavailable, so private notifications cannot be enabled.");
+    return;
+  }
+  if (capability === "denied") {
+    setNotificationState("Notification permission is blocked. Change it in browser site settings to continue.");
+    return;
+  }
+  const config = await fetchJson("/notifications/web/config");
+  if (!config?.available || !config?.vapid_public_key) {
+    setNotificationState("Web Push is not configured on the Sportabase server.");
+    return;
+  }
+  const registration = await navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
+  const browserSubscription = await registration.pushManager.getSubscription();
+  const backend = await backendSubscriptions();
+  if (browserSubscription) {
+    await registerBrowserSubscription(browserSubscription, backend?.items || []);
+    setNotificationState("Enabled for Watchlist alerts on this browser.", { disable: true });
+  } else {
+    if (backend?.items?.length) await removeBackendSubscriptions(backend.items);
+    setNotificationState("Not enabled. Permission is requested only when you choose Enable.", { enable: true });
+  }
+}
+
+
+async function enableWebPush() {
+  setNotificationState("Requesting notification permission…", { enable: true, busy: true });
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setNotificationState(permission === "denied"
+        ? "Notification permission was denied or blocked in browser settings."
+        : "Notification permission was not granted.", { enable: permission !== "denied" });
+      return;
+    }
+    const config = await fetchJson("/notifications/web/config");
+    if (!config?.available) throw new Error("Web Push is not configured on the server.");
+    const registration = await navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
+    let subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(config.vapid_public_key),
+      });
+    }
+    await registerBrowserSubscription(subscription);
+    setNotificationState("Enabled for Watchlist alerts on this browser.", { disable: true });
+  } catch (error) {
+    setNotificationState(`Could not enable notifications: ${clean(error?.message) || "unknown error"}`, { enable: true });
+  }
+}
+
+
+async function disableWebPush() {
+  setNotificationState("Disabling browser notifications…", { disable: true, busy: true });
+  try {
+    const registration = await navigator.serviceWorker.getRegistration("./");
+    const browserSubscription = await registration?.pushManager.getSubscription();
+    const backend = await backendSubscriptions();
+    await removeBackendSubscriptions(backend?.items);
+    if (browserSubscription) await browserSubscription.unsubscribe();
+    setNotificationState("Disabled. You can enable notifications again at any time.", { enable: true });
+  } catch (error) {
+    setNotificationState(`Could not fully disable notifications: ${clean(error?.message) || "unknown error"}`, { enable: true });
+  }
+}
+
+
+async function initializeWebPush() {
+  byId("enable-notifications").addEventListener("click", enableWebPush);
+  byId("disable-notifications").addEventListener("click", disableWebPush);
+  try { await reconcileWebPushState(); }
+  catch (error) {
+    setNotificationState(`Notifications are currently unavailable: ${clean(error?.message) || "server error"}`, { enable: true });
+  }
+}
+
+
+async function loadIntelligenceLanding() {
+  const params = new URLSearchParams(window.location.search);
+  const kind = clean(params.get("target_kind"));
+  const targetId = clean(params.get("target_id"));
+  if (!canonicalTargetUrl(document.baseURI, kind, targetId)) return;
+  const landing = byId("intelligence-landing");
+  landing.hidden = false;
+  byId("landing-title").textContent = `${kind[0].toUpperCase()}${kind.slice(1)} intelligence`;
+  byId("landing-status").textContent = `Loading persisted history for ${targetId}…`;
+  const alertMatch = /^#alert=([^&]+)$/.exec(window.location.hash);
+  const alertId = alertMatch ? decodeURIComponent(alertMatch[1]) : "";
+  if (alertId) {
+    history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    if (getClientId()) {
+      fetchJson(`/watchlists/alerts/${encodeURIComponent(alertId)}/read`, {
+        method: "POST", privateRequest: true,
+      }).catch(() => {});
+    }
+  }
+  const pathKind = kind === "media" ? "media" : `${kind}s`;
+  try {
+    const data = await fetchJson(`/intelligence/${pathKind}/${encodeURIComponent(targetId)}/history`);
+    byId("landing-status").textContent = "Persisted chronology and evidence context. Chronology is not truth.";
+    byId("landing-content").textContent = JSON.stringify(data, null, 2).slice(0, 12000);
+    landing.scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (error) {
+    byId("landing-status").textContent = `Intelligence history is unavailable: ${clean(error?.message)}`;
+  }
 }
 
 

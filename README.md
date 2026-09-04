@@ -255,6 +255,8 @@ The worker is disabled by default. Production delivery requires explicit `SPORTA
 
 Real-device delivery remains unverified until a deployed backend and physical iOS/Android device complete an end-to-end Expo push test.
 
+Web Push V1 is being implemented on its feature branch as an additive delivery provider over the same alert ledger. Configuration, privacy boundaries, static-service-worker requirements, and the unperformed manual deployment gate are documented in [`docs/WEB_PUSH_V1.md`](docs/WEB_PUSH_V1.md). This note does not change the verified `main` checkpoint above.
+
 ---
 
 ## Mobile product

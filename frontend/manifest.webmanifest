@@ -1,0 +1,10 @@
+{
+  "name": "Sportabase Sports Intelligence",
+  "short_name": "Sportabase",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "description": "Evidence-first sports intelligence"
+}
