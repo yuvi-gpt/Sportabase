@@ -40,6 +40,12 @@
     }
   });
 
+  // src/styles/persistent-intelligence.css
+  var init_persistent_intelligence = __esm({
+    "src/styles/persistent-intelligence.css"() {
+    }
+  });
+
   // src/ui/logo.js
   function getSportabaseLogoMarkup({
     className = ""
@@ -1413,8 +1419,8 @@
       node?.innerText || node?.textContent || ""
     );
   }
-  function getLinkDensity(element, text) {
-    if (!element || !text) return 1;
+  function getLinkDensity(element, text2) {
+    if (!element || !text2) return 1;
     const linkTextLength = Array.from(
       element.querySelectorAll("a")
     ).reduce(
@@ -1423,56 +1429,56 @@
     );
     return Math.min(
       1,
-      linkTextLength / Math.max(1, text.length)
+      linkTextLength / Math.max(1, text2.length)
     );
   }
-  function countMatches(text, pattern) {
-    return (String(text || "").match(pattern) || []).length;
+  function countMatches(text2, pattern) {
+    return (String(text2 || "").match(pattern) || []).length;
   }
-  function looksLikeFeedDump(text) {
+  function looksLikeFeedDump(text2) {
     const dateHits = countMatches(
-      text,
+      text2,
       /\b\d{1,2}\s+[A-Za-z?-?]{3,10}\s+\d{4}\b/gi
     );
     const timeHits = countMatches(
-      text,
+      text2,
       /\b\d{1,2}:\d{2}\b/g
     );
     const pipeHits = countMatches(
-      text,
+      text2,
       /\|/g
     );
     return dateHits >= 2 || timeHits >= 4 || timeHits >= 2 && pipeHits >= 2;
   }
-  function looksPromotional(text) {
+  function looksPromotional(text2) {
     const matches = PROMOTIONAL_PATTERNS.filter(
-      (pattern) => pattern.test(text)
+      (pattern) => pattern.test(text2)
     ).length;
-    return matches >= 2 || matches >= 1 && text.length <= 260;
+    return matches >= 2 || matches >= 1 && text2.length <= 260;
   }
-  function looksLikeBoilerplate(text) {
-    return text.length <= 240 && BOILERPLATE_PATTERNS.some(
-      (pattern) => pattern.test(text)
+  function looksLikeBoilerplate(text2) {
+    return text2.length <= 240 && BOILERPLATE_PATTERNS.some(
+      (pattern) => pattern.test(text2)
     );
   }
-  function isUsefulContentBlock(node, text) {
-    if (!text) return false;
+  function isUsefulContentBlock(node, text2) {
+    if (!text2) return false;
     const tagName = String(node.tagName || "").toLowerCase();
     const minimumLength = tagName === "h2" || tagName === "h3" ? 30 : 45;
-    if (text.length < minimumLength) {
+    if (text2.length < minimumLength) {
       return false;
     }
-    if (looksLikeFeedDump(text)) {
+    if (looksLikeFeedDump(text2)) {
       return false;
     }
-    if (looksPromotional(text)) {
+    if (looksPromotional(text2)) {
       return false;
     }
-    if (looksLikeBoilerplate(text)) {
+    if (looksLikeBoilerplate(text2)) {
       return false;
     }
-    const linkDensity = getLinkDensity(node, text);
-    if (linkDensity >= 0.65 && text.length < 500) {
+    const linkDensity = getLinkDensity(node, text2);
+    if (linkDensity >= 0.65 && text2.length < 500) {
       return false;
     }
     return true;
@@ -1505,19 +1511,19 @@
     const blocks = [];
     const seen = /* @__PURE__ */ new Set();
     const addBlock = (node) => {
-      const text = getNodeText(node);
+      const text2 = getNodeText(node);
       if (!isUsefulContentBlock(
         node,
-        text
+        text2
       )) {
         return;
       }
-      const duplicateKey = text.toLowerCase();
+      const duplicateKey = text2.toLowerCase();
       if (seen.has(duplicateKey)) {
         return;
       }
       seen.add(duplicateKey);
-      blocks.push(text);
+      blocks.push(text2);
     };
     clone.querySelectorAll(
       "p, h2, h3, blockquote"
@@ -1536,14 +1542,14 @@
   }
   function buildCandidate(element, selector, priorityBonus = 0) {
     const blocks = collectContentBlocks(element);
-    const text = normalizeText(
+    const text2 = normalizeText(
       blocks.join("\n\n")
     );
-    if (text.length < 250 || blocks.length < 2) {
+    if (text2.length < 250 || blocks.length < 2) {
       return null;
     }
     const blockCount = blocks.length;
-    const averageBlockLength = text.length / blockCount;
+    const averageBlockLength = text2.length / blockCount;
     const shortBlockCount = blocks.filter(
       (block) => block.length < 80
     ).length;
@@ -1553,7 +1559,7 @@
     const shortBlockRatio = shortBlockCount / Math.max(1, blockCount);
     const linkDensity = getLinkDensity(
       element,
-      text
+      text2
     );
     const tooManyBlocks = blockCount > 90;
     const heavilyFragmented = blockCount > 35 && averageBlockLength < 95;
@@ -1564,7 +1570,7 @@
       0,
       blockCount - 35
     ) * 240;
-    const score = priorityBonus + Math.min(text.length, 14e3) + blockCount * 115 + longBlockCount * 170 + Math.min(
+    const score = priorityBonus + Math.min(text2.length, 14e3) + blockCount * 115 + longBlockCount * 170 + Math.min(
       averageBlockLength,
       260
     ) * 4 - shortBlockRatio * 2200 - linkDensity * 6500 - fragmentationPenalty - (suspicious ? 8500 : 0);
@@ -1572,7 +1578,7 @@
       selector,
       element,
       blocks,
-      text,
+      text: text2,
       score,
       suspicious,
       metrics: {
@@ -1896,31 +1902,82 @@
   });
 
   // src/content/api.js
-  async function getSportabaseClientId() {
-    const storageKey = "sportabaseClientId";
+  function createRandomClientId() {
+    if (typeof crypto?.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    if (typeof crypto?.getRandomValues === "function") {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      bytes[6] = bytes[6] & 15 | 64;
+      bytes[8] = bytes[8] & 63 | 128;
+      const hex = Array.from(
+        bytes,
+        (value) => value.toString(16).padStart(2, "0")
+      );
+      return [
+        hex.slice(0, 4).join(""),
+        hex.slice(4, 6).join(""),
+        hex.slice(6, 8).join(""),
+        hex.slice(8, 10).join(""),
+        hex.slice(10, 16).join("")
+      ].join("-");
+    }
+    throw new SportabaseApiError(
+      "Sportabase could not create a private installation identity."
+    );
+  }
+  async function loadClientIdentity() {
+    const generatedId = createRandomClientId();
     try {
-      const stored = await chrome.storage.local.get(storageKey);
+      const stored = await chrome.storage.local.get(
+        CLIENT_ID_STORAGE_KEY
+      );
       const existing = String(
-        stored?.[storageKey] || ""
+        stored?.[CLIENT_ID_STORAGE_KEY] || ""
       ).trim();
       if (existing) {
-        return existing;
+        return {
+          id: existing,
+          persisted: true
+        };
       }
-      const clientId = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : [
-        Date.now().toString(36),
-        Math.random().toString(36).slice(2)
-      ].join("-");
       await chrome.storage.local.set({
-        [storageKey]: clientId
+        [CLIENT_ID_STORAGE_KEY]: generatedId
       });
-      return clientId;
+      return {
+        id: generatedId,
+        persisted: true
+      };
     } catch (error) {
       console.warn(
-        "[sportabase] Client ID unavailable:",
+        "[sportabase] Persistent client identity unavailable:",
         error
       );
-      return "anonymous";
+      return {
+        id: generatedId,
+        persisted: false
+      };
     }
+  }
+  async function getSportabaseClientId({
+    requirePersistent = false
+  } = {}) {
+    if (!clientIdentityPromise) {
+      clientIdentityPromise = loadClientIdentity().catch(
+        (error) => {
+          clientIdentityPromise = null;
+          throw error;
+        }
+      );
+    }
+    const identity = await clientIdentityPromise;
+    if (requirePersistent && !identity.persisted) {
+      throw new SportabaseApiError(
+        "Watchlists and alerts require Chrome extension storage. Persistent storage is unavailable in this browser session."
+      );
+    }
+    return identity.id;
   }
   async function postJson(url, payload, {
     timeoutMs = 12e4,
@@ -2044,7 +2101,7 @@
       );
     }
   }
-  var SportabaseApiError;
+  var SportabaseApiError, CLIENT_ID_STORAGE_KEY, clientIdentityPromise;
   var init_api = __esm({
     "src/content/api.js"() {
       SportabaseApiError = class extends Error {
@@ -2060,6 +2117,8 @@
           this.cancelled = Boolean(cancelled);
         }
       };
+      CLIENT_ID_STORAGE_KEY = "sportabaseClientId";
+      clientIdentityPromise = null;
     }
   });
 
@@ -3590,14 +3649,14 @@
     let duplicateSegmentCount = 0;
     for (const rawSegment of rawSegments || []) {
       rawSegmentCount += 1;
-      const text = String(
+      const text2 = String(
         rawSegment?.text ?? rawSegment ?? ""
       ).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-      if (!text) {
+      if (!text2) {
         emptySegmentCount += 1;
         continue;
       }
-      const duplicateKey = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+      const duplicateKey = text2.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
       const previousKey = seenAdjacent[seenAdjacent.length - 1];
       if (duplicateKey && duplicateKey === previousKey) {
         duplicateSegmentCount += 1;
@@ -3605,7 +3664,7 @@
       }
       seenAdjacent.push(duplicateKey);
       normalizedSegments.push({
-        text,
+        text: text2,
         timestamp: String(
           rawSegment?.timestamp || ""
         ).trim()
@@ -4533,15 +4592,15 @@
     ).replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\n[ \t]+/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
   }
   function truncateText(value, limit) {
-    const text = cleanText(value);
+    const text2 = cleanText(value);
     const safeLimit = Math.max(
       500,
       Number(limit) || 12e3
     );
-    if (text.length <= safeLimit) {
-      return text;
+    if (text2.length <= safeLimit) {
+      return text2;
     }
-    return text.slice(
+    return text2.slice(
       0,
       safeLimit
     ).trim();
@@ -4637,9 +4696,9 @@
           selector
         ]
       );
-      const text = nodeText(node);
-      if (text) {
-        return text;
+      const text2 = nodeText(node);
+      if (text2) {
+        return text2;
       }
     }
     return "";
@@ -5974,6 +6033,1234 @@
     }
   });
 
+  // src/content/persistent-intelligence-core.mjs
+  function clean2(value) {
+    return String(value ?? "").trim();
+  }
+  function text(value) {
+    return typeof value === "string" ? value.trim() : "";
+  }
+  function isTrackingQueryParameter(name) {
+    const normalized = clean2(name).toLowerCase();
+    return normalized.startsWith("utm_") || TRACKING_QUERY_PARAMETERS.has(normalized);
+  }
+  function youtubeVideoId(url) {
+    const hostname = clean2(
+      url.hostname
+    ).toLowerCase();
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    let candidate = "";
+    if (hostname === "youtu.be" || hostname === "www.youtu.be") {
+      candidate = pathParts[0] || "";
+    } else if (YOUTUBE_HOSTS.has(hostname)) {
+      const first = clean2(pathParts[0]).toLowerCase();
+      if (["embed", "live", "shorts", "v"].includes(first) && pathParts.length >= 2) {
+        candidate = pathParts[1];
+      } else if (!pathParts.length || first === "watch") {
+        candidate = clean2(
+          url.searchParams.get("v")
+        );
+      }
+    }
+    candidate = candidate.replace(
+      /[^A-Za-z0-9_-]/g,
+      ""
+    );
+    return /^[A-Za-z0-9_-]{6,20}$/.test(candidate) ? candidate : "";
+  }
+  function normalizeCanonicalAnalysisUrl(value) {
+    let rawUrl = clean2(value);
+    if (!rawUrl) {
+      return "";
+    }
+    rawUrl = rawUrl.split("#", 1)[0].trim();
+    try {
+      if (/^\/\//.test(rawUrl)) {
+        rawUrl = `https:${rawUrl}`;
+      } else if (!/^[A-Za-z][A-Za-z0-9+.-]*:/.test(rawUrl) && /^[A-Za-z0-9.-]+\//.test(rawUrl)) {
+        rawUrl = `https://${rawUrl}`;
+      }
+      const parsed = new URL(rawUrl);
+      const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
+      const hostname = parsed.hostname.trim().toLowerCase();
+      if (!scheme || !hostname) {
+        return rawUrl;
+      }
+      const videoId = youtubeVideoId(parsed);
+      if (videoId) {
+        return `https://youtube.com/watch?v=${videoId}`;
+      }
+      let authority = hostname;
+      if (parsed.port) {
+        authority = `${authority}:${parsed.port}`;
+      }
+      let path = parsed.pathname || "/";
+      path = path.replace(/\/{2,}/g, "/");
+      if (path !== "/") {
+        path = path.replace(/\/+$/, "");
+      }
+      const retained = [];
+      for (const [key, queryValue] of parsed.searchParams.entries()) {
+        if (isTrackingQueryParameter(key)) {
+          continue;
+        }
+        retained.push([key, queryValue]);
+      }
+      retained.sort((left, right) => {
+        const leftKey = left[0].toLowerCase();
+        const rightKey = right[0].toLowerCase();
+        if (leftKey < rightKey) return -1;
+        if (leftKey > rightKey) return 1;
+        if (left[1] < right[1]) return -1;
+        if (left[1] > right[1]) return 1;
+        return 0;
+      });
+      const query = new URLSearchParams();
+      for (const [key, queryValue] of retained) {
+        query.append(key, queryValue);
+      }
+      const encoded = query.toString();
+      return `${scheme}://${authority}${path}${encoded ? `?${encoded}` : ""}`;
+    } catch {
+      return rawUrl;
+    }
+  }
+  async function mediaItemIdForUrl(value) {
+    const canonicalUrl2 = normalizeCanonicalAnalysisUrl(value);
+    if (!canonicalUrl2) {
+      throw new Error("Media item URL is required.");
+    }
+    const payload = new TextEncoder().encode(
+      `media|${canonicalUrl2}`
+    );
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      payload
+    );
+    return Array.from(
+      new Uint8Array(digest),
+      (byte) => byte.toString(16).padStart(2, "0")
+    ).join("");
+  }
+  function isWatchableKind(value) {
+    return WATCHABLE_KINDS.includes(
+      clean2(value)
+    );
+  }
+  function historyPathFor(kind, id, {
+    limit = 30,
+    cursor = ""
+  } = {}) {
+    if (!isWatchableKind(kind)) {
+      throw new Error(
+        "Unsupported Sportabase intelligence kind."
+      );
+    }
+    const targetId = clean2(id);
+    if (!targetId) {
+      throw new Error(
+        "Sportabase intelligence ID is required."
+      );
+    }
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    if (cursor) {
+      params.set("cursor", cursor);
+    }
+    return `/intelligence/${HISTORY_PATH_SEGMENTS[kind]}/${encodeURIComponent(targetId)}/history?${params.toString()}`;
+  }
+  function historyIdentity(kind, response) {
+    if (kind === "entity") {
+      const entity = response?.entity || {};
+      return {
+        kind,
+        id: clean2(entity.id),
+        title: clean2(entity.canonical_name) || "Persisted entity",
+        subtitle: [
+          clean2(entity.entity_type),
+          clean2(entity.sport_key)
+        ].filter(Boolean).join(" \xB7 "),
+        firstSeenAt: clean2(entity.first_seen_at),
+        lastSeenAt: clean2(entity.last_seen_at),
+        canonicalUrl: ""
+      };
+    }
+    if (kind === "story") {
+      const story = response?.story || {};
+      return {
+        kind,
+        id: clean2(story.id),
+        title: clean2(story.canonical_title) || "Persisted story",
+        subtitle: clean2(story.status) || "Persisted story",
+        firstSeenAt: clean2(story.first_seen_at),
+        lastSeenAt: clean2(story.last_seen_at),
+        canonicalUrl: ""
+      };
+    }
+    if (kind === "claim") {
+      const claim = response?.claim || {};
+      return {
+        kind,
+        id: clean2(claim.id),
+        title: clean2(claim.canonical_text) || "Persisted claim",
+        subtitle: [
+          clean2(claim.claim_type),
+          clean2(claim.subject_key)
+        ].filter(Boolean).join(" \xB7 "),
+        firstSeenAt: clean2(claim.first_seen_at),
+        lastSeenAt: clean2(claim.last_seen_at),
+        canonicalUrl: ""
+      };
+    }
+    const media = response?.media || {};
+    return {
+      kind: "media",
+      id: clean2(media.id),
+      title: clean2(media.title) || "Persisted media",
+      subtitle: clean2(media.mode) || "Persisted media",
+      firstSeenAt: clean2(media.first_seen_at),
+      lastSeenAt: clean2(media.last_seen_at),
+      canonicalUrl: clean2(media.canonical_url)
+    };
+  }
+  function historyRelations(kind, response) {
+    const relations = [];
+    const add = (relation) => {
+      if (!relation?.id || !isWatchableKind(relation.kind)) {
+        return;
+      }
+      if (relations.some(
+        (item) => item.kind === relation.kind && item.id === relation.id
+      )) {
+        return;
+      }
+      relations.push(relation);
+    };
+    if (kind === "media") {
+      for (const event of response?.events || []) {
+        const storyId = text(event?.story_id);
+        if (storyId) {
+          add({
+            kind: "story",
+            id: storyId,
+            title: `Story ${storyId}`,
+            subtitle: "Persisted media relationship"
+          });
+        }
+      }
+    }
+    if (kind === "story") {
+      for (const claim of response?.claims || []) {
+        add({
+          kind: "claim",
+          id: clean2(claim?.id),
+          title: clean2(claim?.canonical_text) || `Claim ${clean2(claim?.id)}`,
+          subtitle: clean2(claim?.claim_type)
+        });
+      }
+      for (const media of response?.media || []) {
+        add({
+          kind: "media",
+          id: clean2(media?.id),
+          title: clean2(media?.title) || `Media ${clean2(media?.id)}`,
+          subtitle: clean2(media?.mode)
+        });
+      }
+    }
+    if (kind === "claim") {
+      for (const story of response?.stories || []) {
+        add({
+          kind: "story",
+          id: clean2(story?.id),
+          title: clean2(story?.canonical_title) || `Story ${clean2(story?.id)}`,
+          subtitle: clean2(story?.status)
+        });
+      }
+      for (const participant of response?.verified_participants || []) {
+        const entityId = clean2(
+          participant?.entity_id
+        );
+        add({
+          kind: "entity",
+          id: entityId,
+          title: clean2(participant?.canonical_name) || `Entity ${entityId}`,
+          subtitle: clean2(participant?.entity_type)
+        });
+      }
+    }
+    if (kind === "entity") {
+      for (const story of response?.stories || []) {
+        add({
+          kind: "story",
+          id: clean2(story?.id),
+          title: clean2(story?.canonical_title) || `Story ${clean2(story?.id)}`,
+          subtitle: clean2(story?.status)
+        });
+      }
+      for (const media of response?.media || []) {
+        add({
+          kind: "media",
+          id: clean2(media?.id),
+          title: clean2(media?.title) || `Media ${clean2(media?.id)}`,
+          subtitle: clean2(media?.mode)
+        });
+      }
+      for (const event of response?.events || []) {
+        const claimId = text(event?.claim_id);
+        if (claimId) {
+          add({
+            kind: "claim",
+            id: claimId,
+            title: text(event?.claim_text) || `Claim ${claimId}`,
+            subtitle: "Verified claim participation"
+          });
+        }
+      }
+    }
+    return relations;
+  }
+  function historyPolicyNotes(policy) {
+    return Object.entries(
+      policy && typeof policy === "object" ? policy : {}
+    ).filter(([, enabled]) => Boolean(enabled)).map(
+      ([key]) => POLICY_COPY[key] || key.replace(/_/g, " ")
+    );
+  }
+  function historyEventDetails(event) {
+    const details = [];
+    for (const [field, label] of EVENT_DETAIL_FIELDS) {
+      const value = event?.[field];
+      if (typeof value === "string" || typeof value === "number") {
+        const rendered = clean2(value);
+        if (rendered) {
+          details.push({ label, value: rendered });
+        }
+      }
+    }
+    if (Array.isArray(event?.reasons)) {
+      const reasons = event.reasons.filter(
+        (value) => typeof value === "string" && value.trim()
+      ).map((value) => value.trim()).join(" \xB7 ");
+      if (reasons) {
+        details.push({
+          label: "Reasons",
+          value: reasons
+        });
+      }
+    }
+    return details;
+  }
+  function filterAlertsForTarget(alerts, target) {
+    return (Array.isArray(alerts) ? alerts : []).filter(
+      (item) => clean2(item?.target_kind) === clean2(target?.kind) && clean2(item?.target_id) === clean2(target?.id)
+    );
+  }
+  var TRACKING_QUERY_PARAMETERS, YOUTUBE_HOSTS, WATCHABLE_KINDS, HISTORY_PATH_SEGMENTS, POLICY_COPY, EVENT_DETAIL_FIELDS;
+  var init_persistent_intelligence_core = __esm({
+    "src/content/persistent-intelligence-core.mjs"() {
+      TRACKING_QUERY_PARAMETERS = /* @__PURE__ */ new Set([
+        "dclid",
+        "fbclid",
+        "gclid",
+        "gbraid",
+        "igshid",
+        "mc_cid",
+        "mc_eid",
+        "msclkid",
+        "ref_src",
+        "s_cid",
+        "vero_conv",
+        "vero_id",
+        "wbraid"
+      ]);
+      YOUTUBE_HOSTS = /* @__PURE__ */ new Set([
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "music.youtube.com",
+        "youtu.be",
+        "www.youtu.be",
+        "youtube-nocookie.com",
+        "www.youtube-nocookie.com"
+      ]);
+      WATCHABLE_KINDS = Object.freeze([
+        "entity",
+        "story",
+        "claim",
+        "media"
+      ]);
+      HISTORY_PATH_SEGMENTS = Object.freeze({
+        entity: "entities",
+        story: "stories",
+        claim: "claims",
+        media: "media"
+      });
+      POLICY_COPY = Object.freeze({
+        verified_relationships_only: "Entity relationships shown here come from verified persisted relationships.",
+        chronology_is_not_truth: "Chronology records when intelligence occurred; it is not a truth or credibility score.",
+        relationships_are_persisted: "Story relationships shown here are persisted graph relationships, not temporary text matches.",
+        evidence_quantity_is_not_probability: "More evidence records do not automatically mean a claim is more likely to be true.",
+        dependencies_remain_distinct: "Repeated or dependent reporting remains distinct from independent corroboration.",
+        article_merit_is_reporting_quality_not_truth: "Article Merit measures reporting and informational quality, not truth probability.",
+        video_scores_are_not_combined: "Video Evidence Score, Logic Score and Verdict remain separate; there is no composite credibility score.",
+        versions_are_not_assumed_comparable: "Analysis versions are not assumed to be directly comparable across time."
+      });
+      EVENT_DETAIL_FIELDS = Object.freeze([
+        ["claim_text", "Claim"],
+        ["canonical_name", "Entity"],
+        ["participant_role", "Participant role"],
+        ["verification_status", "Verification status"],
+        ["relationship_type", "Relationship"],
+        ["link_basis", "Link basis"],
+        ["claim_summary", "Observation"],
+        ["trigger_type", "Revision trigger"],
+        ["field", "Field"],
+        ["kind", "Transition"],
+        ["mode", "Mode"],
+        ["badge", "Article badge"],
+        ["article_type", "Article type"],
+        ["merit_score", "Merit \xB7 reporting quality"],
+        ["evidence_score", "Video evidence score"],
+        ["logic_score", "Video logic score"],
+        ["verdict", "Video verdict"],
+        ["analysis_version", "Analysis version"],
+        ["scoring_version", "Scoring version"]
+      ]);
+    }
+  });
+
+  // src/content/persistent-intelligence.js
+  function escapeHtml4(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  }
+  function formatTime(value) {
+    const text2 = String(value || "").trim();
+    if (!text2) return "Not recorded";
+    const parsed = new Date(text2);
+    if (Number.isNaN(parsed.getTime())) {
+      return text2;
+    }
+    return parsed.toLocaleString();
+  }
+  function humanize2(value) {
+    return String(value || "").replaceAll("_", " ").replaceAll("-", " ").replace(/\s+/g, " ").trim().replace(
+      /\b\w/g,
+      (letter) => letter.toUpperCase()
+    );
+  }
+  function errorMessage(error) {
+    if (error instanceof SportabaseApiError) {
+      return error.message;
+    }
+    return String(error?.message || error || "").trim() || "Sportabase could not load persistent intelligence.";
+  }
+  async function requestJson(apiBase, path, {
+    method = "GET",
+    body = void 0,
+    privateRequest = false
+  } = {}) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(
+      () => controller.abort(),
+      REQUEST_TIMEOUT_MS
+    );
+    try {
+      const headers = {
+        Accept: "application/json"
+      };
+      if (body !== void 0) {
+        headers["Content-Type"] = "application/json";
+      }
+      if (privateRequest) {
+        headers["x-sportabase-client-id"] = await getSportabaseClientId({
+          requirePersistent: true
+        });
+      }
+      const response = await fetch(
+        `${apiBase}${path}`,
+        {
+          method,
+          headers,
+          body: body === void 0 ? void 0 : JSON.stringify(body),
+          signal: controller.signal
+        }
+      );
+      const responseText = await response.text();
+      let payload = null;
+      try {
+        payload = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        payload = null;
+      }
+      if (!response.ok) {
+        const detail = String(
+          payload?.detail || payload?.message || responseText || ""
+        ).trim();
+        throw new SportabaseApiError(
+          detail || `Sportabase returned HTTP ${response.status}.`,
+          {
+            status: response.status,
+            details: detail
+          }
+        );
+      }
+      return payload;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new SportabaseApiError(
+          "Persistent intelligence request timed out.",
+          { status: 408 }
+        );
+      }
+      if (error instanceof SportabaseApiError) {
+        throw error;
+      }
+      throw new SportabaseApiError(
+        "Sportabase could not reach the persistent intelligence service.",
+        {
+          details: String(
+            error?.message || error || ""
+          )
+        }
+      );
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+  function eventMarkup(event, index) {
+    const details = historyEventDetails(event);
+    return `
+    <article class="sb-pi-event">
+      <div class="sb-pi-event-head">
+        <span class="sb-pi-event-index">
+          ${String(index + 1).padStart(2, "0")}
+        </span>
+
+        <div>
+          <strong>
+            ${escapeHtml4(
+      humanize2(event?.type || "Persisted event")
+    )}
+          </strong>
+
+          <small>
+            ${escapeHtml4(
+      formatTime(event?.occurred_at)
+    )}
+          </small>
+        </div>
+      </div>
+
+      ${details.length ? `
+            <dl class="sb-pi-event-details">
+              ${details.map(
+      (detail) => `
+                    <div>
+                      <dt>${escapeHtml4(detail.label)}</dt>
+                      <dd>${escapeHtml4(detail.value)}</dd>
+                    </div>
+                  `
+    ).join("")}
+            </dl>
+          ` : `
+            <p class="sb-pi-event-empty">
+              Persisted relationship or analysis event.
+            </p>
+          `}
+    </article>
+  `;
+  }
+  function relationMarkup(relation) {
+    return `
+    <button
+      class="sb-pi-relation"
+      type="button"
+      data-sb-pi-open-kind="${escapeHtml4(relation.kind)}"
+      data-sb-pi-open-id="${escapeHtml4(relation.id)}"
+    >
+      <span>
+        ${escapeHtml4(relation.kind.toUpperCase())}
+      </span>
+
+      <strong>
+        ${escapeHtml4(relation.title)}
+      </strong>
+
+      ${relation.subtitle ? `<small>${escapeHtml4(relation.subtitle)}</small>` : ""}
+    </button>
+  `;
+  }
+  function activityMarkup(activity) {
+    if (!activity) return "";
+    const alerts = activity.alerts || [];
+    return `
+    <section class="sb-pi-section sb-pi-activity-section">
+      <div class="sb-pi-section-head">
+        <div>
+          <span>WATCH ACTIVITY</span>
+          <h4>Recent persisted changes</h4>
+        </div>
+
+        <strong>
+          ${alerts.length}
+        </strong>
+      </div>
+
+      <p class="sb-pi-note">
+        Reconciliation read the persisted discovery ledger only.
+        It did not call Gemini or a notification provider.
+      </p>
+
+      ${alerts.length ? `
+            <div class="sb-pi-alert-list">
+              ${alerts.slice(0, 10).map(
+      (alert) => `
+                    <article class="sb-pi-alert ${alert.read_at ? "" : "is-unread"}">
+                      <div>
+                        <span>
+                          ${escapeHtml4(
+        humanize2(alert.event_type)
+      )}
+                        </span>
+                        ${alert.read_at ? "" : "<b>UNREAD</b>"}
+                      </div>
+
+                      <p>
+                        ${escapeHtml4(alert.summary)}
+                      </p>
+
+                      <small>
+                        Occurred ${escapeHtml4(
+        formatTime(alert.occurred_at)
+      )}
+                        \xB7 detected ${escapeHtml4(
+        formatTime(alert.detected_at)
+      )}
+                      </small>
+                    </article>
+                  `
+    ).join("")}
+            </div>
+          ` : `
+            <div class="sb-pi-empty-inline">
+              ${activity.truncated ? `No matching activity was found in the first ${activity.pagesScanned * ALERT_PAGE_LIMIT} recent inbox records.` : "No alert activity has been persisted for this watched object yet."}
+            </div>
+          `}
+
+      <div class="sb-pi-reconcile-meta">
+        Reconcile result \xB7 ${activity.newAlerts} new alert${activity.newAlerts === 1 ? "" : "s"} across ${activity.watchesChecked} watch${activity.watchesChecked === 1 ? "" : "es"} checked.
+      </div>
+    </section>
+  `;
+  }
+  function createPanel({
+    host,
+    apiBase,
+    sourceUrl,
+    mode
+  }) {
+    let destroyed = false;
+    let loading = false;
+    let current = null;
+    let watchedKeys = /* @__PURE__ */ new Set();
+    let privateStateError = "";
+    function targetKey(target) {
+      return `${target.kind}:${target.id}`;
+    }
+    function isWatching(target) {
+      return watchedKeys.has(
+        targetKey(target)
+      );
+    }
+    function renderLoading(label) {
+      if (destroyed) return;
+      host.innerHTML = `
+      <section class="sb-pi-card">
+        <div class="sb-pi-loading">
+          <span class="sb-pi-spinner"></span>
+          <div>
+            <strong>${escapeHtml4(label)}</strong>
+            <small>
+              Reading only persisted Sportabase intelligence.
+            </small>
+          </div>
+        </div>
+      </section>
+    `;
+    }
+    function renderMissing(message) {
+      if (destroyed) return;
+      host.innerHTML = `
+      <section class="sb-pi-card">
+        <div class="sb-pi-eyebrow">
+          PERSISTENT INTELLIGENCE
+        </div>
+
+        <h3>Canonical history is not ready yet</h3>
+
+        <p class="sb-pi-copy">
+          ${escapeHtml4(message)}
+        </p>
+
+        <button
+          class="sb-pi-button sb-pi-button-secondary"
+          type="button"
+          data-sb-pi-retry
+        >
+          Check persisted record again
+        </button>
+      </section>
+    `;
+      host.querySelector("[data-sb-pi-retry]")?.addEventListener("click", () => {
+        void openInitialMedia();
+      });
+    }
+    function renderError(message) {
+      if (destroyed) return;
+      host.innerHTML = `
+      <section class="sb-pi-card is-error">
+        <div class="sb-pi-eyebrow">
+          PERSISTENT INTELLIGENCE
+        </div>
+
+        <h3>History temporarily unavailable</h3>
+
+        <p class="sb-pi-copy">
+          ${escapeHtml4(message)}
+        </p>
+
+        <button
+          class="sb-pi-button sb-pi-button-secondary"
+          type="button"
+          data-sb-pi-retry
+        >
+          Retry
+        </button>
+      </section>
+    `;
+      host.querySelector("[data-sb-pi-retry]")?.addEventListener("click", () => {
+        void openInitialMedia();
+      });
+    }
+    function bindActions() {
+      if (!current || destroyed) return;
+      host.querySelectorAll("[data-sb-pi-open-kind]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const kind = button.getAttribute(
+            "data-sb-pi-open-kind"
+          );
+          const id = button.getAttribute(
+            "data-sb-pi-open-id"
+          );
+          if (kind && id) {
+            void openTarget(kind, id);
+          }
+        });
+      });
+      host.querySelector("[data-sb-pi-watch]")?.addEventListener("click", () => {
+        void addWatch();
+      });
+      host.querySelector("[data-sb-pi-activity]")?.addEventListener("click", () => {
+        void checkActivity();
+      });
+      host.querySelector("[data-sb-pi-more]")?.addEventListener("click", () => {
+        void loadMoreHistory();
+      });
+      host.querySelector("[data-sb-pi-back-media]")?.addEventListener("click", () => {
+        void openInitialMedia();
+      });
+      host.querySelector("[data-sb-pi-original]")?.addEventListener("click", () => {
+        const url = current?.identity?.canonicalUrl;
+        if (url) {
+          window.open(
+            url,
+            "_blank",
+            "noopener,noreferrer"
+          );
+        }
+      });
+    }
+    function renderCurrent() {
+      if (!current || destroyed) return;
+      const {
+        target,
+        history,
+        identity,
+        relations,
+        activity
+      } = current;
+      const watching = isWatching(target);
+      const policyNotes = historyPolicyNotes(history.policy);
+      host.innerHTML = `
+      <section class="sb-pi-card">
+        <div class="sb-pi-head">
+          <div>
+            <div class="sb-pi-eyebrow">
+              PERSISTENT INTELLIGENCE
+            </div>
+
+            <h3>${escapeHtml4(identity.title)}</h3>
+
+            <p class="sb-pi-subtitle">
+              ${escapeHtml4(
+        identity.subtitle || humanize2(target.kind)
+      )}
+            </p>
+          </div>
+
+          <span class="sb-pi-kind">
+            ${escapeHtml4(target.kind.toUpperCase())}
+          </span>
+        </div>
+
+        <div class="sb-pi-time-grid">
+          <div>
+            <span>FIRST SEEN</span>
+            <strong>${escapeHtml4(
+        formatTime(identity.firstSeenAt)
+      )}</strong>
+          </div>
+
+          <div>
+            <span>LAST SEEN</span>
+            <strong>${escapeHtml4(
+        formatTime(identity.lastSeenAt)
+      )}</strong>
+          </div>
+        </div>
+
+        <div class="sb-pi-actions">
+          <button
+            class="sb-pi-button ${watching ? "sb-pi-button-active" : "sb-pi-button-primary"}"
+            type="button"
+            data-sb-pi-watch
+            ${watching ? "disabled" : ""}
+          >
+            ${watching ? "Watching future changes" : "Watch future changes"}
+          </button>
+
+          <button
+            class="sb-pi-button sb-pi-button-secondary"
+            type="button"
+            data-sb-pi-activity
+            ${watching ? "" : "disabled"}
+          >
+            Check watch activity
+          </button>
+
+          ${identity.canonicalUrl ? `
+                <button
+                  class="sb-pi-button sb-pi-button-secondary"
+                  type="button"
+                  data-sb-pi-original
+                >
+                  Open original \u2197
+                </button>
+              ` : ""}
+
+          ${target.kind !== "media" ? `
+                <button
+                  class="sb-pi-button sb-pi-button-quiet"
+                  type="button"
+                  data-sb-pi-back-media
+                >
+                  Back to analyzed media
+                </button>
+              ` : ""}
+        </div>
+
+        ${privateStateError ? `
+              <p class="sb-pi-private-warning">
+                History remains public, but watch controls are unavailable: ${escapeHtml4(
+        privateStateError
+      )}
+              </p>
+            ` : ""}
+
+        <section class="sb-pi-policy">
+          <span>INTERPRETATION BOUNDARIES</span>
+          ${policyNotes.length ? policyNotes.map(
+        (note) => `
+                      <p>
+                        <i></i>
+                        ${escapeHtml4(note)}
+                      </p>
+                    `
+      ).join("") : `
+                <p>
+                  <i></i>
+                  Persisted chronology is descriptive context, not a truth score.
+                </p>
+              `}
+        </section>
+
+        <section class="sb-pi-section">
+          <div class="sb-pi-section-head">
+            <div>
+              <span>PERSISTED GRAPH</span>
+              <h4>Related intelligence</h4>
+            </div>
+            <strong>${relations.length}</strong>
+          </div>
+
+          ${relations.length ? `
+                <div class="sb-pi-relations">
+                  ${relations.map(relationMarkup).join("")}
+                </div>
+              ` : `
+                <div class="sb-pi-empty-inline">
+                  No related canonical objects are exposed by this history response yet.
+                </div>
+              `}
+        </section>
+
+        <section class="sb-pi-section">
+          <div class="sb-pi-section-head">
+            <div>
+              <span>DOMAIN CHRONOLOGY</span>
+              <h4>Persisted history</h4>
+            </div>
+            <strong>${history.events?.length || 0}</strong>
+          </div>
+
+          <p class="sb-pi-note">
+            Ordering reflects domain occurrence time. It does not imply truth, credibility, novelty, or independent corroboration.
+          </p>
+
+          ${history.events?.length ? `
+                <div class="sb-pi-events">
+                  ${history.events.map(eventMarkup).join("")}
+                </div>
+              ` : `
+                <div class="sb-pi-empty-inline">
+                  No persisted history events are exposed for this object yet.
+                </div>
+              `}
+
+          ${history.pagination?.next_cursor ? `
+                <button
+                  class="sb-pi-button sb-pi-button-secondary sb-pi-more"
+                  type="button"
+                  data-sb-pi-more
+                >
+                  Load more history
+                </button>
+              ` : ""}
+        </section>
+
+        ${activityMarkup(activity)}
+      </section>
+    `;
+      bindActions();
+    }
+    async function loadWatchState() {
+      privateStateError = "";
+      try {
+        const response = await requestJson(
+          apiBase,
+          "/watchlists",
+          { privateRequest: true }
+        );
+        watchedKeys = new Set(
+          (response?.items || []).map(
+            (item) => `${item.target_kind}:${item.target_id}`
+          )
+        );
+      } catch (error) {
+        privateStateError = errorMessage(error);
+        watchedKeys = /* @__PURE__ */ new Set();
+      }
+    }
+    async function openTarget(kind, id) {
+      if (loading || destroyed) return;
+      loading = true;
+      renderLoading(
+        `Loading ${humanize2(kind)} history\u2026`
+      );
+      try {
+        const history = await requestJson(
+          apiBase,
+          historyPathFor(kind, id, {
+            limit: 30
+          })
+        );
+        if (destroyed) return;
+        const target = { kind, id };
+        current = {
+          target,
+          history,
+          identity: historyIdentity(
+            kind,
+            history
+          ),
+          relations: historyRelations(
+            kind,
+            history
+          ),
+          activity: null
+        };
+        renderCurrent();
+      } catch (error) {
+        if (destroyed) return;
+        if (error?.status === 404) {
+          const modeCopy = mode === "video" ? "The video readout is available, but its canonical media history has not been persisted yet. Browser-capture persistence may still be processing." : "The article readout is available, but Sportabase does not currently expose a canonical media-history record for this URL.";
+          renderMissing(modeCopy);
+        } else {
+          renderError(errorMessage(error));
+        }
+      } finally {
+        loading = false;
+      }
+    }
+    async function openInitialMedia() {
+      if (loading || destroyed) return;
+      try {
+        const mediaId = await mediaItemIdForUrl(sourceUrl);
+        await openTarget("media", mediaId);
+      } catch (error) {
+        renderError(errorMessage(error));
+      }
+    }
+    async function addWatch() {
+      if (!current || loading || isWatching(current.target)) {
+        return;
+      }
+      loading = true;
+      try {
+        const response = await requestJson(
+          apiBase,
+          "/watchlists",
+          {
+            method: "POST",
+            privateRequest: true,
+            body: {
+              target_kind: current.target.kind,
+              target_id: current.target.id
+            }
+          }
+        );
+        watchedKeys.add(
+          targetKey(current.target)
+        );
+        if (response?.created === false) {
+          watchedKeys.add(
+            targetKey(current.target)
+          );
+        }
+        privateStateError = "";
+        renderCurrent();
+      } catch (error) {
+        privateStateError = errorMessage(error);
+        renderCurrent();
+      } finally {
+        loading = false;
+      }
+    }
+    async function loadMoreHistory() {
+      if (!current || loading || !current.history?.pagination?.next_cursor) {
+        return;
+      }
+      loading = true;
+      try {
+        const next = await requestJson(
+          apiBase,
+          historyPathFor(
+            current.target.kind,
+            current.target.id,
+            {
+              limit: 30,
+              cursor: current.history.pagination.next_cursor
+            }
+          )
+        );
+        current.history = {
+          ...current.history,
+          events: [
+            ...current.history.events || [],
+            ...next?.events || []
+          ],
+          pagination: next?.pagination || current.history.pagination
+        };
+        current.relations = historyRelations(
+          current.target.kind,
+          current.history
+        );
+        renderCurrent();
+      } catch (error) {
+        privateStateError = errorMessage(error);
+        renderCurrent();
+      } finally {
+        loading = false;
+      }
+    }
+    async function checkActivity() {
+      if (!current || loading || !isWatching(current.target)) {
+        return;
+      }
+      loading = true;
+      try {
+        const reconcile = await requestJson(
+          apiBase,
+          "/watchlists/alerts/reconcile",
+          {
+            method: "POST",
+            privateRequest: true
+          }
+        );
+        let cursor = "";
+        let pagesScanned = 0;
+        let truncated = false;
+        const alerts = [];
+        while (pagesScanned < MAX_ALERT_PAGES) {
+          const params = new URLSearchParams();
+          params.set(
+            "unread_only",
+            "false"
+          );
+          params.set(
+            "limit",
+            String(ALERT_PAGE_LIMIT)
+          );
+          if (cursor) {
+            params.set("cursor", cursor);
+          }
+          const page = await requestJson(
+            apiBase,
+            `/watchlists/alerts?${params.toString()}`,
+            { privateRequest: true }
+          );
+          alerts.push(
+            ...page?.items || []
+          );
+          pagesScanned += 1;
+          cursor = String(
+            page?.pagination?.next_cursor || ""
+          );
+          if (!cursor) {
+            break;
+          }
+        }
+        truncated = Boolean(cursor);
+        current.activity = {
+          alerts: filterAlertsForTarget(
+            alerts,
+            current.target
+          ),
+          pagesScanned,
+          truncated,
+          newAlerts: Number(
+            reconcile?.new_alerts || 0
+          ),
+          watchesChecked: Number(
+            reconcile?.watches_checked || 0
+          )
+        };
+        privateStateError = "";
+        renderCurrent();
+      } catch (error) {
+        privateStateError = errorMessage(error);
+        renderCurrent();
+      } finally {
+        loading = false;
+      }
+    }
+    void loadWatchState().finally(() => {
+      if (!destroyed) {
+        void openInitialMedia();
+      }
+    });
+    return {
+      destroy() {
+        destroyed = true;
+        host.innerHTML = "";
+      }
+    };
+  }
+  function createPersistentIntelligenceIntegration({
+    root,
+    apiBase,
+    sourceUrl,
+    mode
+  } = {}) {
+    if (!root) {
+      return {
+        destroy() {
+        }
+      };
+    }
+    const normalizedApiBase = String(
+      apiBase || "https://sportabase-api.onrender.com"
+    ).replace(/\/+$/, "");
+    let activePanel = null;
+    let activeResults = null;
+    function sync() {
+      const results = root.querySelector(
+        ".sb-article-results, .sb-video-results"
+      );
+      if (!results) {
+        if (activePanel) {
+          activePanel.destroy();
+          activePanel = null;
+          activeResults = null;
+        }
+        return;
+      }
+      if (results === activeResults && results.querySelector(
+        "[data-sb-persistent-intelligence-host]"
+      )) {
+        return;
+      }
+      activePanel?.destroy();
+      const host = document.createElement("div");
+      host.setAttribute(
+        "data-sb-persistent-intelligence-host",
+        ""
+      );
+      const actions = results.querySelector(
+        ".sb-article-result-actions, .sb-result-actions"
+      );
+      if (actions?.parentNode === results) {
+        results.insertBefore(
+          host,
+          actions
+        );
+      } else {
+        results.append(host);
+      }
+      activeResults = results;
+      activePanel = createPanel({
+        host,
+        apiBase: normalizedApiBase,
+        sourceUrl: sourceUrl || window.location.href,
+        mode
+      });
+    }
+    const observer = new MutationObserver(sync);
+    observer.observe(root, {
+      childList: true,
+      subtree: true
+    });
+    sync();
+    return {
+      destroy() {
+        observer.disconnect();
+        activePanel?.destroy();
+        activePanel = null;
+        activeResults = null;
+      }
+    };
+  }
+  var REQUEST_TIMEOUT_MS, MAX_ALERT_PAGES, ALERT_PAGE_LIMIT;
+  var init_persistent_intelligence2 = __esm({
+    "src/content/persistent-intelligence.js"() {
+      init_api();
+      init_persistent_intelligence_core();
+      REQUEST_TIMEOUT_MS = 22e3;
+      MAX_ALERT_PAGES = 3;
+      ALERT_PAGE_LIMIT = 100;
+    }
+  });
+
   // src/content/index.js
   var require_index = __commonJS({
     "src/content/index.js"() {
@@ -5981,10 +7268,12 @@
       init_loader();
       init_video_results();
       init_article_mode();
+      init_persistent_intelligence();
       init_overlay_shell();
       init_article_mode2();
       init_video_mode();
       init_browser_capture_session();
+      init_persistent_intelligence2();
       init_article_extractor();
       init_youtube_transcript();
       init_api();
@@ -6009,6 +7298,17 @@
       var shell = openSportabaseShell({
         mode: isYouTubeVideo ? "video" : "article",
         preferences: runtimeConfig.preferences || {}
+      });
+      var persistentIntelligence = createPersistentIntelligenceIntegration({
+        root: shell.content,
+        apiBase: String(
+          runtimeConfig.api || "https://sportabase-api.onrender.com"
+        ).replace(/\/+$/, ""),
+        sourceUrl: window.location.href,
+        mode: isYouTubeVideo ? "video" : "article"
+      });
+      shell.onClose?.(() => {
+        persistentIntelligence.destroy();
       });
       if (isYouTubeVideo) {
         openVideoMode({
