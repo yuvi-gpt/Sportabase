@@ -2,7 +2,7 @@
 
 ## Evidence-first sports intelligence
 
-Sportabase is a sports intelligence platform that turns articles, videos, sources, claims, and evidence into a persistent, explainable intelligence graph.
+Sportabase is a sports intelligence platform that turns articles, videos, sources, claims, evidence, and analysis history into a persistent, explainable intelligence graph.
 
 It is not merely a summarizer and it is not a truth machine. Its job is to answer:
 
@@ -11,40 +11,52 @@ It is not merely a summarizer and it is not a truth machine. Its job is to answe
 - Who originated or repeated it?
 - What evidence supports, contradicts, corrects, or supersedes it?
 - Which corroboration is genuinely independent?
-- How has the persisted intelligence changed over time?
-- What should a user be able to search, revisit, watch, and eventually act on?
+- How has persisted intelligence changed over time?
+- What should a user be able to search, inspect, revisit, watch, and eventually act on?
 
-The product currently spans a FastAPI backend, Chrome extension, React Native mobile app, and internal control-room surfaces. SQLite remains the current persistence layer.
+The product currently spans a FastAPI backend, Chrome extension, React Native / Expo mobile app, and internal control-room surfaces. SQLite remains the current persistence layer.
 
 ---
 
 ## Current project checkpoint — 4 September 2026
 
-The backend has moved well beyond the original URL-in, summary-out MVP. The durable foundation now includes:
+### Current `main`
+
+Latest verified remote `main`:
+
+```text
+9691575c0232450a16170973bb54d9a293bb7494
+```
+
+Latest merge:
+
+```text
+Add mobile intelligence detail and history flow
+```
+
+The backend intelligence line, Watchlists + Alerts V1, mobile watchlists/alerts productization, and mobile canonical intelligence detail/history flow are all integrated into `main`.
+
+### Backend foundation now integrated
+
+The backend includes:
 
 - article and YouTube analysis with distinct article/video semantics;
 - canonical media, story, claim, entity, source, reporter, evidence, and snapshot records;
 - canonical entity resolution and aliases;
 - claim extraction, normalization, support, evidence, and evolution history;
 - story clustering and story evolution;
-- source profiles, reporting coverage, and source-independence analysis;
+- source profiles, reporting coverage, provenance, dependency, and independence analysis;
 - persistent analysis and operational event history;
-- readiness, capacity, quota, provider-reliability, and multi-model routing controls;
+- readiness, capacity, quota, provider-reliability, caching, retry, and multi-model routing controls;
 - long-video transcript compression and analysis;
 - golden-set evaluation and structured validation paths;
 - homepage storyline aggregation;
-- public search and historical-intelligence APIs;
-- a locally completed Watchlists + Alerts V1 implementation awaiting its final Git commit and push.
+- public Search + Historical Intelligence APIs;
+- Watchlists + Alerts V1 with client-scoped ownership and deterministic persisted-event reconciliation.
 
-### Latest remote checkpoint
+### Search + Historical Intelligence V1
 
-Roadmap item **#12 — Search + Historical Intelligence V1** is committed on:
-
-- Branch: `backend-search-historical-intelligence-v1`
-- Commit: `8f691a53f6d445587169fdd8ce36b88e2776d4c9`
-- Commit message: `add search and historical intelligence API`
-
-It exposes:
+Public product-safe endpoints:
 
 - `GET /intelligence/search`
 - `GET /intelligence/entities/{entity_id}/history`
@@ -52,45 +64,15 @@ It exposes:
 - `GET /intelligence/claims/{claim_id}/history`
 - `GET /intelligence/media/{media_item_id}/history`
 
-The API uses product-safe projections and deterministic cursor pagination. Search is lexical discovery only; it does not invent canonical relationships or treat a matching string as verified intelligence.
+Search is lexical discovery only. A matching string does not create a canonical relationship or verified intelligence link.
 
-### Current local checkpoint
+History endpoints expose canonical identity, persisted relationships, chronology, pagination, and explicit interpretation policies. Domain chronology is not treated as truth, credibility, novelty, or independent corroboration.
 
-Roadmap item **#13 — Watchlists + Alerts V1** has been implemented in the local worktree:
+### Watchlists + Alerts V1
 
-- Worktree: `C:\Users\Yuvraj\Documents\Sportabase-watchlists-alerts`
-- Branch: `backend-watchlists-alerts-v1`
-- Exact base: `8f691a53f6d445587169fdd8ce36b88e2776d4c9`
-- Current state: six intended files staged; not yet committed or pushed at the time of this update
+Watchlists + Alerts V1 is committed, pushed, integrated, and available on `main`.
 
-Final exact-tree backend checkpoint:
-
-```text
-3651 passed, 3 skipped, 12 warnings, 694 subtests passed in 96.29s
-```
-
-Staged feature diff:
-
-```text
-6 files changed, 699 insertions(+)
-```
-
-The staged files are:
-
-- `backend/app/application/composition.py`
-- `backend/app/db/schema.py`
-- `backend/app/routes/watchlists_product.py`
-- `backend/app/watchlists/__init__.py`
-- `backend/app/watchlists/runtime.py`
-- `backend/tests/test_watchlists_alerts_api.py`
-
-The immediate next action is to inspect the staged diff/status one last time, commit it, push `backend-watchlists-alerts-v1`, and verify the remote branch and commit SHA. Do not redo the implementation or rerun the full backend suite unless production code changes.
-
----
-
-## Watchlists + Alerts V1
-
-### Product API
+Product API:
 
 - `POST /watchlists`
 - `GET /watchlists`
@@ -99,42 +81,172 @@ The immediate next action is to inspect the staged diff/status one last time, co
 - `GET /watchlists/alerts`
 - `POST /watchlists/alerts/{alert_id}/read`
 
-### Supported targets
-
-V1 watches exactly four stable public intelligence objects:
+Supported targets remain exactly:
 
 - `entity`
 - `story`
 - `claim`
 - `media`
 
-Sources and reporters are deliberately excluded until they have equivalent dedicated product-history contracts.
+Sources and reporters remain deliberately excluded until they receive equivalent dedicated product-history contracts.
 
-### Ownership and privacy invariants
+Final exact backend checkpoint from the completed Watchlists + Alerts implementation tree:
+
+```text
+3651 passed, 3 skipped, 12 warnings, 694 subtests passed in 96.29s
+```
+
+The feature diff at that checkpoint was:
+
+```text
+6 files changed, 699 insertions(+)
+```
+
+No full backend suite was rerun during later Git-only integration because backend production code was not changed by those merge operations.
+
+---
+
+## Mobile productization now completed
+
+### Mobile Watchlists + Alerts product flow
+
+Merged through PR #3.
+
+Merge commit on `main`:
+
+```text
+576b6b8108e34cbb012338f5fd011bef2edd76cf
+```
+
+The mobile app now includes:
+
+- persistent installation-scoped client identity for `x-sportabase-client-id`;
+- public persisted-intelligence discovery;
+- watch creation from Discover;
+- Watchlist management;
+- explicit alert reconciliation;
+- Alerts inbox;
+- unread filtering;
+- pagination;
+- mark-read behavior;
+- persistent Analyze / Discover / Watches / Alerts navigation.
+
+Client identity is randomly generated and persisted on-device. It is not derived from IP address, account details, or hardware fingerprinting. The backend hashes the raw client ID before persistence.
+
+Verification completed before merge:
+
+```text
+npx tsc --noEmit                     PASS
+npx expo export --platform web      PASS
+git diff --check                    PASS
+```
+
+The Expo export included:
+
+- `/`
+- `/explore`
+- `/watchlists`
+- `/alerts`
+- `/handle-share`
+
+### Mobile canonical intelligence detail + history flow
+
+Merged through PR #4.
+
+Current `main` merge commit:
+
+```text
+9691575c0232450a16170973bb54d9a293bb7494
+```
+
+The mobile app now lets users move from Discover, Watchlists, or Alerts into the underlying canonical Sportabase object and persisted graph.
+
+Supported detail objects:
+
+- entity
+- story
+- claim
+- media
+
+The detail experience includes:
+
+- canonical identity;
+- first-seen / last-seen metadata;
+- related persisted graph objects;
+- navigation across entity/story/claim/media relationships;
+- paginated persisted history timelines;
+- explicit interpretation-policy notes;
+- watch creation directly from detail pages;
+- kind-level Alerts access;
+- original-media navigation where a canonical URL exists;
+- article Merit displayed as reporting/informational quality, not truth probability;
+- video Evidence Score, Logic Score, and Verdict kept separate;
+- chronology explicitly described as chronology, not credibility.
+
+The route is intentionally static for Expo Router / static web export:
+
+```text
+/intelligence?kind=<entity|story|claim|media>&id=<canonical_id>
+```
+
+Verification completed on the final feature branch tree:
+
+```text
+npm ci                              PASS
+npx tsc --noEmit                    PASS
+npx expo export --platform web      PASS
+git diff --check                    PASS
+```
+
+The Expo export included the new route:
+
+```text
+/intelligence
+```
+
+At verification time, local and remote feature SHAs matched exactly at:
+
+```text
+fbee13607fe0ecec9f59a1a304c292654d143e25
+```
+
+Post-merge comparison confirmed zero file differences between the reviewed feature tree and `main`.
+
+### CI note
+
+There are currently no GitHub Actions/status checks configured for these mobile branches. Local TypeScript and Expo static-export checks are therefore the current execution gates for mobile feature branches.
+
+---
+
+## Watchlists + Alerts invariants
+
+### Ownership and privacy
 
 - Every private route requires an explicit, non-empty `x-sportabase-client-id` header.
 - There is no IP, `x-forwarded-for`, or `request.client.host` fallback.
 - The raw installation ID is never persisted or returned.
-- A SHA-256 digest with the namespace `sportabase:watchlists:v1:` is persisted as the internal owner key.
+- A SHA-256 digest with namespace `sportabase:watchlists:v1:` is persisted internally.
 - Every private read and write is client-scoped.
 - Cross-client watch and alert probes return `404`.
 - Watch IDs and alert IDs are opaque.
 - `user_history` is untouched and is not reused as subscription state.
 
-### Baselines, watermarks, and late arrivals
+### Baselines, discovery ordering, and late arrivals
 
 Creating a watch establishes a baseline at the current maximum global discovery sequence, so historical intelligence does not flood the alert inbox.
 
-Eligible persisted events are appended by SQLite triggers to an AUTOINCREMENT discovery ledger. Watches advance through that total order using an integer sequence rather than an event timestamp. This preserves correct behavior for:
+Eligible persisted events are appended by SQLite triggers to an AUTOINCREMENT discovery ledger. Watches advance through that integer total order rather than through event timestamps.
+
+This preserves correct behavior for:
 
 - identical timestamps;
-- late-arriving evidence whose `occurred_at` predates watch creation;
+- late-arriving evidence with old domain time;
 - repeated reconciliation;
 - bounded partial batches;
 - concurrent reconciliation;
 - process restarts.
 
-Alert insertion and watermark advancement occur together inside a transaction. A failed alert write cannot silently advance beyond the event. Stable source-event keys plus a database uniqueness constraint prevent duplicate alerts.
+Alert insertion and watermark advancement occur together inside one transaction. Stable source-event keys plus database uniqueness constraints prevent duplicate alerts.
 
 ### Reconciliation behavior
 
@@ -153,14 +265,12 @@ Canonical intelligence is read-only during reconciliation. Only watch watermarks
 
 ### Event behavior
 
-- Entity watches react only through verified claim/entity participation and graph relationships derived from that verified path. Lexical mentions do not alert.
-- Story watches can react to new claim links, media links, source observations, reporter observations, evidence links, and analysis snapshots.
+- Entity watches react only through verified claim/entity participation and graph relationships derived from that verified path.
+- Story watches can react to claim links, media links, source observations, reporter observations, evidence links, and analysis snapshots.
 - Claim watches can react to observation/evidence links, verified entity participants, story links, adjudication revisions, and adjudication transitions.
 - Media watches react to new analysis snapshots.
 
 Alert summaries are deterministic and neutral. They do not use AI and do not claim that an event is breaking, confirmed, true, reliable, or credible unless that precise persisted semantic is explicitly represented.
-
-Deleting a watch cascades its subscription alerts without altering the underlying intelligence or another client's watch. Alerts begin unread; marking one read is client-scoped and idempotent. Inbox cursors are versioned, validated, deterministic, and bound to the current client and filters.
 
 ---
 
@@ -168,7 +278,7 @@ Deleting a watch cascades its subscription alerts without altering the underlyin
 
 ### Articles
 
-The **Merit Score** measures reporting/informational quality and evidential support. It is not a truth probability or a credibility percentage.
+The **Merit Score** measures reporting/informational quality and evidential support. It is not a truth probability or credibility percentage.
 
 ### Videos
 
@@ -186,7 +296,7 @@ Repetition is not independence. Ten rewrites of one report remain one reporting 
 
 ### History
 
-Persisted history distinguishes domain time (`occurred_at` or `observed_at`) from discovery/materialization time. Chronology alone is never proof of truth, credibility, or novelty.
+Persisted history distinguishes domain time (`occurred_at` / `observed_at`) from discovery/materialization time. Chronology alone is never proof of truth, credibility, novelty, or independence.
 
 ---
 
@@ -202,17 +312,26 @@ Persisted history distinguishes domain time (`occurred_at` or `observed_at`) fro
 
 ### Browser extension
 
-- JavaScript/Chrome Extension APIs
+- JavaScript / Chrome Extension APIs
 - article extraction and analysis overlay
 - YouTube transcript extraction and analysis
 - localized UI, loading states, settings, caching, and trust-oriented result presentation
+- modular source structure under `extension/src`
+- esbuild browser bundle pipeline
+
+The extension still needs first-class integration with the persistent intelligence graph now available to mobile.
 
 ### Mobile
 
-- React Native, Expo Router, and TypeScript
+- React Native
+- Expo Router
+- TypeScript
 - shared-link and pasted-link ingestion
 - article and video result surfaces
-- evolving Home, Explore, History, story, media, watchlist, and notification experiences
+- persisted intelligence discovery
+- watchlists and in-app alerts
+- canonical entity/story/claim/media detail pages
+- persisted graph traversal and chronological history
 
 ---
 
@@ -233,17 +352,74 @@ Persisted history distinguishes domain time (`occurred_at` or `observed_at`) fro
 
 ## Roadmap status
 
-Completed backend foundations include entity resolution, claim/story intelligence, evidence and support graphs, history, source profiles, reporting coverage, independence, story evolution, storyline aggregation, golden evaluation, long-video compression, provider reliability, task-specific model routing, and Search + Historical Intelligence V1.
+Completed foundations now include:
 
-Current boundary:
+- entity resolution;
+- claim/story intelligence;
+- evidence and support graphs;
+- history;
+- source profiles;
+- reporting coverage and independence;
+- story evolution;
+- storyline aggregation;
+- golden evaluation;
+- long-video compression;
+- provider reliability and task-specific model routing;
+- Search + Historical Intelligence V1;
+- Watchlists + Alerts V1;
+- mobile Watchlists + Alerts productization;
+- mobile canonical intelligence detail/history productization.
 
-1. Commit and push Watchlists + Alerts V1.
-2. Verify the exact remote branch head and diff.
-3. Decide the next roadmap unit before opening another implementation worktree.
-4. Keep delivery channels—push, email, SMS, Slack, webhooks, and browser notifications—out of the V1 in-app alert subsystem.
-5. Preserve the completed backend intelligence graph while productizing watchlists, history, story/media pages, and alert experiences across mobile and extension surfaces.
+### Current next roadmap unit
+
+**Chrome extension ↔ persistent intelligence integration.**
+
+Target product flow:
+
+```text
+Analyze article / video
+        ↓
+Persisted Sportabase intelligence object
+        ↓
+Open canonical history / intelligence
+        ↓
+Watch future changes
+        ↓
+See persisted changes through in-product alert/history surfaces
+```
+
+The extension integration should consume existing backend product contracts rather than create a separate intelligence model.
+
+Initial intended scope:
+
+- expose persisted canonical intelligence from extension analysis results;
+- allow opening entity/story/claim/media history from the extension;
+- allow watching supported canonical objects using explicit stable client identity;
+- surface whether a watched object has future persisted alert activity where product-safe data permits;
+- preserve article/video scoring semantics;
+- preserve lexical-search vs canonical-relationship distinctions;
+- do not add push/email/SMS/Slack/webhook/browser-notification delivery yet.
+
+After extension integration, a strong next product unit is **Sources + Reporters as first-class intelligence objects**, including dedicated product-history contracts before making them watchable.
 
 Future predictive work may use information momentum, evidence growth, source quality, team/player context, structured sports data, and market movement. It must be evaluated empirically and must not be smuggled into the Merit Score as an unsupported truth predictor.
+
+---
+
+## Local worktree safety
+
+The primary local repo may contain unrelated UI/design work on other branches. Do not reset, switch, pull, or clean that worktree without first inspecting it.
+
+Use isolated Git worktrees for new roadmap units.
+
+Verified recent feature worktrees include:
+
+```text
+C:\Users\Yuvraj\Documents\Sportabase-mobile-watchlists-alerts
+C:\Users\Yuvraj\Documents\Sportabase-mobile-intelligence-detail
+```
+
+Those feature branches are already merged. Do not extend them for the next roadmap unit.
 
 ---
 
@@ -270,20 +446,23 @@ Context warning: this Sportabase thread is getting long enough that we should ch
 
 ## Handoff source of truth
 
-For a new Sportabase chat, use this README together with live Git/GitHub inspection. The README is a checkpoint, not a substitute for verification. If the local worktree and GitHub disagree, stop and establish which state is authoritative before changing code.
+For a new Sportabase chat, use this README together with live Git/GitHub inspection. The README is a checkpoint, not a substitute for verification.
 
-The next chat should begin by verifying:
+At this checkpoint the authoritative remote base is:
 
-```powershell
-cd C:\Users\Yuvraj\Documents\Sportabase-watchlists-alerts
-git status -sb
-git status --short
-git rev-parse HEAD
-git log -1 --oneline
-git diff --cached --stat
+```text
+main = 9691575c0232450a16170973bb54d9a293bb7494
 ```
 
-At the recorded checkpoint, the expected next operation is final commit/push verification for Watchlists + Alerts V1—not another implementation pass.
+Before beginning the next feature:
+
+1. verify live `origin/main`;
+2. create a clean feature branch/worktree from that verified base;
+3. inspect the current extension architecture before editing;
+4. implement the extension persistent-intelligence integration as a bounded product slice;
+5. avoid backend changes unless a concrete missing product contract is demonstrated.
+
+Do not return to Watchlists + Alerts backend implementation or mobile scaffolding unless a verified regression requires it.
 
 ---
 
