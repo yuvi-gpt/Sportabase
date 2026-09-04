@@ -23,7 +23,7 @@ from app.services.video_support import (
     prepare_video_transcript,
     detect_content_language,
     build_video_transcript_context,
-    normalize_video_transcript_metadata,
+    apply_video_extraction_confidence_policy,
     sanitize_video_model_payload,
     classify_video_provider_error,
 )
@@ -41,41 +41,13 @@ def ai_video_claim_readout_impl(
     client_factory,
     generator,
 ) -> Dict[str, Any]:
-    transcript_extraction = (
-        normalize_video_transcript_metadata(
-            transcript_metadata
-        )
+    extraction_policy = apply_video_extraction_confidence_policy(
+        {}, transcript_metadata
     )
-
-    limiting_extraction_warnings = {
-        "very_few_segments",
-        "very_short_transcript",
-    }
-
-    transcript_extraction_limited = bool(
-        transcript_extraction.get(
-            "provided",
-            False,
-        )
-        and (
-            float(
-                transcript_extraction.get(
-                    "extraction_confidence",
-                    0.0,
-                )
-            )
-            < 0.55
-            or any(
-                warning
-                in limiting_extraction_warnings
-                for warning
-                in transcript_extraction.get(
-                    "extraction_warnings",
-                    [],
-                )
-            )
-        )
-    )
+    transcript_extraction = extraction_policy["transcript_extraction"]
+    transcript_extraction_limited = extraction_policy[
+        "transcript_extraction_limited"
+    ]
 
     client = client_factory()
 
@@ -163,6 +135,22 @@ def ai_video_claim_readout_impl(
             "",
         )
     )
+
+    transcript_context_disclosure = ""
+
+    if transcript_context.get(
+        "compression_applied"
+    ) is True:
+        transcript_context_disclosure = (
+            "Transcript-context note:\n"
+            "- The context below contains deterministic verbatim excerpts from a longer transcript.\n"
+            "- Excerpts are presented in their original source chronology.\n"
+            "- Some passages were omitted only to satisfy the prompt budget.\n"
+            "- Absence from these excerpts is not evidence that something was absent from the full video.\n"
+            "- Do not assume adjacent excerpts were adjacent in the original transcript.\n"
+            "- Use evidence only when it is explicitly present in a visible excerpt.\n"
+            "- Any uncertain caption correction must be supported by the visible excerpt, the video title, and clear local context.\n\n"
+        )
 
     current_date_utc = (
         datetime.now(timezone.utc)
@@ -320,6 +308,7 @@ def ai_video_claim_readout_impl(
         "- not_sports_content\n\n"
         f"Video title: {title}\n"
         f"URL: {url}\n\n"
+        f"{transcript_context_disclosure}"
         "<UNTRUSTED_VIDEO_TRANSCRIPT>\n"
         f"{clipped_transcript}\n"
         "</UNTRUSTED_VIDEO_TRANSCRIPT>\n"
@@ -732,46 +721,25 @@ def ai_video_claim_readout_impl(
         # Lingua remains the authoritative
         # language detector for this response.
 
-        try:
-            model_transcript_confidence = float(
-                data.get(
-                    "transcript_confidence",
-                    0.0,
-                )
-            )
-        except Exception:
-            model_transcript_confidence = 0.0
-
-        model_transcript_confidence = round(
-            max(
-                0.0,
-                min(
-                    1.0,
-                    model_transcript_confidence,
-                ),
-            ),
-            2,
-        )
-
-        extraction_confidence = float(
-            transcript_extraction.get(
-                "extraction_confidence",
-                1.0,
+        extraction_policy = (
+            apply_video_extraction_confidence_policy(
+                data,
+                transcript_extraction,
             )
         )
-
-        if transcript_extraction.get(
-            "provided",
-            False,
-        ):
-            effective_transcript_confidence = min(
-                model_transcript_confidence,
-                extraction_confidence,
-            )
-        else:
-            effective_transcript_confidence = (
-                model_transcript_confidence
-            )
+        data = extraction_policy["data"]
+        transcript_extraction = extraction_policy[
+            "transcript_extraction"
+        ]
+        transcript_extraction_limited = extraction_policy[
+            "transcript_extraction_limited"
+        ]
+        model_transcript_confidence = extraction_policy[
+            "model_transcript_confidence"
+        ]
+        effective_transcript_confidence = extraction_policy[
+            "transcript_confidence"
+        ]
 
         uncertain_corrections = data.get(
             "uncertain_corrections",
@@ -795,103 +763,11 @@ def ai_video_claim_readout_impl(
             "uncertain_corrections"
         ] = uncertain_corrections
 
-        evidence_score = int(float(data.get("evidence_score", 0)))
-        logic_score = int(float(data.get("logic_score", 0)))
-
-        evidence_score = max(0, min(100, evidence_score))
-        logic_score = max(0, min(100, logic_score))
-
-        evidence_used = data.get("evidence_used", [])
-        if not isinstance(evidence_used, list):
-            evidence_used = [str(evidence_used)]
-
-        allowed_content_types = {
-            "confirmed_news",
-            "sports_report",
-            "rumor",
-            "sports_analysis",
-            "sports_opinion",
-            "engagement_bait",
-            "not_sports_content",
-        }
-
-        content_type = str(
-            data.get("content_type", "unknown")
-        ).strip().lower()
-
-        if content_type not in allowed_content_types:
-            content_type = "unknown"
-
-        allowed_verdicts = {
-            "confirmed",
-            "well_supported_report",
-            "well_supported_analysis",
-            "reasonable_opinion",
-            "plausible_rumor",
-            "weakly_supported",
-            "misleading",
-            "engagement_bait",
-            "not_sports_content",
-        }
-
-        verdict = str(
-            data.get("verdict", "weakly_supported")
-        ).strip().lower()
-
-        if verdict not in allowed_verdicts:
-            verdict = "weakly_supported"
-
-        if content_type == "unknown":
-            verdict_to_content_type = {
-                "confirmed": "confirmed_news",
-                "well_supported_report": "sports_report",
-                "well_supported_analysis": "sports_analysis",
-                "reasonable_opinion": "sports_opinion",
-                "plausible_rumor": "rumor",
-                "engagement_bait": "engagement_bait",
-                "not_sports_content": "not_sports_content",
-            }
-
-            content_type = verdict_to_content_type.get(
-                verdict,
-                "unknown",
-            )
-
-        evidence_used = [
-            clean_html(str(item)).strip()
-            for item in evidence_used
-            if str(item).strip()
-        ][:8]
-
-        strong_verdicts = {
-            "confirmed",
-            "well_supported_report",
-            "well_supported_analysis",
-        }
-
-        if not evidence_used:
-            evidence_score = min(
-                evidence_score,
-                35,
-            )
-
-            if verdict in strong_verdicts:
-                verdict = "weakly_supported"
-
-        if transcript_extraction_limited:
-            evidence_score = min(
-                evidence_score,
-                55,
-            )
-
-            if verdict in strong_verdicts:
-                verdict = "weakly_supported"
-
-                # Do not retain a localized label that
-                # describes the previous stronger verdict.
-                # The UI will derive a safe label from the
-                # canonical verdict when this is empty.
-                data["localized_verdict"] = ""
+        evidence_score = extraction_policy["evidence_score"]
+        logic_score = extraction_policy["logic_score"]
+        evidence_used = extraction_policy["evidence_used"]
+        content_type = data["content_type"]
+        verdict = extraction_policy["verdict"]
 
         localized_content_type = clean_html(
             str(

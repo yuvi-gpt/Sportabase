@@ -1,0 +1,30 @@
+{
+  "case_schema_version": "golden-case-v1",
+  "cases": [
+    {"case_id": "article.injury.official.french.synthetic-001", "path": "article/article.injury.official.french.synthetic-001/case.json"},
+    {"case_id": "article.injury.official.synthetic-001", "path": "article/article.injury.official.synthetic-001/case.json"},
+    {"case_id": "article.injury.speculative.synthetic-001", "path": "article/article.injury.speculative.synthetic-001/case.json"},
+    {"case_id": "article.match-report.synthetic-001", "path": "article/article.match-report.synthetic-001/case.json"},
+    {"case_id": "article.opinion.commentary.synthetic-001", "path": "article/article.opinion.commentary.synthetic-001/case.json"},
+    {"case_id": "article.report.hinglish.synthetic-001", "path": "article/article.report.hinglish.synthetic-001/case.json"},
+    {"case_id": "article.tactical-analysis.synthetic-001", "path": "article/article.tactical-analysis.synthetic-001/case.json"},
+    {"case_id": "article.transfer.denial.synthetic-001", "path": "article/article.transfer.denial.synthetic-001/case.json"},
+    {"case_id": "article.transfer.negotiations.synthetic-001", "path": "article/article.transfer.negotiations.synthetic-001/case.json"},
+    {"case_id": "article.transfer.official.synthetic-001", "path": "article/article.transfer.official.synthetic-001/case.json"},
+    {"case_id": "article.transfer.rumor.spanish.synthetic-001", "path": "article/article.transfer.rumor.spanish.synthetic-001/case.json"},
+    {"case_id": "article.transfer.rumor.synthetic-001", "path": "article/article.transfer.rumor.synthetic-001/case.json"},
+    {"case_id": "intelligence.claim.material-conflict.synthetic-001", "path": "intelligence/intelligence.claim.material-conflict.synthetic-001/case.json"},
+    {"case_id": "intelligence.claim.transfer-equivalence.synthetic-001", "path": "intelligence/intelligence.claim.transfer-equivalence.synthetic-001/case.json"},
+    {"case_id": "intelligence.dependency-blocks-independence.synthetic-001", "path": "intelligence/intelligence.dependency-blocks-independence.synthetic-001/case.json"},
+    {"case_id": "intelligence.entity.verified-identity.synthetic-001", "path": "intelligence/intelligence.entity.verified-identity.synthetic-001/case.json"},
+    {"case_id": "video.analysis.evidence.synthetic-001", "path": "video/video.analysis.evidence.synthetic-001/case.json"},
+    {"case_id": "video.analysis.spanish.synthetic-001", "path": "video/video.analysis.spanish.synthetic-001/case.json"},
+    {"case_id": "video.captions.high-confidence.synthetic-001", "path": "video/video.captions.high-confidence.synthetic-001/case.json"},
+    {"case_id": "video.captions.low-confidence.synthetic-001", "path": "video/video.captions.low-confidence.synthetic-001/case.json"},
+    {"case_id": "video.engagement-bait.unsupported.synthetic-001", "path": "video/video.engagement-bait.unsupported.synthetic-001/case.json"},
+    {"case_id": "video.opinion.reasonable.synthetic-001", "path": "video/video.opinion.reasonable.synthetic-001/case.json"},
+    {"case_id": "video.rumor.attributed.synthetic-001", "path": "video/video.rumor.attributed.synthetic-001/case.json"},
+    {"case_id": "video.rumor.hinglish.synthetic-001", "path": "video/video.rumor.hinglish.synthetic-001/case.json"}
+  ],
+  "golden_set_version": "sportabase-golden-set-v1"
+}

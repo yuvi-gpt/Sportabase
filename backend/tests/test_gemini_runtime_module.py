@@ -1,6 +1,12 @@
 import hashlib
+import importlib
 import sys
 import unittest
+
+import httpx
+import requests
+
+from fastapi import HTTPException
 
 from pathlib import Path
 from unittest.mock import patch
@@ -18,6 +24,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 
 from app import main
+from app.application import config
 from app.services import (
     gemini_runtime,
 )
@@ -60,9 +67,126 @@ class RateLimitError(
     status_code = 429
 
 
+class ProviderStatusError(Exception):
+    def __init__(self, code):
+        self.code = code
+        super().__init__(f"provider status {code}")
+
+
 class GeminiRuntimeModuleTests(
     unittest.TestCase
 ):
+    def test_gemini_client_configures_single_sdk_attempt_and_timeout(
+        self,
+    ):
+        sentinel = object()
+
+        with (
+            patch.dict(
+                main.os.environ,
+                {"GEMINI_API_KEY": "test-key"},
+            ),
+            patch.object(
+                main,
+                "_GEMINI_CLIENT",
+                None,
+            ),
+            patch.object(
+                main,
+                "_GEMINI_LAST_INIT",
+                0.0,
+            ),
+            patch.object(
+                main.genai,
+                "Client",
+                return_value=sentinel,
+            ) as client_factory,
+        ):
+            result = main.gemini_client()
+
+        self.assertIs(result, sentinel)
+        client_factory.assert_called_once()
+
+        kwargs = client_factory.call_args.kwargs
+        http_options = kwargs["http_options"]
+
+        self.assertEqual(kwargs["api_key"], "test-key")
+        self.assertEqual(http_options.timeout, 60000)
+        self.assertIsInstance(http_options.timeout, int)
+        self.assertEqual(
+            http_options.retry_options.attempts,
+            1,
+        )
+
+    def test_gemini_client_reuses_cached_transport_client(
+        self,
+    ):
+        sentinel = object()
+
+        with (
+            patch.dict(
+                main.os.environ,
+                {"GEMINI_API_KEY": "test-key"},
+            ),
+            patch.object(
+                main,
+                "_GEMINI_CLIENT",
+                None,
+            ),
+            patch.object(
+                main,
+                "_GEMINI_LAST_INIT",
+                0.0,
+            ),
+            patch.object(
+                main.time,
+                "time",
+                return_value=100.0,
+            ),
+            patch.object(
+                main.genai,
+                "Client",
+                return_value=sentinel,
+            ) as client_factory,
+        ):
+            first = main.gemini_client()
+            second = main.gemini_client()
+
+        self.assertIs(first, sentinel)
+        self.assertIs(second, sentinel)
+        client_factory.assert_called_once()
+
+    def test_gemini_request_timeout_is_clamped_in_milliseconds(
+        self,
+    ):
+        variable = (
+            "SPORTABASE_GEMINI_REQUEST_TIMEOUT_MS"
+        )
+
+        try:
+            with patch.dict(
+                config.os.environ,
+                {variable: "1000"},
+            ):
+                importlib.reload(config)
+                self.assertEqual(
+                    config.GEMINI_REQUEST_TIMEOUT_MS,
+                    5000,
+                )
+
+            with patch.dict(
+                config.os.environ,
+                {variable: "180000"},
+            ):
+                importlib.reload(config)
+                self.assertEqual(
+                    config.GEMINI_REQUEST_TIMEOUT_MS,
+                    120000,
+                )
+
+        finally:
+            importlib.reload(config)
+
     def test_client_key_preserves_installation_identity(
         self,
     ):
@@ -156,6 +280,156 @@ class GeminiRuntimeModuleTests(
             ],
             "rate_limit",
         )
+
+    def test_actual_transport_exception_classification(
+        self,
+    ):
+        request = httpx.Request(
+            "POST",
+            "https://example.invalid",
+        )
+
+        cases = (
+            (
+                httpx.TimeoutException(
+                    "timed out",
+                    request=request,
+                ),
+                "timeout",
+            ),
+            (
+                httpx.ConnectError(
+                    "connection failed",
+                    request=request,
+                ),
+                "network",
+            ),
+            (
+                requests.Timeout(
+                    "request timed out"
+                ),
+                "timeout",
+            ),
+            (
+                requests.ConnectionError(
+                    "connection failed"
+                ),
+                "network",
+            ),
+        )
+
+        for error, expected in cases:
+            with self.subTest(
+                error=type(error).__name__,
+            ):
+                result = (
+                    gemini_runtime
+                    .classify_gemini_failure(
+                        error
+                    )
+                )
+                self.assertEqual(
+                    result["failure_type"],
+                    expected,
+                )
+
+    def test_provider_status_classification_contract(
+        self,
+    ):
+        expected = {
+            400: "invalid_request",
+            401: "authentication",
+            403: "authentication",
+            429: "rate_limit",
+            500: "provider_error",
+            502: "provider_error",
+            503: "provider_capacity",
+            504: "provider_error",
+        }
+
+        for code, failure_type in expected.items():
+            with self.subTest(code=code):
+                result = (
+                    gemini_runtime
+                    .classify_gemini_failure(
+                        ProviderStatusError(code)
+                    )
+                )
+                self.assertEqual(
+                    result["failure_status_code"],
+                    code,
+                )
+                self.assertEqual(
+                    result["failure_type"],
+                    failure_type,
+                )
+
+    def test_retryable_gemini_failure_contract(
+        self,
+    ):
+        request = httpx.Request(
+            "POST",
+            "https://example.invalid",
+        )
+
+        retryable = (
+            ProviderStatusError(500),
+            ProviderStatusError(502),
+            ProviderStatusError(503),
+            ProviderStatusError(504),
+            httpx.TimeoutException(
+                "timed out",
+                request=request,
+            ),
+            httpx.ConnectError(
+                "connection failed",
+                request=request,
+            ),
+        )
+
+        not_retryable = (
+            ProviderStatusError(400),
+            ProviderStatusError(401),
+            ProviderStatusError(403),
+            ProviderStatusError(429),
+            RuntimeError("unexpected"),
+            HTTPException(
+                status_code=429,
+                detail="local capacity",
+            ),
+            httpx.ReadError(
+                "ambiguous read failure",
+                request=request,
+            ),
+            httpx.WriteError(
+                "ambiguous write failure",
+                request=request,
+            ),
+        )
+
+        for error in retryable:
+            with self.subTest(
+                retryable=type(error).__name__,
+            ):
+                self.assertTrue(
+                    gemini_runtime
+                    .is_retryable_gemini_failure(
+                        error
+                    )
+                )
+
+        for error in not_retryable:
+            with self.subTest(
+                not_retryable=(
+                    type(error).__name__
+                ),
+            ):
+                self.assertFalse(
+                    gemini_runtime
+                    .is_retryable_gemini_failure(
+                        error
+                    )
+                )
 
     def test_request_fingerprint_is_deterministic(
         self,

@@ -1,0 +1,3 @@
+{
+  "claim": {"event_type": "transfer", "facets": {}, "negated": false, "roles": {"destination": "football|club|northbridge", "origin": "football|club|coastview"}, "state": "completed", "subject_key": "football|player|mateo-silva", "version": "canonical-claim-contract-v1"}
+}

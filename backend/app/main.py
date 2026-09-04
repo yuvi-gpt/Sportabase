@@ -26,6 +26,7 @@ from fastapi import Query, Request, HTTPException
 from pydantic import BaseModel, Field
 
 from google import genai
+from google.genai import types as genai_types
 from lingua import LanguageDetectorBuilder
 from app.db.schema import SCHEMA
 from app.db.connection import connect_database
@@ -45,6 +46,7 @@ from app.application.config import (
     GLOBAL_DAILY_GEMINI_CALL_CAP,
     CLIENT_DAILY_GEMINI_CALL_CAP,
     GEMINI_RESERVATION_TIMEOUT_SECONDS,
+    GEMINI_REQUEST_TIMEOUT_MS,
     ADMIN_API_KEY,
     INTELLIGENCE_SHADOW_ENABLED,
     MULTIMODAL_SHADOW_API_ENABLED,
@@ -1541,7 +1543,17 @@ def gemini_client():
         return None
 
     if _GEMINI_CLIENT is None or (time.time() - _GEMINI_LAST_INIT) > 60:
-        _GEMINI_CLIENT = genai.Client(api_key=key)
+        _GEMINI_CLIENT = genai.Client(
+            api_key=key,
+            http_options=genai_types.HttpOptions(
+                timeout=GEMINI_REQUEST_TIMEOUT_MS,
+                retry_options=(
+                    genai_types.HttpRetryOptions(
+                        attempts=1,
+                    )
+                ),
+            ),
+        )
         _GEMINI_LAST_INIT = time.time()
 
     return _GEMINI_CLIENT

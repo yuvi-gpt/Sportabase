@@ -8,7 +8,9 @@ from pathlib import Path
 
 
 from app.db.connection import connect_database
+from app.db.migrations import initialize_database
 from app.db.schema import SCHEMA
+from app.intelligence.claim_materialization import materialize_canonical_claim
 from app.intelligence.stories import story_id_for_canonical_key
 from app.services import inbox_candidate_shadow_orchestration
 from app.services import inbox_story_cluster_orchestration
@@ -312,6 +314,76 @@ class StoryClaimGraphMaterializationTests(unittest.TestCase):
             now_provider=lambda: now,
         )
 
+    def interoperable_claim_and_cluster(self):
+        initialize_database(self.factory, SCHEMA)
+        claim = materialize_canonical_claim(
+            candidate={
+                "version": "canonical-claim-contract-v1",
+                "subject_key": SUBJECT_KEY,
+                "event_type": "transfer",
+                "state": "completed",
+                "negated": False,
+                "roles": {"destination": "club:arsenal"},
+                "facets": {},
+            },
+            claim_text="Player One joins Arsenal",
+            observed_at="2026-08-17T10:00:00Z",
+            connection_factory=self.factory,
+        )
+        claim_id = claim["claim"]["id"]
+        members = [
+            completed_member("capture-1", claim_id, "media-1"),
+            completed_member("capture-2", claim_id, "media-2"),
+        ]
+        cluster = safe_cluster(two_claims=False)
+        cluster["claim_id"] = claim_id
+        cluster["claim_ids"] = [claim_id]
+        cluster["claim_groups"] = [{
+            "claim_id": claim_id,
+            "member_capture_record_ids": ["capture-1", "capture-2"],
+            "member_count": 2,
+        }]
+        cluster["completed_members"] = members
+        return claim_id, cluster
+
+    def assert_interoperable_story(
+        self,
+        *,
+        claim_id,
+        expected_generic_version,
+        expect_graph,
+        expect_canonical,
+        expect_subject_entity=True,
+    ):
+        canonical_key = "multimodal-exact-claim-v1|claim:" + claim_id
+        story_id = story_id_for_canonical_key(canonical_key)
+        row = self.one(
+            "SELECT * FROM intelligence_stories WHERE id = ?",
+            (story_id,),
+        )
+        self.assertIsNotNone(row)
+        metadata = json.loads(row["metadata_json"])
+        self.assertEqual(metadata["materialization_version"], expected_generic_version)
+        self.assertEqual(
+            metadata.get("subject_entity_id"),
+            SUBJECT_ID if expect_subject_entity else None,
+        )
+        self.assertEqual(
+            metadata.get("story_claim_graph_materialization_version"),
+            graph.STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION if expect_graph else None,
+        )
+        self.assertEqual(
+            metadata.get("canonical_claim_story_materialization_version"),
+            (
+                graph.CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION
+                if expect_canonical
+                else None
+            ),
+        )
+        self.assertEqual(self.count("intelligence_stories"), 1)
+        self.assertEqual(self.count("story_claim_links"), 1)
+        return story_id
+
     def test_version_is_stable(self):
         self.assertEqual(
             graph.STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION,
@@ -367,6 +439,74 @@ class StoryClaimGraphMaterializationTests(unittest.TestCase):
         self.assertEqual(self.count("intelligence_stories"), 2)
         self.assertEqual(self.count("story_claim_links"), 2)
         self.assertEqual(self.count("story_media_links"), 5)
+
+    def test_multimodal_then_canonical_alternating_replay_preserves_provenance(self):
+        claim_id, cluster = self.interoperable_claim_and_cluster()
+        expected_story_id = story_id_for_canonical_key(
+            "multimodal-exact-claim-v1|claim:" + claim_id
+        )
+
+        for index, path in enumerate(("graph", "canonical", "graph", "canonical")):
+            if path == "graph":
+                result = self.run_graph(cluster, now=f"2026-08-17T1{2 + index}:00:00Z")
+                self.assertEqual(result["story_ids"], [expected_story_id])
+            else:
+                result = graph.materialize_canonical_claim_story(
+                    claim_id=claim_id,
+                    connection_factory=self.factory,
+                    now_provider=lambda index=index: (
+                        f"2026-08-17T1{2 + index}:00:00Z"
+                    ),
+                )
+                self.assertEqual(result["story_id"], expected_story_id)
+            self.assertEqual(
+                self.assert_interoperable_story(
+                    claim_id=claim_id,
+                    expected_generic_version=(
+                        graph.STORY_CLAIM_GRAPH_MATERIALIZATION_VERSION
+                    ),
+                    expect_graph=True,
+                    expect_canonical=index >= 1,
+                ),
+                expected_story_id,
+            )
+            self.assertEqual(self.count("story_media_links"), 3)
+
+    def test_canonical_then_multimodal_alternating_replay_preserves_provenance(self):
+        claim_id, cluster = self.interoperable_claim_and_cluster()
+        expected_story_id = story_id_for_canonical_key(
+            "multimodal-exact-claim-v1|claim:" + claim_id
+        )
+
+        for index, path in enumerate(("canonical", "graph", "canonical", "graph")):
+            if path == "canonical":
+                result = graph.materialize_canonical_claim_story(
+                    claim_id=claim_id,
+                    connection_factory=self.factory,
+                    now_provider=lambda index=index: (
+                        f"2026-08-17T1{2 + index}:00:00Z"
+                    ),
+                )
+                self.assertEqual(result["story_id"], expected_story_id)
+            else:
+                result = self.run_graph(cluster, now=f"2026-08-17T1{2 + index}:00:00Z")
+                self.assertEqual(result["story_ids"], [expected_story_id])
+            self.assertEqual(
+                self.assert_interoperable_story(
+                    claim_id=claim_id,
+                    expected_generic_version=(
+                        graph.CANONICAL_CLAIM_STORY_MATERIALIZATION_VERSION
+                    ),
+                    expect_graph=index >= 1,
+                    expect_canonical=True,
+                    expect_subject_entity=index >= 1,
+                ),
+                expected_story_id,
+            )
+            self.assertEqual(
+                self.count("story_media_links"),
+                3 if index >= 1 else 0,
+            )
 
     def test_existing_story_status_is_not_downgraded(self):
         first = self.run_graph(safe_cluster(two_claims=False))

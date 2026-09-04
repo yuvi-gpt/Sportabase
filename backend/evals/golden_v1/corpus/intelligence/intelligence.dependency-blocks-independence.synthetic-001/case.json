@@ -1,0 +1,23 @@
+{
+  "annotation": {"accepted_alternatives": [], "ambiguity": [], "annotation_version": 1, "notes": "Approved safety contract: an otherwise possible assertion cannot override recorded dependency evidence.", "provenance_type": "synthetic", "review_status": "approved"},
+  "case_id": "intelligence.dependency-blocks-independence.synthetic-001",
+  "case_version": "golden-case-v1",
+  "description": "Recorded dependency blocks effective verified independence in a frozen deterministic output.",
+  "expected": {
+    "checks": [
+      {"dimension": "dependency", "evaluator": "exact", "path": "dependency.evidence_present", "value": true},
+      {"dimension": "dependency", "evaluator": "exact", "path": "dependency.relationship", "value": "derived_from"},
+      {"dimension": "independence", "evaluator": "exact", "path": "independence.assertion_present", "value": true},
+      {"dimension": "independence", "evaluator": "exact", "path": "independence.effective_status", "value": "not_established"},
+      {"dimension": "independence", "evaluator": "forbidden_values", "path": "independence.effective_status", "values": ["established"]},
+      {"dimension": "independence", "evaluator": "exact", "path": "independence.reason", "value": "recorded_dependency_present"}
+    ],
+    "human_review_required": false,
+    "review_focus": ""
+  },
+  "input": {"description": "Frozen structured state; no database execution."},
+  "language": {"mixed": false, "primary": "English"},
+  "mode": "intelligence",
+  "replay": {"artifact": "candidate.json", "kind": "final_output"},
+  "tags": ["intelligence", "dependency", "independence", "safety"]
+}

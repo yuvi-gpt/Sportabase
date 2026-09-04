@@ -311,6 +311,7 @@ def build_claim_state(*, claim_id: str, connection_factory) -> dict[str, Any]:
     support_graph = build_claim_support_graph(
         claim_id=normalized_claim_id,
         connection_factory=connection_factory,
+        strict_graph_integrity=False,
     )
     if support_graph.get("status") == "not_found":
         return {
@@ -319,7 +320,8 @@ def build_claim_state(*, claim_id: str, connection_factory) -> dict[str, Any]:
             "claim_id": normalized_claim_id,
         }
 
-    evidence_rows = _claim_evidence_rows(
+    integrity_blocked = bool(support_graph.get("integrity_blocked"))
+    evidence_rows = [] if integrity_blocked else _claim_evidence_rows(
         claim_id=normalized_claim_id,
         connection_factory=connection_factory,
     )
@@ -379,6 +381,11 @@ def build_claim_state(*, claim_id: str, connection_factory) -> dict[str, Any]:
     )
 
     conflict_signals: list[dict[str, Any]] = []
+    if integrity_blocked:
+        conflict_signals.append({
+            "type": "evidence_graph_integrity_blocked",
+            "detail": "Claim evidence posture is incomplete because graph integrity validation was blocked.",
+        })
     if evidence["counts"]["verified_supporting"] and evidence["counts"][
         "verified_conflicting"
     ]:

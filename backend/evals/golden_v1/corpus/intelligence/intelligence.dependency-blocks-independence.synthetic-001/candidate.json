@@ -1,0 +1,5 @@
+{
+  "claim_key": "football|claim|synthetic-transfer-001",
+  "dependency": {"evidence_present": true, "relationship": "derived_from"},
+  "independence": {"assertion_present": true, "effective_status": "not_established", "reason": "recorded_dependency_present"}
+}

@@ -1,0 +1,24 @@
+{
+  "annotation": {"accepted_alternatives": [], "ambiguity": [], "annotation_version": 1, "notes": "Approved synthetic contract: official completion is explicit; Merit remains reporting quality, not truth.", "provenance_type": "synthetic", "review_status": "approved"},
+  "case_id": "article.transfer.official.synthetic-001",
+  "case_version": "golden-case-v1",
+  "description": "Synthetic official club transfer announcement with an undisclosed fee.",
+  "expected": {
+    "checks": [
+      {"dimension": "classification", "evaluator": "exact", "path": "article_type", "value": "transfer_official"},
+      {"dimension": "classification_safety", "evaluator": "forbidden_values", "path": "article_type", "values": ["transfer_rumor"]},
+      {"dimension": "merit", "evaluator": "numeric_range", "max": 89, "min": 65, "path": "merit_score"},
+      {"dimension": "merit_badge", "evaluator": "allowed_values", "path": "badge", "values": ["Substantial Signal", "Strong Evidence"]},
+      {"dimension": "summary_structure", "evaluator": "structure", "list": true, "max_item_length": 220, "max_items": 3, "max_total_length": 500, "min_items": 2, "non_empty_strings": true, "path": "tldr", "unique_normalized": true},
+      {"dimension": "summary_facts", "evaluator": "required_facts", "facts": [{"any_phrases": ["Mateo Silva"], "id": "player"}, {"any_phrases": ["four-year contract", "contract through June 2030"], "id": "contract"}], "path": "tldr"},
+      {"dimension": "summary_hallucination", "evaluator": "forbidden_facts", "facts": [{"id": "invented_fee", "phrases": ["40 million", "€40 million", "$40 million"]}, {"id": "truth_claim", "phrases": ["proven true", "verified as true", "reliable source"]}], "path": "tldr"}
+    ],
+    "human_review_required": false,
+    "review_focus": ""
+  },
+  "input": {"article_text": "article.txt", "max_bullets": 3, "title": "Northbridge Athletic sign Mateo Silva", "url": "https://northbridge.example/news/mateo-silva"},
+  "language": {"mixed": false, "primary": "English"},
+  "mode": "article",
+  "replay": {"artifact": "candidate.json", "kind": "final_output"},
+  "tags": ["article", "classification", "merit", "summary", "transfer", "official"]
+}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.intelligence.background_pipeline_runtime import (
@@ -23,6 +23,7 @@ from app.intelligence.claim_support_graph import (
     build_claim_support_graph,
     build_story_support_overview,
 )
+from app.intelligence.homepage_storylines import build_homepage_storylines
 from app.intelligence.claim_state import (
     build_claim_state,
     build_story_claim_state_overview,
@@ -35,11 +36,24 @@ from app.intelligence.projection import (
     build_story_projection,
     build_subject_timeline,
 )
+from app.intelligence.reporting_coverage import (
+    build_claim_reporting_coverage,
+)
+from app.intelligence.source_dependency_graph import (
+    build_claim_source_dependency_graph,
+)
 from app.intelligence.source_health import (
     build_source_evidence_health,
 )
+from app.intelligence.source_profiles import (
+    build_reporter_profile,
+    build_source_profile,
+)
 from app.intelligence.structured_claim_ingestion import (
     load_claim_identity_mapping,
+)
+from app.story.story_claim_graph_materialization import (
+    StoryClaimGraphMaterializationIntegrityError,
 )
 
 
@@ -77,6 +91,40 @@ def build_router(
             connection_factory=connection_factory,
             days=days,
         )
+
+    @router.get("/admin/intelligence/sources/{source_id}/profile")
+    def intelligence_source_profile(
+        request: Request,
+        source_id: str = Path(..., min_length=1, max_length=128),
+    ):
+        require_admin(request)
+        try:
+            result = build_source_profile(
+                source_id=source_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Source not found.")
+        return result
+
+    @router.get("/admin/intelligence/reporters/{reporter_id}/profile")
+    def intelligence_reporter_profile(
+        request: Request,
+        reporter_id: str = Path(..., min_length=1, max_length=128),
+    ):
+        require_admin(request)
+        try:
+            result = build_reporter_profile(
+                reporter_id=reporter_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Reporter not found.")
+        return result
 
     @router.get("/admin/intelligence/background-jobs/{job_id}")
     def intelligence_background_job(
@@ -146,6 +194,24 @@ def build_router(
             limit=limit,
         )
 
+    @router.get("/admin/intelligence/homepage-storylines")
+    def intelligence_homepage_storylines(
+        request: Request,
+        limit: int = Query(50, ge=1, le=200),
+        cursor: str = Query("", max_length=4096),
+    ):
+        require_admin(request)
+        try:
+            return build_homepage_storylines(
+                connection_factory=connection_factory,
+                limit=limit,
+                cursor=cursor,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     @router.post("/admin/intelligence/claims/materialize-semantic-router")
     def intelligence_materialize_semantic_router(
         body: ClaimSemanticMaterializationRequest,
@@ -204,18 +270,59 @@ def build_router(
             raise HTTPException(status_code=404, detail="Claim not found.")
         return result
 
+    @router.get(
+        "/admin/intelligence/claims/{canonical_claim_id}/reporting-coverage"
+    )
+    def intelligence_claim_reporting_coverage(
+        canonical_claim_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        try:
+            result = build_claim_reporting_coverage(
+                canonical_claim_id=canonical_claim_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Canonical claim not found.")
+        return result
+
     @router.get("/admin/intelligence/claims/{claim_id}/support-graph")
     def intelligence_claim_support_graph(
         claim_id: str,
         request: Request,
     ):
         require_admin(request)
-        result = build_claim_support_graph(
-            claim_id=claim_id,
-            connection_factory=connection_factory,
-        )
+        try:
+            result = build_claim_support_graph(
+                claim_id=claim_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         if result.get("status") == "not_found":
             raise HTTPException(status_code=404, detail="Claim not found.")
+        return result
+
+    @router.get(
+        "/admin/intelligence/claims/{canonical_claim_id}/source-dependency-graph"
+    )
+    def intelligence_claim_source_dependency_graph(
+        canonical_claim_id: str,
+        request: Request,
+    ):
+        require_admin(request)
+        try:
+            result = build_claim_source_dependency_graph(
+                canonical_claim_id=canonical_claim_id,
+                connection_factory=connection_factory,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        if result.get("status") == "not_found":
+            raise HTTPException(status_code=404, detail="Canonical claim not found.")
         return result
 
     @router.get("/admin/intelligence/claims/{claim_id}/state")

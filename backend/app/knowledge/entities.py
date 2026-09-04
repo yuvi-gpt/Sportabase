@@ -874,3 +874,214 @@ def resolve_entity_alias(
             "does_not_change_live_merit": True,
         },
     }
+
+VERIFIED_ENTITY_IMPORT_VERSION = (
+    "verified-entity-import-v1"
+)
+
+
+def import_verified_entity(
+    *,
+    entity_key: str,
+    entity_type: str,
+    canonical_name: str,
+    sport_key: str = "",
+    aliases=(),
+    metadata: Optional[
+        Dict[str, Any]
+    ] = None,
+    seen_at: Optional[str] = None,
+    connection_factory=None,
+) -> Dict[str, Any]:
+    if connection_factory is None:
+        raise ValueError(
+            "Verified entity import requires "
+            "database access."
+        )
+
+    validated_aliases = []
+
+    for alias_spec in aliases or ():
+        if (
+            not isinstance(
+                alias_spec,
+                (tuple, list),
+            )
+            or len(alias_spec) != 2
+        ):
+            raise ValueError(
+                "Verified entity aliases must "
+                "contain alias text and alias type."
+            )
+
+        alias_text = _clean(
+            alias_spec[0]
+        )
+        alias_type = _key(
+            alias_spec[1]
+        )
+
+        if not normalize_entity_alias(
+            alias_text
+        ):
+            raise ValueError(
+                "Verified entity alias text is required."
+            )
+
+        if (
+            alias_type
+            not in ENTITY_ALIAS_TYPES
+        ):
+            raise ValueError(
+                "Verified entity alias type is unsupported."
+            )
+
+        validated_aliases.append(
+            (
+                alias_text,
+                alias_type,
+            )
+        )
+
+    entity_result = (
+        upsert_canonical_entity(
+            entity_key=entity_key,
+            entity_type=entity_type,
+            canonical_name=canonical_name,
+            sport_key=sport_key,
+            metadata=metadata,
+            seen_at=seen_at,
+            connection_factory=connection_factory,
+        )
+    )
+
+    entity = entity_result[
+        "entity"
+    ]
+
+    alias_results = [
+        record_entity_alias(
+            entity_id=entity["id"],
+            alias_text=canonical_name,
+            alias_type="canonical_name",
+            metadata=metadata,
+            seen_at=seen_at,
+            connection_factory=connection_factory,
+        )
+    ]
+
+    for (
+        alias_text,
+        alias_type,
+    ) in validated_aliases:
+        alias_results.append(
+            record_entity_alias(
+                entity_id=entity["id"],
+                alias_text=alias_text,
+                alias_type=alias_type,
+                metadata=metadata,
+                seen_at=seen_at,
+                connection_factory=connection_factory,
+            )
+        )
+
+    return {
+        "version": (
+            VERIFIED_ENTITY_IMPORT_VERSION
+        ),
+        "entity": entity,
+        "entity_created": (
+            entity_result["created"]
+        ),
+        "aliases": [
+            result["alias"]
+            for result
+            in alias_results
+        ],
+        "alias_count": len(
+            alias_results
+        ),
+        "policy": {
+            "verified_input_required": True,
+            "canonical_name_alias_recorded": True,
+            "explicit_aliases_only": True,
+            "no_alias_inference": True,
+            "no_fuzzy_matching": True,
+            "no_model_calls": True,
+            "does_not_change_live_merit": True,
+        },
+    }
+
+
+def import_verified_entities(
+    *,
+    entities,
+    metadata: Optional[
+        Dict[str, Any]
+    ] = None,
+    seen_at: Optional[str] = None,
+    connection_factory=None,
+) -> Dict[str, Any]:
+    if connection_factory is None:
+        raise ValueError(
+            "Verified entity import requires "
+            "database access."
+        )
+
+    imports = []
+
+    for entity in entities or ():
+        if not isinstance(
+            entity,
+            dict,
+        ):
+            raise ValueError(
+                "Verified entity entries must "
+                "be dictionaries."
+            )
+
+        imports.append(
+            import_verified_entity(
+                entity_key=entity.get(
+                    "entity_key",
+                    "",
+                ),
+                entity_type=entity.get(
+                    "entity_type",
+                    "",
+                ),
+                canonical_name=entity.get(
+                    "canonical_name",
+                    "",
+                ),
+                sport_key=entity.get(
+                    "sport_key",
+                    "",
+                ),
+                aliases=entity.get(
+                    "aliases",
+                    (),
+                ),
+                metadata=metadata,
+                seen_at=seen_at,
+                connection_factory=connection_factory,
+            )
+        )
+
+    return {
+        "version": (
+            VERIFIED_ENTITY_IMPORT_VERSION
+        ),
+        "imports": imports,
+        "entity_count": len(
+            imports
+        ),
+        "policy": {
+            "verified_input_required": True,
+            "explicit_catalog_entries_only": True,
+            "runtime_entity_creation": False,
+            "no_fuzzy_matching": True,
+            "no_model_calls": True,
+            "does_not_change_live_merit": True,
+        },
+    }

@@ -39,6 +39,7 @@ def finalize_structured_claim_materialization(
             "failure_is_advisory": True,
             "no_provider_call_performed": True,
             "no_model_call_performed": True,
+            "story_membership_from_claim_links_only": True,
             "does_not_establish_truth": True,
             "does_not_establish_authority": True,
             "affects_live_merit": False,
@@ -51,6 +52,7 @@ def finalize_structured_claim_materialization(
             "status": "skipped",
             "reason": "canonical_materialization_unavailable",
             "evolution": None,
+            "story": None,
         }
 
     evolution = reconcile_claim_evolution_safely(
@@ -58,6 +60,22 @@ def finalize_structured_claim_materialization(
         connection_factory=connection_factory,
     )
     evolution_status = _clean(evolution.get("status"), 64).casefold()
+
+    try:
+        from app.story.story_claim_graph_materialization import (
+            materialize_canonical_claim_story,
+        )
+
+        story = materialize_canonical_claim_story(
+            claim_id=claim_id,
+            connection_factory=connection_factory,
+        )
+    except Exception as error:
+        story = {
+            "status": "unavailable",
+            "reason": "canonical_claim_story_materialization_failed",
+            "error_type": type(error).__name__,
+        }
 
     return {
         **base,
@@ -71,6 +89,7 @@ def finalize_structured_claim_materialization(
             if evolution_status not in {"unavailable"}
             else "claim_evolution_unavailable"
         ),
+        "story": story,
         "evolution": evolution,
     }
 

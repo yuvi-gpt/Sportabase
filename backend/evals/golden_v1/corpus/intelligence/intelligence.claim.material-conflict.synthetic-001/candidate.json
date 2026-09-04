@@ -1,0 +1,1 @@
+{"claim":{"version":"canonical-claim-contract-v1","subject_key":"football|player|lina-varo","event_type":"transfer","state":"completed","negated":false,"roles":{"destination":"football|club|north-quay","origin":"football|club|east-harbor"},"facets":{"effective_period":"2030"}}}

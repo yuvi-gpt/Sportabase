@@ -1,0 +1,24 @@
+{
+  "annotation": {"accepted_alternatives": [], "ambiguity": [], "annotation_version": 1, "notes": "Approved synthetic high-confidence caption contract.", "provenance_type": "synthetic", "review_status": "approved"},
+  "case_id": "video.captions.high-confidence.synthetic-001",
+  "case_version": "golden-case-v1",
+  "description": "Clear synthetic sports report captions with concrete match evidence.",
+  "expected": {
+    "checks": [
+      {"dimension": "classification", "evaluator": "exact", "path": "content_type", "value": "sports_report"},
+      {"dimension": "video_evidence_score", "evaluator": "numeric_range", "max": 90, "min": 70, "path": "evidence_score"},
+      {"dimension": "video_logic_score", "evaluator": "numeric_range", "max": 92, "min": 70, "path": "logic_score"},
+      {"dimension": "verdict", "evaluator": "exact", "path": "verdict", "value": "well_supported_report"},
+      {"dimension": "localization", "evaluator": "language", "mixed": false, "path": "language", "primary": "English", "confidence_max": 1.0, "confidence_min": 0.8},
+      {"dimension": "transcript_confidence", "evaluator": "numeric_range", "max": 1.0, "min": 0.85, "path": "language.transcript_confidence"},
+      {"dimension": "caption_corrections", "evaluator": "exact", "path": "language.uncertain_corrections", "value": []}
+    ],
+    "human_review_required": false,
+    "review_focus": ""
+  },
+  "input": {"title": "Northbridge win at Coastview", "transcript": "transcript.txt", "transcript_metadata": {"extraction_confidence": 0.96, "provided": true, "segment_count": 18}},
+  "language": {"mixed": false, "primary": "English"},
+  "mode": "video",
+  "replay": {"artifact": "candidate.json", "kind": "final_output"},
+  "tags": ["video", "classification", "high-confidence", "transcript", "scores"]
+}

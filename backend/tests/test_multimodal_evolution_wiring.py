@@ -32,6 +32,10 @@ class MultimodalEvolutionWiringTests(unittest.TestCase):
             "status": "completed",
             "reason": "claim_evolution_reconciled",
             "canonical_claim_id": "canonical-claim",
+            "story": {
+                "status": "materialized",
+                "story_id": "story-1",
+            },
             "evolution": {
                 "status": "reconciled",
                 "family_key": "family-1",
@@ -82,6 +86,12 @@ class MultimodalEvolutionWiringTests(unittest.TestCase):
         self.assertEqual(
             result["result"]["stages"]["claim_evolution_reconciliation"]["status"],
             "completed",
+        )
+        self.assertEqual(
+            result["result"]["stages"]["canonical_claim_story_materialization"][
+                "story_id"
+            ],
+            "story-1",
         )
         self.assertEqual(
             result["result"]["structured_claim_ingestion"]["evolution"][

@@ -21,11 +21,13 @@ from app.operations.persistent_runtime import (
 from app.routes import (
     control_room_admin,
     intelligence_admin,
+    intelligence_product,
     intelligence_runtime_admin,
     multimodal_admin,
     operations_admin,
     product_api,
     usage_admin,
+    watchlists_product,
 )
 from app.security.control_room_runtime import (
     build_default_control_room_guard,
@@ -115,6 +117,15 @@ def register_startup_handler(
         return
 
     legacy_registrar = getattr(app, "add_event_handler", None)
+
+    if not callable(legacy_registrar):
+        router = getattr(app, "router", None)
+        legacy_registrar = getattr(
+            router,
+            "add_event_handler",
+            None,
+        )
+
     if callable(legacy_registrar):
         legacy_registrar("startup", handler)
         return
@@ -139,6 +150,15 @@ def register_shutdown_handler(
         return
 
     legacy_registrar = getattr(app, "add_event_handler", None)
+
+    if not callable(legacy_registrar):
+        router = getattr(app, "router", None)
+        legacy_registrar = getattr(
+            router,
+            "add_event_handler",
+            None,
+        )
+
     if callable(legacy_registrar):
         legacy_registrar("shutdown", handler)
         return
@@ -238,6 +258,18 @@ def compose_application(
             analyze_video_handler=analyze_video_handler,
             analyze_handler=analyze_handler,
             operational_event_recorder=persistent_event_recorder,
+            connection_factory=connection_factory,
+        )
+    )
+
+    app.include_router(
+        intelligence_product.build_router(
+            connection_factory=connection_factory,
+        )
+    )
+
+    app.include_router(
+        watchlists_product.build_router(
             connection_factory=connection_factory,
         )
     )
