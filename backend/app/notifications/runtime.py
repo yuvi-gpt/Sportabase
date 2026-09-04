@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 import requests
 
+from app.notifications import web_push
 from app.watchlists.runtime import reconcile as reconcile_watchlists
 
 
@@ -354,7 +355,7 @@ def unregister_device(
 def _active_client_keys(*, connection_factory) -> list[str]:
     conn = connection_factory()
     try:
-        return [
+        expo_clients = [
             str(row["client_key"])
             for row in conn.execute(
                 """
@@ -369,6 +370,8 @@ def _active_client_keys(*, connection_factory) -> list[str]:
         ]
     finally:
         conn.close()
+    web_clients = web_push.active_client_keys(connection_factory=connection_factory)
+    return sorted(set(expo_clients) | set(web_clients))[:MAX_NOTIFICATION_CLIENTS_PER_CYCLE]
 
 
 def reconcile_notification_clients(*, connection_factory) -> dict[str, int]:
@@ -851,11 +854,17 @@ def run_notification_cycle(
     worker_id: str = "notification-worker",
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+    web_push_sender: Callable[..., Any] = web_push._default_sender,
+    env_getter=os.getenv,
 ) -> dict[str, int]:
     reconciliation = reconcile_notification_clients(
         connection_factory=connection_factory,
     )
     materialized = materialize_pending_deliveries(
+        connection_factory=connection_factory,
+        clock=clock,
+    )
+    web_materialized = web_push.materialize_pending_deliveries(
         connection_factory=connection_factory,
         clock=clock,
     )
@@ -867,7 +876,22 @@ def run_notification_cycle(
         lease_seconds=lease_seconds,
         request_timeout_seconds=request_timeout_seconds,
     )
-    return {**reconciliation, **materialized, **dispatched}
+    web_dispatched = web_push.dispatch_pending_deliveries(
+        connection_factory=connection_factory,
+        sender=web_push_sender,
+        env_getter=env_getter,
+        clock=clock,
+        worker_id=worker_id + "-web",
+        lease_seconds=lease_seconds,
+        request_timeout_seconds=request_timeout_seconds,
+    )
+    return {
+        **reconciliation,
+        **materialized,
+        **dispatched,
+        **web_materialized,
+        **web_dispatched,
+    }
 
 
 def _worker_loop(
