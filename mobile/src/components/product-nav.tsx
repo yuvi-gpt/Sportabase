@@ -40,7 +40,11 @@ export function ProductNav() {
               key={item.route}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              onPress={() => router.push(item.route)}
+              onPress={() => {
+                if (!active) {
+                  router.replace(item.route);
+                }
+              }}
               style={({ pressed }) => [
                 styles.item,
                 active && styles.itemActive,
