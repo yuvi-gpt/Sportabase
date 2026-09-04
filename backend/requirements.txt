@@ -2,10 +2,11 @@ fastapi==0.136.3
 uvicorn[standard]
 pydantic
 requests
+httpx==0.28.1
 feedparser
 python-dateutil
 python-dotenv
-google-genai
+google-genai==2.22.0
 beautifulsoup4
 lxml
 pandas

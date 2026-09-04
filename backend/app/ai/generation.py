@@ -19,6 +19,7 @@ from typing import (
 )
 
 import requests
+import httpx
 
 from fastapi import (
     HTTPException,
@@ -617,28 +618,9 @@ def usage_metadata_counts(
     }
 
 
-def classify_gemini_failure(
+def _gemini_failure_status_code(
     error: Exception,
-) -> Dict[str, Any]:
-    error_name = type(error).__name__
-
-    raw_detail = re.sub(
-        r"\s+",
-        " ",
-        str(error or ""),
-    ).strip()
-
-    detail = (
-        f"{error_name}: {raw_detail}"
-        if raw_detail
-        else error_name
-    )
-
-    detail = detail[:500]
-    lowered = detail.lower()
-
-    status_code: Optional[int] = None
-
+) -> Optional[int]:
     for attribute_name in (
         "status_code",
         "status",
@@ -671,10 +653,38 @@ def classify_gemini_failure(
         )
 
         if match:
-            status_code = int(
+            return int(
                 match.group(1)
             )
-            break
+
+    return None
+
+
+def classify_gemini_failure(
+    error: Exception,
+) -> Dict[str, Any]:
+    error_name = type(error).__name__
+
+    raw_detail = re.sub(
+        r"\s+",
+        " ",
+        str(error or ""),
+    ).strip()
+
+    detail = (
+        f"{error_name}: {raw_detail}"
+        if raw_detail
+        else error_name
+    )
+
+    detail = detail[:500]
+    lowered = detail.lower()
+
+    status_code = (
+        _gemini_failure_status_code(
+            error
+        )
+    )
 
     if status_code is None:
         match = re.search(
@@ -687,7 +697,19 @@ def classify_gemini_failure(
                 match.group(1)
             )
 
-    if (
+    if isinstance(
+        error,
+        httpx.TimeoutException,
+    ):
+        failure_type = "timeout"
+
+    elif isinstance(
+        error,
+        httpx.ConnectError,
+    ):
+        failure_type = "network"
+
+    elif (
         status_code in {401, 403}
         or "unauthenticated" in lowered
         or "permission denied" in lowered
@@ -766,6 +788,40 @@ def classify_gemini_failure(
         "failure_status_code": status_code,
         "failure_type": failure_type,
         "failure_detail": detail,
+    }
+
+
+def is_retryable_gemini_failure(
+    error: Exception,
+) -> bool:
+    if isinstance(error, HTTPException):
+        return False
+
+    if isinstance(
+        error,
+        (
+            httpx.ReadError,
+            httpx.WriteError,
+        ),
+    ):
+        return False
+
+    if isinstance(
+        error,
+        (
+            httpx.TimeoutException,
+            httpx.ConnectError,
+        ),
+    ):
+        return True
+
+    return _gemini_failure_status_code(
+        error
+    ) in {
+        500,
+        502,
+        503,
+        504,
     }
 
 
@@ -974,11 +1030,6 @@ def generate_gemini_content(
 
         return shared_result
 
-    usage_id: Optional[int] = None
-    provider_started_at: Optional[
-        float
-    ] = None
-
     try:
         estimated_prompt_tokens = (
             estimate_prompt_tokens(
@@ -990,97 +1041,108 @@ def generate_gemini_content(
         )
         total_wait = 0.0
 
-        while True:
+        for attempt_index in range(2):
+            while True:
+                try:
+                    usage_id = reserve_call(
+                        client_key=client_key,
+                        mode=mode,
+                        model=model,
+                        estimated_prompt_tokens=(
+                            estimated_prompt_tokens
+                        ),
+                    )
+                    break
+
+                except GeminiCapacityPacingRequired as pacing:
+                    wait_seconds = max(
+                        0.0,
+                        float(
+                            pacing.wait_seconds
+                        ),
+                    )
+
+                    if (
+                        total_wait
+                        + wait_seconds
+                        > policy.max_pacing_wait_seconds
+                    ):
+                        raise HTTPException(
+                            status_code=429,
+                            detail=(
+                                "Sportabase is pacing "
+                                "Gemini traffic to stay "
+                                "inside provider RPM/TPM "
+                                "capacity. Please retry "
+                                "shortly."
+                            ),
+                        )
+
+                    sleep_func(
+                        wait_seconds
+                    )
+                    total_wait += wait_seconds
+
+            provider_started_at = (
+                time.perf_counter()
+            )
+
             try:
-                usage_id = reserve_call(
-                    client_key=client_key,
-                    mode=mode,
-                    model=model,
-                    estimated_prompt_tokens=(
-                        estimated_prompt_tokens
+                response = (
+                    client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                    )
+                )
+
+            except Exception as error:
+                failure = classify_failure(
+                    error
+                )
+                failure_latency_ms = max(
+                    0,
+                    int(
+                        round(
+                            (
+                                time.perf_counter()
+                                - provider_started_at
+                            )
+                            * 1000
+                        )
                     ),
                 )
-                break
 
-            except GeminiCapacityPacingRequired as pacing:
-                wait_seconds = max(
-                    0.0,
-                    float(
-                        pacing.wait_seconds
+                finish_call(
+                    usage_id,
+                    "failed",
+                    latency_ms=(
+                        failure_latency_ms
+                    ),
+                    failure_status_code=(
+                        failure[
+                            "failure_status_code"
+                        ]
+                    ),
+                    failure_type=(
+                        failure["failure_type"]
+                    ),
+                    failure_detail=(
+                        failure["failure_detail"]
                     ),
                 )
 
                 if (
-                    total_wait
-                    + wait_seconds
-                    > policy.max_pacing_wait_seconds
+                    attempt_index == 0
+                    and is_retryable_gemini_failure(
+                        error
+                    )
                 ):
-                    raise HTTPException(
-                        status_code=429,
-                        detail=(
-                            "Sportabase is pacing "
-                            "Gemini traffic to stay "
-                            "inside provider RPM/TPM "
-                            "capacity. Please retry "
-                            "shortly."
-                        ),
-                    )
+                    sleep_func(1.0)
+                    continue
 
-                sleep_func(
-                    wait_seconds
-                )
-                total_wait += wait_seconds
+                raise
 
-        provider_started_at = (
-            time.perf_counter()
-        )
-
-        response = (
-            client.models.generate_content(
-                model=model,
-                contents=contents,
-            )
-        )
-
-        success_latency_ms = max(
-            0,
-            int(
-                round(
-                    (
-                        time.perf_counter()
-                        - provider_started_at
-                    )
-                    * 1000
-                )
-            ),
-        )
-
-        finish_call(
-            usage_id,
-            "success",
-            response,
-            latency_ms=success_latency_ms,
-        )
-
-        shared_future.set_result(
-            response
-        )
-
-        return response
-
-    except Exception as error:
-        if (
-            usage_id is not None
-            and provider_started_at
-            is not None
-        ):
-            failure = (
-                classify_failure(
-                    error
-                )
-            )
-
-            failure_latency_ms = max(
+            success_latency_ms = max(
                 0,
                 int(
                     round(
@@ -1095,23 +1157,18 @@ def generate_gemini_content(
 
             finish_call(
                 usage_id,
-                "failed",
-                latency_ms=(
-                    failure_latency_ms
-                ),
-                failure_status_code=(
-                    failure[
-                        "failure_status_code"
-                    ]
-                ),
-                failure_type=(
-                    failure["failure_type"]
-                ),
-                failure_detail=(
-                    failure["failure_detail"]
-                ),
+                "success",
+                response,
+                latency_ms=success_latency_ms,
             )
 
+            shared_future.set_result(
+                response
+            )
+
+            return response
+
+    except Exception as error:
         shared_future.set_exception(
             error
         )

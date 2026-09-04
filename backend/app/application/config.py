@@ -108,6 +108,19 @@ GEMINI_RESERVATION_TIMEOUT_SECONDS = max(
     ),
 )
 
+GEMINI_REQUEST_TIMEOUT_MS = max(
+    5000,
+    min(
+        120000,
+        int(
+            os.getenv(
+                "SPORTABASE_GEMINI_REQUEST_TIMEOUT_MS",
+                "60000",
+            )
+        ),
+    ),
+)
+
 ADMIN_API_KEY = os.getenv(
     "SPORTABASE_ADMIN_API_KEY",
     "",
