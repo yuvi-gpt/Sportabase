@@ -1,821 +1,294 @@
 # Sportabase
 
-## Sports Intelligence, Not Just Sports Summaries
+## Evidence-first sports intelligence
 
-Sportabase is an evidence-first sports intelligence platform for analyzing sports media.
+Sportabase is a sports intelligence platform that turns articles, videos, sources, claims, and evidence into a persistent, explainable intelligence graph.
 
-The product is designed to go beyond answering:
-
-"What does this article or video say?"
-
-Sportabase aims to answer:
+It is not merely a summarizer and it is not a truth machine. Its job is to answer:
 
 - What is being claimed?
-- Who originated the information?
-- What evidence supports it?
-- Do independent trusted sources corroborate it?
-- How reliable have those sources been historically?
-- How has confidence in the story changed over time?
-- What can that information movement tell us?
+- Which media items and stories carry the claim?
+- Who originated or repeated it?
+- What evidence supports, contradicts, corrects, or supersedes it?
+- Which corroboration is genuinely independent?
+- How has the persisted intelligence changed over time?
+- What should a user be able to search, revisit, watch, and eventually act on?
 
-Sportabase currently analyzes sports articles and YouTube videos through a Chrome extension, FastAPI backend, and React Native mobile application.
-
-The long-term goal is to build a persistent sports intelligence system that remembers previously analyzed stories, learns from what eventually happened, and uses those historical information patterns as inputs into future predictive analysis.
+The product currently spans a FastAPI backend, Chrome extension, React Native mobile app, and internal control-room surfaces. SQLite remains the current persistence layer.
 
 ---
 
-## Product Model
+## Current project checkpoint — 4 September 2026
 
-Sportabase is evolving around this structure:
+The backend has moved well beyond the original URL-in, summary-out MVP. The durable foundation now includes:
 
-    Media Piece
-        |
-        v
-    Story / Claim
-        |
-        v
-    Sources + Evidence
-        |
-        v
-    Analysis History
-        |
-        v
-    Score Trajectory
-        |
-        v
-    Alerts + Predictive Signals
+- article and YouTube analysis with distinct article/video semantics;
+- canonical media, story, claim, entity, source, reporter, evidence, and snapshot records;
+- canonical entity resolution and aliases;
+- claim extraction, normalization, support, evidence, and evolution history;
+- story clustering and story evolution;
+- source profiles, reporting coverage, and source-independence analysis;
+- persistent analysis and operational event history;
+- readiness, capacity, quota, provider-reliability, and multi-model routing controls;
+- long-video transcript compression and analysis;
+- golden-set evaluation and structured validation paths;
+- homepage storyline aggregation;
+- public search and historical-intelligence APIs;
+- a locally completed Watchlists + Alerts V1 implementation awaiting its final Git commit and push.
 
-A media piece may be:
+### Latest remote checkpoint
 
-- a sports article
-- a YouTube video
-- a social post
-- a thread
-- a Reddit post
-- another supported public sports source
+Roadmap item **#12 — Search + Historical Intelligence V1** is committed on:
 
-Multiple media pieces may refer to the same underlying story.
+- Branch: `backend-search-historical-intelligence-v1`
+- Commit: `8f691a53f6d445587169fdd8ce36b88e2776d4c9`
+- Commit message: `add search and historical intelligence API`
 
-An ESPN article, a reporter post, a YouTube report, and an official club statement may all provide evidence about the same transfer story.
+It exposes:
 
-Sportabase should eventually connect them rather than treating every URL as an unrelated object.
+- `GET /intelligence/search`
+- `GET /intelligence/entities/{entity_id}/history`
+- `GET /intelligence/stories/{story_id}/history`
+- `GET /intelligence/claims/{claim_id}/history`
+- `GET /intelligence/media/{media_item_id}/history`
+
+The API uses product-safe projections and deterministic cursor pagination. Search is lexical discovery only; it does not invent canonical relationships or treat a matching string as verified intelligence.
+
+### Current local checkpoint
+
+Roadmap item **#13 — Watchlists + Alerts V1** has been implemented in the local worktree:
+
+- Worktree: `C:\Users\Yuvraj\Documents\Sportabase-watchlists-alerts`
+- Branch: `backend-watchlists-alerts-v1`
+- Exact base: `8f691a53f6d445587169fdd8ce36b88e2776d4c9`
+- Current state: six intended files staged; not yet committed or pushed at the time of this update
+
+Final exact-tree backend checkpoint:
+
+```text
+3651 passed, 3 skipped, 12 warnings, 694 subtests passed in 96.29s
+```
+
+Staged feature diff:
+
+```text
+6 files changed, 699 insertions(+)
+```
+
+The staged files are:
+
+- `backend/app/application/composition.py`
+- `backend/app/db/schema.py`
+- `backend/app/routes/watchlists_product.py`
+- `backend/app/watchlists/__init__.py`
+- `backend/app/watchlists/runtime.py`
+- `backend/tests/test_watchlists_alerts_api.py`
+
+The immediate next action is to inspect the staged diff/status one last time, commit it, push `backend-watchlists-alerts-v1`, and verify the remote branch and commit SHA. Do not redo the implementation or rerun the full backend suite unless production code changes.
 
 ---
 
-## Current Capabilities
+## Watchlists + Alerts V1
 
-### Chrome Extension
+### Product API
 
-The Sportabase Chrome extension currently supports:
+- `POST /watchlists`
+- `GET /watchlists`
+- `DELETE /watchlists/{watch_id}`
+- `POST /watchlists/alerts/reconcile`
+- `GET /watchlists/alerts`
+- `POST /watchlists/alerts/{alert_id}/read`
 
-- sports article analysis
-- YouTube transcript analysis
-- Merit Scores
-- TLDR summaries
-- article and content classification
-- evidence and reasoning signals
-- multilingual analysis
-- dynamic score-based visual presentation
-- caching
-- quota and capacity protection
+### Supported targets
 
-The extension acts as an intelligence overlay on top of the original sports page.
+V1 watches exactly four stable public intelligence objects:
 
-### Mobile Application
+- `entity`
+- `story`
+- `claim`
+- `media`
 
-The Sportabase mobile application currently supports:
+Sources and reporters are deliberately excluded until they have equivalent dedicated product-history contracts.
 
-- sharing links into Sportabase
-- manually pasting article links
-- manually pasting YouTube links
-- article content resolution
-- article analysis
-- YouTube transcript analysis
-- Merit Score results
-- score explanations
-- content-type confidence
-- score-responsive visual themes
+### Ownership and privacy invariants
 
-The mobile application is being redesigned around dedicated media and story pages, History, tracking, notifications, settings, and richer analysis views.
+- Every private route requires an explicit, non-empty `x-sportabase-client-id` header.
+- There is no IP, `x-forwarded-for`, or `request.client.host` fallback.
+- The raw installation ID is never persisted or returned.
+- A SHA-256 digest with the namespace `sportabase:watchlists:v1:` is persisted as the internal owner key.
+- Every private read and write is client-scoped.
+- Cross-client watch and alert probes return `404`.
+- Watch IDs and alert IDs are opaque.
+- `user_history` is untouched and is not reused as subscription state.
+
+### Baselines, watermarks, and late arrivals
+
+Creating a watch establishes a baseline at the current maximum global discovery sequence, so historical intelligence does not flood the alert inbox.
+
+Eligible persisted events are appended by SQLite triggers to an AUTOINCREMENT discovery ledger. Watches advance through that total order using an integer sequence rather than an event timestamp. This preserves correct behavior for:
+
+- identical timestamps;
+- late-arriving evidence whose `occurred_at` predates watch creation;
+- repeated reconciliation;
+- bounded partial batches;
+- concurrent reconciliation;
+- process restarts.
+
+Alert insertion and watermark advancement occur together inside a transaction. A failed alert write cannot silently advance beyond the event. Stable source-event keys plus a database uniqueness constraint prevent duplicate alerts.
+
+### Reconciliation behavior
+
+Reconciliation is explicit, deterministic, bounded, and local:
+
+- zero Gemini calls;
+- zero external HTTP calls;
+- zero web search;
+- zero notification-provider calls;
+- maximum 100 watches per client;
+- maximum 200 ledger records scanned per watch/request;
+- maximum 50 new alerts per watch/reconciliation;
+- maximum 100 alerts per inbox page.
+
+Canonical intelligence is read-only during reconciliation. Only watch watermarks and alert rows are written.
+
+### Event behavior
+
+- Entity watches react only through verified claim/entity participation and graph relationships derived from that verified path. Lexical mentions do not alert.
+- Story watches can react to new claim links, media links, source observations, reporter observations, evidence links, and analysis snapshots.
+- Claim watches can react to observation/evidence links, verified entity participants, story links, adjudication revisions, and adjudication transitions.
+- Media watches react to new analysis snapshots.
+
+Alert summaries are deterministic and neutral. They do not use AI and do not claim that an event is breaking, confirmed, true, reliable, or credible unless that precise persisted semantic is explicitly represented.
+
+Deleting a watch cascades its subscription alerts without altering the underlying intelligence or another client's watch. Alerts begin unread; marking one read is client-scoped and idempotent. Inbox cursors are versioned, validated, deterministic, and bound to the current client and filters.
+
+---
+
+## Product semantics that must not regress
+
+### Articles
+
+The **Merit Score** measures reporting/informational quality and evidential support. It is not a truth probability or a credibility percentage.
+
+### Videos
+
+Video analysis keeps these concepts separate:
+
+- Evidence Score
+- Logic Score
+- Verdict
+
+Do not create a composite video credibility score.
+
+### Corroboration
+
+Repetition is not independence. Ten rewrites of one report remain one reporting origin unless the persisted provenance graph establishes otherwise.
+
+### History
+
+Persisted history distinguishes domain time (`occurred_at` or `observed_at`) from discovery/materialization time. Chronology alone is never proof of truth, credibility, or novelty.
+
+---
+
+## Architecture
 
 ### Backend
 
-The FastAPI backend currently handles:
+- Python 3.14-compatible FastAPI application
+- SQLite persistence with idempotent startup schema initialization
+- dedicated domain/service/runtime modules rather than route-heavy business logic
+- product-safe public projections separated from internal/admin records
+- provider routing, capacity accounting, caching, retry, and readiness controls
 
-- article and video analysis
-- content resolution
-- Merit Score calculation
-- content classification
-- language detection
-- Gemini-assisted analysis
-- caching
-- usage accounting
-- request capacity controls
+### Browser extension
 
-SQLite is currently used for persistence.
+- JavaScript/Chrome Extension APIs
+- article extraction and analysis overlay
+- YouTube transcript extraction and analysis
+- localized UI, loading states, settings, caching, and trust-oriented result presentation
 
----
+### Mobile
 
-# Merit Score
-
-The Merit Score is a 0-100 assessment of how strongly a piece of sports reporting is supported by the available evidence.
-
-It is not intended to be an absolute truth detector.
-
-A score should be capable of changing as the real-world information environment changes.
-
-Examples:
-
-- new evidence appears
-- another trusted outlet independently corroborates the claim
-- an official source confirms the story
-- an official source denies the story
-- conflicting reporting appears
-- a reporter corrects or retracts information
-- the underlying story develops
-
-The Merit Score should therefore become a time-dependent intelligence signal rather than a static article rating.
+- React Native, Expo Router, and TypeScript
+- shared-link and pasted-link ingestion
+- article and video result surfaces
+- evolving Home, Explore, History, story, media, watchlist, and notification experiences
 
 ---
 
-# Merit Score vNext
+## Development principles
 
-The next scoring system will place substantially more weight on external evidence, source history, and corroboration.
-
-## 1. Publisher Reputation
-
-Sportabase should evaluate the publication making the claim.
-
-Signals may include:
-
-- historical reporting accuracy
-- correction rate
-- retraction rate
-- transparency
-- primary-report frequency
-- independence from other reporting
-- evidence quality
-- topic-specific historical accuracy
-- publication history
-- domain or publication age as a low-weight supporting signal
-
-Site age alone should never make a publication trustworthy.
-
-Historical behavior should matter far more.
+1. Evidence over confidence.
+2. Persisted relationships over lexical resemblance.
+3. Independent corroboration over repetition.
+4. History over static reputation.
+5. Explainability over black-box scoring.
+6. Stories and claims over isolated URLs.
+7. Trajectory over isolated snapshots.
+8. Probability and uncertainty over fake certainty.
+9. Product-safe projections over raw database exposure.
+10. Database constraints and transactions as the final correctness boundary.
 
 ---
 
-## 2. Reporter Reputation
+## Roadmap status
 
-Where a named journalist or reporter is identifiable, Sportabase should track their historical record separately from the publication.
+Completed backend foundations include entity resolution, claim/story intelligence, evidence and support graphs, history, source profiles, reporting coverage, independence, story evolution, storyline aggregation, golden evaluation, long-video compression, provider reliability, task-specific model routing, and Search + Historical Intelligence V1.
 
-Possible signals include:
+Current boundary:
 
-- previous claims tracked
-- eventual confirmation rate
-- correction rate
-- retraction rate
-- topic-specific reliability
-- primary-source frequency
-- speed versus accuracy
+1. Commit and push Watchlists + Alerts V1.
+2. Verify the exact remote branch head and diff.
+3. Decide the next roadmap unit before opening another implementation worktree.
+4. Keep delivery channels—push, email, SMS, Slack, webhooks, and browser notifications—out of the V1 in-app alert subsystem.
+5. Preserve the completed backend intelligence graph while productizing watchlists, history, story/media pages, and alert experiences across mobile and extension surfaces.
 
-A reporter may be highly reliable in one area of sport and less reliable in another.
+Future predictive work may use information momentum, evidence growth, source quality, team/player context, structured sports data, and market movement. It must be evaluated empirically and must not be smuggled into the Merit Score as an unsupported truth predictor.
 
 ---
 
-## 3. Evidence Quality
+## Conversation continuity protocol
 
-Sportabase should evaluate what evidence is actually presented.
+> **Context warning for every future Sportabase chat:** Treat a long conversation as an operational risk. Before the chat becomes large enough that earlier technical context may be truncated, proactively warn Yuvraj and propose a checkpoint update. Do not wait for the final message or pretend an exact context meter is available. The warning should occur early enough to capture the current branch, base/head SHAs, worktree, dirty/staged state, files changed, tests and exact results, architectural decisions, invariants, blockers, and next command.
 
-Possible evidence includes:
+When a context checkpoint is needed:
 
-- official club statements
-- league statements
-- press releases
-- regulatory documents
-- direct quotations
-- named sources
-- attributed anonymous sources
-- interviews
-- press conferences
-- statistics
-- photographs
-- video
-- first-hand reporting
-- links to primary evidence
+1. Stop before starting another large implementation or review chunk.
+2. Summarize only verified state; clearly distinguish remote, committed, local, staged, and planned work.
+3. Update this README/checkpoint on GitHub when authorized.
+4. Produce a self-contained handoff prompt for the next chat.
+5. Never claim a branch, commit, push, test result, or clean worktree without evidence.
+6. Preserve exact SHAs, exact test commands/results, and non-negotiable semantic constraints.
 
-Confident writing should never substitute for actual evidence.
+Recommended warning language:
+
+```text
+Context warning: this Sportabase thread is getting long enough that we should checkpoint before the next major step. I should save the verified Git/GitHub state, tests, decisions, remaining risks, and the exact next action now, then give you a clean handoff prompt for a new chat.
+```
 
 ---
 
-## 4. Evidence Investigation
+## Handoff source of truth
 
-Sportabase should eventually investigate the evidence cited by a media piece rather than only detecting that a source exists.
+For a new Sportabase chat, use this README together with live Git/GitHub inspection. The README is a checkpoint, not a substitute for verification. If the local worktree and GitHub disagree, stop and establish which state is authoritative before changing code.
 
-For example:
+The next chat should begin by verifying:
 
-    Article
-      -> Reporter
-          -> Anonymous Source
+```powershell
+cd C:\Users\Yuvraj\Documents\Sportabase-watchlists-alerts
+git status -sb
+git status --short
+git rev-parse HEAD
+git log -1 --oneline
+git diff --cached --stat
+```
 
-is materially different from:
-
-    Article
-      -> Official Club Statement
-
-The system should increasingly identify:
-
-- original source
-- intermediaries
-- primary evidence
-- secondary reporting
-- unsupported claims
-- circular sourcing
+At the recorded checkpoint, the expected next operation is final commit/push verification for Watchlists + Alerts V1—not another implementation pass.
 
 ---
 
-## 5. Independent Corroboration
+## Long-term vision
 
-Independent corroboration should become one of the strongest Merit Score signals.
+Sportabase aims to become the intelligence layer for global sports information: a system that remembers what was claimed, traces where it came from, measures how evidence changed, learns from outcomes, and helps users understand the story rather than merely consume the headline.
 
-Sportabase should determine whether unrelated trustworthy sources independently support the same underlying claim.
-
-Three independent reputable reports are meaningful.
-
-Ten websites rewriting the same original report are not ten confirmations.
-
-This requires:
-
-- story clustering
-- origin tracing
-- duplicate-content detection
-- source-dependency detection
-- copied-reporting detection
-- churnalism detection
-
-Sportabase should measure independent evidence, not raw article volume.
-
----
-
-## 6. Specificity
-
-Specific reporting is easier to verify or disprove.
-
-Relevant signals include:
-
-- named players
-- named teams
-- dates
-- transfer values
-- contract lengths
-- locations
-- competition details
-- named sources
-- attributed quotations
-- clearly defined events
-
-Specificity improves testability.
-
-It does not prove that a claim is true.
-
----
-
-## 7. Language and Claim Strength
-
-Language remains useful, but it should only be one part of legitimacy.
-
-Sportabase currently detects signals such as:
-
-- reportedly
-- could
-- might
-- believed to
-- expected to
-- sources say
-- set to
-- official
-- confirmed
-- announced
-- sensational framing
-- clickbait
-- opinion framing
-
-Language helps answer:
-
-"How strongly is this source presenting the claim?"
-
-It does not answer:
-
-"Is the claim actually true?"
-
----
-
-## 8. Content-Type Fit
-
-Different sports content requires different standards.
-
-Examples include:
-
-- transfer rumor
-- confirmed transfer
-- injury report
-- match report
-- tactical analysis
-- statistics report
-- press conference
-- opinion article
-- official announcement
-- legal or disciplinary report
-
-A transfer rumor should not be evaluated using the same expectations as an official club announcement.
-
----
-
-## 9. Temporal Context
-
-Sportabase should understand where a report sits in the development of a story.
-
-A story may progress through states such as:
-
-    Initial Rumor
-        ->
-    Developing
-        ->
-    Corroborated
-        ->
-    Advanced
-        ->
-    Confirmed
-
-Other stories may instead move toward:
-
-    Reported
-        ->
-    Contradicted
-        ->
-    Denied
-
-or:
-
-    Reported
-        ->
-    Corrected
-        ->
-    Retracted
-
-The score should reflect these developments.
-
----
-
-# Persistent History
-
-Sportabase will store analyzed public sports media so that previous analysis can improve future analysis.
-
-The system should distinguish between the exact media item and the underlying story.
-
-## Media Item
-
-A media item represents the exact content analyzed.
-
-Possible stored information includes:
-
-- canonical URL
-- publisher
-- reporter
-- publication timestamp
-- content hash
-- content type
-- first analyzed timestamp
-- latest analyzed timestamp
-
-## Story
-
-A Story represents the underlying real-world claim or event.
-
-For example:
-
-"Barcelona attempting to sign Player X"
-
-Multiple media items may belong to the same Story.
-
----
-
-# Analysis Snapshots
-
-Each meaningful analysis should create an immutable historical snapshot.
-
-Example:
-
-    10:00    Merit 31
-    12:20    Merit 48
-    15:40    Merit 63
-    18:10    Merit 78
-    21:35    Merit 96
-
-Each snapshot should preserve:
-
-- Merit Score
-- scoring components
-- source reputation
-- reporter reputation
-- available evidence
-- corroborating sources
-- classification
-- uncertainty
-- timestamp
-- scoring-engine version
-
-The scoring-engine version is essential.
-
-An algorithm update must not be mistaken for a real-world credibility movement.
-
----
-
-# Story Trajectory
-
-Historical snapshots allow Sportabase to measure how information changes over time.
-
-For example:
-
-    31 -> 48 -> 63 -> 78 -> 96
-
-Sportabase should also explain why the score changed.
-
-Example:
-
-    31
-    Initial speculative report
-
-    48
-    Reliable reporter independently confirms talks
-
-    63
-    Second trusted outlet corroborates the story
-
-    78
-    Multiple independent reports indicate an agreement
-
-    96
-    Official club announcement
-
-This creates a new concept:
-
-## Information Momentum
-
-Possible future signals include:
-
-- Merit Score velocity
-- Merit Score acceleration
-- corroboration velocity
-- evidence growth
-- contradiction rate
-- source-quality improvement
-- news-volume growth
-- story-state transitions
-
-Sportabase should eventually be able to answer:
-
-"How quickly is the evidence around this story strengthening or weakening?"
-
----
-
-# History
-
-The mobile application will include a History section containing media and stories previously analyzed by the user.
-
-Users should eventually be able to reopen an item and view:
-
-- current Merit Score
-- previous Merit Scores
-- score trajectory
-- source changes
-- evidence changes
-- corroboration changes
-- story status
-- analysis timestamps
-
----
-
-# Story Tracking and Movement Alerts
-
-Users should be able to track stories they care about.
-
-Sportabase should notify them when meaningful movement occurs.
-
-Potential notification triggers include:
-
-- large Merit Score increase
-- large Merit Score decrease
-- crossing a score band
-- major new independent corroboration
-- official confirmation
-- official denial
-- major contradiction
-- correction
-- retraction
-
-Small score fluctuations should not generate notifications.
-
-Example:
-
-    Major movement
-
-    Rodri -> Barcelona
-    Merit Score: 42 -> 68 (+26)
-
-    New independent reporting and stronger
-    source evidence increased confidence.
-
----
-
-# Shared Sports Intelligence Corpus
-
-Public sports media analyzed through Sportabase can contribute to a growing intelligence database.
-
-Over time the corpus can contain:
-
-- publishers
-- reporters
-- media items
-- stories
-- claims
-- source relationships
-- evidence chains
-- historical scores
-- confirmations
-- denials
-- corrections
-- retractions
-- eventual outcomes
-
-This historical database can help Sportabase make more informed decisions on future stories.
-
-For example:
-
-    Reporter A
-
-    Transfer claims tracked: 184
-    Eventually confirmed: 151
-    Historical reliability: High
-
-Historical performance should influence future assessments probabilistically rather than act as absolute truth.
-
-Personal user information should remain separate from the shared public-media intelligence corpus.
-
----
-
-# Predictive Intelligence
-
-The Merit Score itself is not intended to predict match or market outcomes.
-
-Instead, historical information movement can become one input into a broader predictive system.
-
-Future predictive analysis may combine:
-
-    Information momentum
-    +
-    Story credibility trajectory
-    +
-    News volume
-    +
-    Source quality
-    +
-    Sentiment
-    +
-    Team and player context
-    +
-    Historical performance
-    +
-    Market or betting movement
-    +
-    Structured sports data
-
-This may eventually allow Sportabase to investigate questions such as:
-
-"Is the market reacting faster than the available evidence supports?"
-
-or:
-
-"Is strong credible information appearing before the market has meaningfully reacted?"
-
-This forms the basis of Sportabase's future market-overreaction research.
-
----
-
-# Planned Backend Architecture
-
-The backend is expected to evolve toward entities such as:
-
-- sources
-- reporters
-- media_items
-- stories
-- claims
-- story_media_links
-- evidence_items
-- source_relationships
-- analysis_snapshots
-- score_events
-- user_history
-- tracked_stories
-- alerts
-
-Entity resolution will later connect:
-
-- players
-- teams
-- clubs
-- leagues
-- competitions
-- countries
-- reporters
-- publishers
-- YouTube channels
-- social accounts
-
----
-
-# Evaluation
-
-A more sophisticated scoring engine requires stronger regression testing.
-
-Sportabase will maintain a golden-set evaluation harness containing examples such as:
-
-- weak rumors
-- strong rumors
-- confirmed transfers
-- false reports
-- official announcements
-- opinion pieces
-- match reports
-- multilingual articles
-- misleading headlines
-- copied coverage
-
-Every major scoring change should be tested against the golden set.
-
----
-
-# Development Roadmap
-
-## Phase 1 - Data and History Foundation
-
-- expand the database schema
-- canonicalize media URLs
-- store analyzed public media
-- create analysis snapshots
-- version the scoring engine
-- create source records
-- create reporter records
-- preserve score history
-
-## Phase 2 - Merit Score vNext
-
-- historical publisher accuracy
-- historical reporter accuracy
-- independent corroboration
-- evidence investigation
-- source provenance
-- copied-reporting detection
-- stronger evidence scoring
-- reduced dependence on language heuristics
-- uncertainty and confidence
-- exposed score components
-
-## Phase 3 - Story Intelligence
-
-- entity resolution
-- claim extraction
-- story clustering
-- evidence relationships
-- source dependency detection
-- cross-source corroboration
-- story state tracking
-
-## Phase 4 - Story Trajectory
-
-- score deltas
-- evidence deltas
-- corroboration deltas
-- credibility timelines
-- information momentum
-
-## Phase 5 - Tracking and Alerts
-
-- story watchlists
-- significant-movement detection
-- confirmation alerts
-- denial alerts
-- contradiction alerts
-- mobile notifications
-
-## Phase 6 - Frontend Productization
-
-- dedicated Home screen
-- dedicated media screens
-- dedicated story screens
-- History
-- trajectory charts
-- Dark / Light / System themes
-- settings
-- watchlists
-- richer evidence views
-
-## Phase 7 - Predictive Intelligence
-
-- combine story trajectories with structured sports data
-- quantify market reaction
-- test market-overreaction hypotheses
-- evaluate predictive performance against historical outcomes
-
----
-
-# Technical Stack
-
-## Backend
-
-- Python
-- FastAPI
-- SQLite
-- Requests
-- Gemini
-- local rule-based analysis
-- caching
-- usage and quota controls
-
-## Browser Extension
-
-- JavaScript
-- Chrome Extension APIs
-- in-page intelligence overlay
-- article extraction
-- YouTube transcript extraction
-
-## Mobile
-
-- React Native
-- Expo
-- Expo Router
-- TypeScript
-
-## Infrastructure
-
-- Render
-- GitHub
-- GitHub Pages
-
----
-
-# Development Principles
-
-## Evidence over confidence
-
-Confident writing is not evidence.
-
-## Independent corroboration over repetition
-
-Ten copies of one report are not ten confirmations.
-
-## History over static reputation
-
-Credibility should increasingly come from observable historical performance.
-
-## Explainability over black-box scoring
-
-Users should understand why a score exists and why it changed.
-
-## Stories over URLs
-
-Multiple media pieces may describe the same underlying event.
-
-## Trajectory over snapshots
-
-How information changes can be as important as its current state.
-
-## Probability over certainty
-
-Sportabase evaluates evidence. It does not claim omniscience.
-
----
-
-# Final Vision
-
-Sportabase aims to become an intelligence layer for global sports information.
-
-Not merely:
-
-"Summarize this story."
-
-But:
-
-- What is being claimed?
-- Who originated it?
-- What evidence supports it?
-- Who independently corroborates it?
-- How reliable have those sources historically been?
-- How has confidence changed over time?
-- What does that information movement imply?
-
-The long-term objective is a system that remembers sports information, learns from what eventually happened, and uses that history to make progressively better evidence-based assessments.
-
-**Sportabase - Understand the story, not just the headline.**
+**Sportabase — understand the story, not just the headline.**
