@@ -3,8 +3,17 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.intelligence.product_history import (
-    ProductIntelligenceIntegrityError, SEARCH_KINDS, claim_history, entity_history,
-    media_history, search_intelligence, story_history,
+    ProductIntelligenceIntegrityError,
+    SEARCH_KINDS,
+    claim_history,
+    entity_history,
+    media_history,
+    search_intelligence,
+    story_history,
+)
+from app.intelligence.source_reporter_product_history import (
+    reporter_history,
+    source_history,
 )
 
 
@@ -52,5 +61,13 @@ def build_router(*, connection_factory) -> APIRouter:
     @router.get("/media/{media_item_id}/history")
     def media(media_item_id: str = Path(..., min_length=1, max_length=128), after: str = Query("", max_length=128), before: str = Query("", max_length=128), limit: int = Query(100, ge=1, le=200), cursor: str = Query("", max_length=4096)):
         return common_history(media_history, media_item_id, "media_item", after, before, limit, cursor)
+
+    @router.get("/sources/{source_id}/history")
+    def source(source_id: str = Path(..., min_length=1, max_length=128), after: str = Query("", max_length=128), before: str = Query("", max_length=128), limit: int = Query(100, ge=1, le=200), cursor: str = Query("", max_length=4096)):
+        return common_history(source_history, source_id, "source", after, before, limit, cursor)
+
+    @router.get("/reporters/{reporter_id}/history")
+    def reporter(reporter_id: str = Path(..., min_length=1, max_length=128), after: str = Query("", max_length=128), before: str = Query("", max_length=128), limit: int = Query(100, ge=1, le=200), cursor: str = Query("", max_length=4096)):
+        return common_history(reporter_history, reporter_id, "reporter", after, before, limit, cursor)
 
     return router

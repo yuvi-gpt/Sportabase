@@ -14,10 +14,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   createWatch,
   listWatches,
-  searchIntelligence,
-  type IntelligenceSearchResult,
 } from '../lib/api';
-import { intelligenceRoute } from '../lib/intelligence-history';
+import {
+  inspectableIntelligenceRoute,
+  isWatchableIntelligenceKind,
+} from '../lib/intelligence-kinds';
+import {
+  searchInspectableIntelligence,
+  type IntelligenceSearchResult,
+} from '../lib/intelligence-search';
 
 const COLORS = {
   background: '#050807',
@@ -77,7 +82,9 @@ export default function ExploreScreen() {
     const value = query.trim();
 
     if (!value) {
-      setMessage('Enter a player, team, story, or claim.');
+      setMessage(
+        'Enter a player, team, story, claim, source, or reporter.',
+      );
       return;
     }
 
@@ -85,7 +92,7 @@ export default function ExploreScreen() {
     setMessage('');
 
     try {
-      const response = await searchIntelligence(value);
+      const response = await searchInspectableIntelligence(value);
       setResults(response.results);
 
       if (response.results.length === 0) {
@@ -102,6 +109,10 @@ export default function ExploreScreen() {
   }
 
   async function watch(result: IntelligenceSearchResult) {
+    if (!isWatchableIntelligenceKind(result.kind)) {
+      return;
+    }
+
     const key = `${result.kind}:${result.id}`;
     setBusyKey(key);
     setMessage('');
@@ -144,9 +155,10 @@ export default function ExploreScreen() {
           <Text style={styles.title}>Discover</Text>
           <Text style={styles.subtitle}>
             Search Sportabase&apos;s canonical entities,
-            stories, claims and media. A text match helps you
-            discover persisted objects; it does not create a
-            new verified relationship.
+            stories, claims, media, sources and reporters. A
+            text match helps you discover persisted objects; it
+            does not create a new verified relationship or a
+            reliability judgement.
           </Text>
 
           <View style={styles.searchCard}>
@@ -156,7 +168,7 @@ export default function ExploreScreen() {
                 setQuery(value);
                 setMessage('');
               }}
-              placeholder="Player, club, story, claim..."
+              placeholder="Player, club, story, source, reporter..."
               placeholderTextColor="#667169"
               autoCapitalize="none"
               autoCorrect={false}
@@ -191,7 +203,10 @@ export default function ExploreScreen() {
           <View style={styles.results}>
             {results.map((result) => {
               const key = `${result.kind}:${result.id}`;
-              const watched = watchedKeys.has(key);
+              const watchable = isWatchableIntelligenceKind(
+                result.kind,
+              );
+              const watched = watchable && watchedKeys.has(key);
               const busy = busyKey === key;
 
               return (
@@ -232,7 +247,7 @@ export default function ExploreScreen() {
                       accessibilityRole="button"
                       onPress={() =>
                         router.push(
-                          intelligenceRoute(
+                          inspectableIntelligenceRoute(
                             result.kind,
                             result.id,
                           ),
@@ -248,30 +263,37 @@ export default function ExploreScreen() {
                       </Text>
                     </Pressable>
 
-                    <Pressable
-                      accessibilityRole="button"
-                      disabled={watched || busy}
-                      onPress={() => watch(result)}
-                      style={({ pressed }) => [
-                        styles.watchButton,
-                        watched && styles.watchButtonActive,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.watchButtonText,
-                          watched &&
-                            styles.watchButtonTextActive,
+                    {watchable ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={watched || busy}
+                        onPress={() => void watch(result)}
+                        style={({ pressed }) => [
+                          styles.watchButton,
+                          watched && styles.watchButtonActive,
+                          pressed && styles.pressed,
                         ]}
                       >
-                        {busy
-                          ? 'Adding...'
-                          : watched
-                            ? 'Watching'
-                            : 'Watch future changes'}
-                      </Text>
-                    </Pressable>
+                        <Text
+                          style={[
+                            styles.watchButtonText,
+                            watched && styles.watchButtonTextActive,
+                          ]}
+                        >
+                          {busy
+                            ? 'Adding...'
+                            : watched
+                              ? 'Watching'
+                              : 'Watch future changes'}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View style={styles.profileOnly}>
+                        <Text style={styles.profileOnlyText}>
+                          Profile only · not watchable in Alerts V1
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
               );
@@ -449,6 +471,23 @@ const styles = StyleSheet.create({
   },
   watchButtonTextActive: {
     color: COLORS.accent,
+  },
+  profileOnly: {
+    alignItems: 'center',
+    backgroundColor: COLORS.raised,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    minWidth: 190,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  profileOnlyText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   pressed: {
     opacity: 0.72,
