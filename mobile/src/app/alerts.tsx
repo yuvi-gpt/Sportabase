@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   useFocusEffect,
   useLocalSearchParams,
+  useRouter,
 } from 'expo-router';
 import {
   ActivityIndicator,
@@ -21,6 +22,7 @@ import {
   type AlertItem,
   type WatchTargetKind,
 } from '../lib/api';
+import { intelligenceRoute } from '../lib/intelligence-history';
 
 const WATCHABLE = new Set<WatchTargetKind>([
   'entity',
@@ -46,6 +48,7 @@ function messageFrom(error: unknown) {
 }
 
 export default function AlertsScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{
     targetKind?: string | string[];
   }>();
@@ -166,6 +169,16 @@ export default function AlertsScreen() {
     }
   }
 
+  function openAlert(item: AlertItem) {
+    if (!item.read_at) {
+      void markRead(item);
+    }
+
+    router.push(
+      intelligenceRoute(item.target_kind, item.target_id),
+    );
+  }
+
   return (
     <View style={styles.screen}>
       <SafeAreaView style={styles.safeArea}>
@@ -264,7 +277,7 @@ export default function AlertsScreen() {
                 <Pressable
                   key={item.id}
                   accessibilityRole="button"
-                  onPress={() => void markRead(item)}
+                  onPress={() => openAlert(item)}
                   style={({ pressed }) => [
                     styles.card,
                     unread && styles.cardUnread,
@@ -332,13 +345,17 @@ export default function AlertsScreen() {
 
                   {readingId === item.id ? (
                     <Text style={styles.markingText}>
-                      Marking read...
+                      Marking read and opening intelligence...
                     </Text>
                   ) : unread ? (
                     <Text style={styles.markingText}>
-                      Tap to mark read
+                      Tap to open watched item · marks read
                     </Text>
-                  ) : null}
+                  ) : (
+                    <Text style={styles.markingText}>
+                      Tap to open watched item
+                    </Text>
+                  )}
                 </Pressable>
               );
             })}

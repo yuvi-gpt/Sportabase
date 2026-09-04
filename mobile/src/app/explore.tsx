@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Pressable,
@@ -17,6 +17,7 @@ import {
   searchIntelligence,
   type IntelligenceSearchResult,
 } from '../lib/api';
+import { intelligenceRoute } from '../lib/intelligence-history';
 
 const COLORS = {
   background: '#050807',
@@ -37,6 +38,7 @@ function messageFrom(error: unknown) {
 }
 
 export default function ExploreScreen() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<
     IntelligenceSearchResult[]
@@ -225,30 +227,52 @@ export default function ExploreScreen() {
                       : ''}
                   </Text>
 
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={watched || busy}
-                    onPress={() => watch(result)}
-                    style={({ pressed }) => [
-                      styles.watchButton,
-                      watched && styles.watchButtonActive,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.watchButtonText,
-                        watched &&
-                          styles.watchButtonTextActive,
+                  <View style={styles.resultActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() =>
+                        router.push(
+                          intelligenceRoute(
+                            result.kind,
+                            result.id,
+                          ),
+                        )
+                      }
+                      style={({ pressed }) => [
+                        styles.detailButton,
+                        pressed && styles.pressed,
                       ]}
                     >
-                      {busy
-                        ? 'Adding...'
-                        : watched
-                          ? 'Watching'
-                          : 'Watch future changes'}
-                    </Text>
-                  </Pressable>
+                      <Text style={styles.detailButtonText}>
+                        Open intelligence
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={watched || busy}
+                      onPress={() => watch(result)}
+                      style={({ pressed }) => [
+                        styles.watchButton,
+                        watched && styles.watchButtonActive,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.watchButtonText,
+                          watched &&
+                            styles.watchButtonTextActive,
+                        ]}
+                      >
+                        {busy
+                          ? 'Adding...'
+                          : watched
+                            ? 'Watching'
+                            : 'Watch future changes'}
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -382,13 +406,35 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 12,
   },
+  resultActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 9,
+    marginTop: 15,
+  },
+  detailButton: {
+    alignItems: 'center',
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    flex: 1,
+    minWidth: 142,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  detailButtonText: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   watchButton: {
     alignItems: 'center',
     backgroundColor: COLORS.raised,
     borderColor: '#354038',
     borderRadius: 12,
     borderWidth: 1,
-    marginTop: 15,
+    flex: 1,
+    minWidth: 156,
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
