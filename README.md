@@ -22,16 +22,16 @@ The product currently spans a FastAPI backend, Chrome extension, React Native / 
 
 ### Current `main`
 
-Latest verified remote `main` after the Sources + Reporters product merge:
+Latest verified remote `main` after the Notifications Push V1 merge:
 
 ```text
-2a85cb33fcc9b701ba85ae1603abb07ef0e7a5da
+f5ebc411ab1e14823a56d61946b4b25ff1dc1034
 ```
 
 Latest merged product unit:
 
 ```text
-Add source and reporter intelligence profiles
+Add push notification delivery
 ```
 
 The following roadmap units are now integrated into `main`:
@@ -41,39 +41,34 @@ The following roadmap units are now integrated into `main`:
 - mobile Watchlists + Alerts productization;
 - mobile canonical intelligence detail/history;
 - Chrome extension ↔ persistent intelligence integration;
-- Sources + Reporters as first-class inspectable intelligence objects across backend, mobile, and extension.
+- Sources + Reporters as first-class inspectable intelligence objects across backend, mobile, and extension;
+- Notifications Push V1 with explicit native opt-in and separate provider delivery.
 
 ### Latest verification checkpoint
 
-Final backend verification on the Sources + Reporters feature tree:
+Final backend verification on the Notifications Push V1 feature tree:
 
 ```text
-3654 passed, 3 skipped, 11 warnings, 694 subtests passed in 103.39s
+3660 passed, 2 skipped, 11 warnings, 694 subtests passed in 61.43s
 ```
 
-Focused Source/Reporter backend contract test:
+Focused notification contract tests:
 
 ```text
-3 passed, 2 warnings in 0.86s
+5 passed, 2 warnings in 0.72s
 ```
 
 Mobile verification:
 
 ```text
 npm ci                              PASS
+npx expo install expo-notifications PASS (~57.0.17, SDK 57)
 npx tsc --noEmit                    PASS
 npx expo export --platform web      PASS
-```
-
-Extension verification:
-
-```text
-npm ci                              PASS
-npm test                            38/38 PASS
-npm run build                       PASS
-node --check dist/content.js        PASS
 git diff --check                    PASS
 ```
+
+The static web export now includes `/notifications`. Real push delivery was tested with mocked Expo tickets; a physical-device end-to-end delivery test remains a deployment gate before production enablement.
 
 There are currently no GitHub Actions/status checks configured for this repo, so the local backend, TypeScript, Expo export, extension tests/build, and repository-integrity checks remain the execution gates for these product branches.
 
@@ -225,6 +220,43 @@ Canonical intelligence is read-only during reconciliation. Only watch watermarks
 
 ---
 
+## Notifications Push V1
+
+Push delivery is a separate product layer on top of persisted Watchlist alerts. It does not put provider calls inside Watchlist reconciliation.
+
+Private device API:
+
+- `POST /notifications/devices`
+- `GET /notifications/devices`
+- `DELETE /notifications/devices/{device_id}`
+
+The delivery model includes:
+
+- explicit native iOS/Android opt-in;
+- Expo push-token registration scoped by the existing private client identity;
+- a post-registration alert baseline so old inbox alerts are not pushed retroactively;
+- an append-only notification alert ledger;
+- unique per-device/per-alert delivery jobs;
+- leased delivery claiming and bounded retries;
+- permanent invalid-device handling for `DeviceNotRegistered`;
+- canonical intelligence deep links from push taps;
+- best-effort mark-read synchronization with the in-app Alerts inbox.
+
+Privacy and semantic boundaries:
+
+- raw Expo push tokens are required server-side for delivery but are never returned by product APIs;
+- push payloads contain no client key or raw installation identity;
+- watchable kinds remain exactly `entity`, `story`, `claim`, and `media`;
+- Sources and Reporters remain inspectable but not watchable;
+- notification materialization makes no Gemini calls;
+- Watchlist reconciliation itself still makes zero notification-provider calls.
+
+The worker is disabled by default. Production delivery requires explicit `SPORTABASE_NOTIFICATIONS_ENABLED=1`; `SPORTABASE_NOTIFICATIONS_POLL_SECONDS` should be set deliberately based on deployment load rather than relying on the code default.
+
+Real-device delivery remains unverified until a deployed backend and physical iOS/Android device complete an end-to-end Expo push test.
+
+---
+
 ## Mobile product
 
 The mobile app now supports six inspectable intelligence kinds while preserving four watchable kinds.
@@ -372,6 +404,8 @@ History, provenance, dependencies, corrections/reversals, first-vs-repeated repo
 - six-kind canonical intelligence inspection
 - four-kind watch contract
 - persisted graph traversal and chronological history
+- explicit push-notification opt-in and notification settings
+- push-tap routing into canonical intelligence
 
 ---
 
@@ -410,17 +444,16 @@ Completed foundations now include:
 - mobile Watchlists + Alerts productization;
 - mobile canonical intelligence detail/history productization;
 - Chrome extension persistent-intelligence integration;
-- first-class Source/Reporter inspectable product intelligence.
+- first-class Source/Reporter inspectable product intelligence;
+- Notifications Push V1.
 
 ### Current next roadmap unit
 
-**Notifications.**
+**Prediction**, after completing the Notifications production-enablement gate.
 
-The next product layer should deliver future persisted intelligence changes beyond the current in-product reconciliation/inbox flow while preserving existing watchlist semantics and privacy boundaries.
+Before predictive product work is treated as production-facing, Notifications still needs one deployment validation step: enable the worker in a controlled environment, register a physical iOS/Android device, persist a new watched intelligence event, and confirm one real Expo push arrives and deep-links to the expected canonical object.
 
-Notification work should be designed separately from reconciliation. Reconciliation remains deterministic, persisted-ledger-only, and provider-free.
-
-After notifications, the next major research/product unit is **prediction**.
+After that validation, the next major research/product unit is **prediction**.
 
 Future predictive work may use:
 
@@ -494,7 +527,7 @@ For a new Sportabase chat, use this README together with live Git/GitHub inspect
 At this checkpoint the authoritative product merge is:
 
 ```text
-main = 2a85cb33fcc9b701ba85ae1603abb07ef0e7a5da
+main = f5ebc411ab1e14823a56d61946b4b25ff1dc1034
 ```
 
 Before beginning the next feature:
@@ -503,10 +536,12 @@ Before beginning the next feature:
 2. create a clean feature branch/worktree from that verified base;
 3. preserve the six inspectable / four watchable intelligence-kind split;
 4. preserve reconciliation as persisted-ledger-only with zero Gemini/provider/notification calls;
-5. design notification delivery as a separate bounded product contract;
-6. keep source/reporter history empirical and score-free.
+5. keep notification delivery separate from reconciliation and disabled until production configuration is intentional;
+6. complete a physical-device push delivery test before calling Notifications production-enabled;
+7. keep source/reporter history empirical and score-free;
+8. begin prediction as an empirically evaluated layer that does not alter Merit Score semantics.
 
-Do not return to Watchlists backend, mobile scaffolding, extension persistence, or Source/Reporter first-class integration unless a verified regression requires it.
+Do not return to Watchlists backend, mobile scaffolding, extension persistence, Source/Reporter first-class integration, or Notifications implementation unless a verified regression or deployment finding requires it.
 
 ---
 
