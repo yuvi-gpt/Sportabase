@@ -32,9 +32,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt pytest pytest-subtests
-      - name: Compile touched backend modules
-        run: |
-          python -m compileall -q backend/app
+      - name: Compile backend modules
+        run: python -m compileall -q backend/app
       - name: Run backend test suite
         working-directory: backend
         run: python -m pytest -q
@@ -60,16 +59,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run Playwright
         working-directory: tooling/browser
-        run: |
-          npm run serve > /tmp/sportabase-browser-server.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
-          for i in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:4173/ >/dev/null; then break; fi
-            sleep 1
-          done
-          curl --fail http://127.0.0.1:4173/ >/dev/null
-          npm test
+        run: npm test
 
   extension:
     name: Extension tests + reproducible build
