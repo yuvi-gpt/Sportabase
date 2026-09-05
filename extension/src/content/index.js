@@ -1,3 +1,4 @@
+import "../styles/account-settings.css";
 ﻿import "../styles/sportabase.css";
 
 import "../styles/loader.css";

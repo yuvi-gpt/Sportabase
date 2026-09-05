@@ -1,3 +1,4 @@
+import { gateway } from "./src/background/account-entry.js";
 const API = "https://sportabase-api.onrender.com";
 // const API = "http://127.0.0.1:8000"; // local development
 
@@ -9,8 +10,6 @@ const CONFIG = {
 
 const DEFAULT_PREFERENCES = {
   sportabaseAppearance: "system",
-  sportabaseAccentMode: "dynamic",
-  sportabaseAccentColor: "#1ed760",
   sportabaseGlowLevel: "reduced",
   sportabaseMotionLevel: "full",
   sportabaseHighContrast: false,
@@ -32,6 +31,11 @@ const DEFAULT_PREFERENCES = {
 };
 
 async function openSportabase(tabId) {
+  try {
+    await gateway.refreshPresentation();
+  } catch (error) {
+    console.warn("[sportabase] Account presentation sync was unavailable:", error?.message || error);
+  }
   const preferences = await chrome.storage.local.get(
     DEFAULT_PREFERENCES
   );
@@ -102,33 +106,3 @@ chrome.action.onClicked.addListener(async (tab) => {
     );
   }
 });
-
-chrome.runtime.onMessage.addListener(
-  (message, _sender, sendResponse) => {
-    if (
-      message?.type !==
-      "SPORTABASE_SAVE_OVERLAY_PREFS"
-    ) {
-      return;
-    }
-
-    chrome.storage.local
-      .set(message.payload || {})
-      .then(() => {
-        sendResponse({ ok: true });
-      })
-      .catch((error) => {
-        console.error(
-          "[sportabase] Failed to save preferences:",
-          error
-        );
-
-        sendResponse({
-          ok: false,
-          error: String(error?.message || error),
-        });
-      });
-
-    return true;
-  }
-);

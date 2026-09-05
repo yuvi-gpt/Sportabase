@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -58,6 +59,8 @@ export function SourceReporterDetailScreen({
   kind: SourceReporterKind;
   id: string;
 }) {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
   const [data, setData] =
     useState<SourceReporterHistoryResponse | null>(null);
@@ -298,7 +301,7 @@ export function SourceReporterDetailScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: { backgroundColor: COLORS.background, flex: 1 },
   safeArea: { flex: 1 },
   content: {

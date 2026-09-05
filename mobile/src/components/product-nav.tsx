@@ -1,3 +1,4 @@
+import { useProductTheme } from '../theme/product-theme';
 import { usePathname, useRouter } from 'expo-router';
 import {
   Pressable,
@@ -6,25 +7,29 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAccount } from '../lib/account-context';
 
 const ITEMS = [
   { label: 'Analyze', route: '/' },
   { label: 'Discover', route: '/explore' },
   { label: 'Watches', route: '/watchlists' },
   { label: 'Alerts', route: '/alerts' },
-  { label: 'Notify', route: '/notifications' },
+  { label: 'Settings', route: '/settings' },
 ] as const;
 
 export function ProductNav() {
+  const { colors,scale }=useProductTheme();
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { signedIn } = useAccount();
 
   return (
     <View
       style={[
         styles.shell,
         {
+          backgroundColor: colors.surface, borderTopColor: colors.border,
           paddingBottom: Math.max(insets.bottom, 8),
         },
       ]}
@@ -34,7 +39,7 @@ export function ProductNav() {
           const active =
             item.route === '/'
               ? pathname === '/'
-              : pathname.startsWith(item.route);
+              : pathname.startsWith(item.route) || (item.route === '/settings' && ['/activity', '/notifications'].some(route => pathname.startsWith(route)));
 
           return (
             <Pressable
@@ -43,7 +48,8 @@ export function ProductNav() {
               accessibilityState={{ selected: active }}
               onPress={() => {
                 if (!active) {
-                  router.replace(item.route);
+                  const accountRequired = ['/', '/watchlists', '/alerts'].includes(item.route);
+                  router.replace(accountRequired && !signedIn ? '/settings' : item.route);
                 }
               }}
               style={({ pressed }) => [
@@ -62,6 +68,7 @@ export function ProductNav() {
                 style={[
                   styles.label,
                   active && styles.labelActive,
+                  {color:active?colors.text:colors.muted,fontSize:12*scale},
                 ]}
               >
                 {item.label}

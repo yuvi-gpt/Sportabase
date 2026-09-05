@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from inspect import isawaitable
+import os
 from typing import Any, Callable
 
 from fastapi import FastAPI
@@ -203,9 +204,13 @@ def create_application() -> FastAPI:
     _managed_lifespan_handlers(app, _SHUTDOWN_HANDLERS_STATE)
     _install_event_handler_compatibility(app)
 
+    configured_origins = [value.strip() for value in os.getenv("SPORTABASE_ALLOWED_ORIGINS", "").split(",") if value.strip()]
+    production = os.getenv("SPORTABASE_ENV", "development").strip().lower() == "production"
+    if production and not configured_origins:
+        raise RuntimeError("Production requires SPORTABASE_ALLOWED_ORIGINS.")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=configured_origins or ["*"],
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -249,6 +254,11 @@ def compose_application(
             timeout_seconds=PERSISTENT_OPERATIONS_EVENT_TIMEOUT_SECONDS,
         )
     )
+
+    from app.accounts.boundary import AccountBoundary
+    from app.routes.account_product import build_router as account_router
+    app.add_middleware(AccountBoundary, connection_factory=connection_factory)
+    app.include_router(account_router(connection_factory=connection_factory, require_admin=require_admin))
 
     app.include_router(
         product_api.build_router(

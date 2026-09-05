@@ -17,7 +17,6 @@ import {
 
 import {
   createAccentTheme,
-  getScorePalette,
 } from "../ui/accent-theme.js";
 
 const ANALYSIS_STEPS = [
@@ -480,13 +479,6 @@ export function openVideoMode({
     const logicScore =
       clampScore(data.logic_score);
 
-    const supportScore = Math.round(
-      (evidenceScore + logicScore) / 2
-    );
-
-    const scorePalette =
-      getScorePalette(supportScore);
-
     const uiLabels =
       data.ui_labels &&
       typeof data.ui_labels === "object"
@@ -529,7 +521,7 @@ export function openVideoMode({
             </li>
           `;
 
-    accentTheme.apply(scorePalette);
+    accentTheme.clear();
 
     shell.setModeLabel(
       `VIDEO INTELLIGENCE · ${contentTypeLabel.toUpperCase()}`
@@ -541,29 +533,13 @@ export function openVideoMode({
           <div class="sb-result-score-top">
             <div>
               <div class="sb-result-eyebrow">
-                OVERALL SUPPORT
+                VERDICT
               </div>
 
-              <div class="sb-result-score">
-                <strong>
-                  ${supportScore}
-                </strong>
-
-                <span>/100</span>
+              <div class="sb-result-verdict">
+                ${escapeHtml(verdictLabel)}
               </div>
             </div>
-
-            <div class="sb-result-verdict">
-              ${escapeHtml(verdictLabel)}
-            </div>
-          </div>
-
-          <div class="sb-result-score-track">
-            <div
-              style="
-                width:${supportScore}%;
-              "
-            ></div>
           </div>
 
           <div class="sb-result-transcript-meta">

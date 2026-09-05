@@ -44,6 +44,14 @@ def build_router(
 ) -> APIRouter:
     router = APIRouter()
 
+    def track(request, req, kind):
+        account = getattr(request.state, "account", None)
+        if account and connection_factory:
+            from app.accounts.store import record_analysis_best_effort
+            record_analysis_best_effort(connection_factory, account["id"], request.state.device_id,
+                                        kind, getattr(req, "title", ""), req.url)
+
+
     @router.get("/health")
     def health():
         return health_handler()
@@ -107,13 +115,15 @@ def build_router(
         req: VideoAnalyzeRequest,
         request: Request,
     ):
-        return execute_analysis_with_operational_telemetry(
+        response = execute_analysis_with_operational_telemetry(
             handler=analyze_video_handler,
             req=req,
             request=request,
             mode="video",
             event_recorder=operational_event_recorder,
         )
+        track(request, req, "video")
+        return response
 
     @router.post(
         "/analyze",
@@ -131,6 +141,7 @@ def build_router(
             event_recorder=operational_event_recorder,
         )
 
+        track(request, req, "article")
         return attach_article_product_intelligence(
             response=response,
             url=req.url,

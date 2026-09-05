@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.accounts.notification_policy import eligible_at, filter_claims
+
 import base64
 import hashlib
 import ipaddress
@@ -372,6 +374,9 @@ def register_subscription(*, owner_key: str, endpoint: str, p256dh: str, auth: s
         existing = conn.execute(
             "SELECT * FROM product_web_push_subscriptions WHERE subscription_hash=?", (digest,)
         ).fetchone()
+        if existing is not None and existing["client_key"] != owner_key and str(existing["client_key"]).startswith("account:"):
+            raise ValueError("Notification registration belongs to another account.")
+
         registered = existing is None or existing["client_key"] != owner_key or not bool(existing["enabled"])
         if registered:
             count = int(conn.execute(
@@ -478,6 +483,9 @@ def materialize_pending_deliveries(*, connection_factory, clock=time.time) -> di
             ).fetchall()
             scanned += len(rows)
             for row in rows:
+                available = eligible_at(conn, subscription["client_key"], "web", subscription["id"], row["alert_id"], now_epoch)
+                if available is None:
+                    continue
                 cursor = conn.execute(
                     """INSERT OR IGNORE INTO product_web_push_deliveries(
                     id,client_key,subscription_id,alert_id,status,attempts,available_at_epoch,
@@ -485,7 +493,7 @@ def materialize_pending_deliveries(*, connection_factory, clock=time.time) -> di
                     created_at,updated_at,accepted_at
                     ) VALUES(?,?,?,?,'pending',0,?,'',0,'','','',?,?,NULL)""",
                     (_delivery_id(subscription["id"], row["alert_id"]), subscription["client_key"],
-                     subscription["id"], row["alert_id"], now_epoch, now, now),
+                     subscription["id"], row["alert_id"], available, now, now),
                 )
                 created += int(cursor.rowcount or 0)
             if rows:
@@ -524,6 +532,7 @@ def _claim(*, connection_factory, worker_id: str, now_epoch: int, lease_seconds:
             ((d.status='pending' AND d.available_at_epoch<=?) OR (d.status='sending' AND d.lease_expires_at_epoch<=?))
             ORDER BY d.available_at_epoch,d.created_at,d.id LIMIT ?""",
             (MAX_DELIVERY_ATTEMPTS, now_epoch, now_epoch, MAX_DELIVERIES_PER_REQUEST)).fetchall()]
+        ids = filter_claims(conn, ids, "web", now_epoch)
         if not ids:
             conn.commit()
             return []

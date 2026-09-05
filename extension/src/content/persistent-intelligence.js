@@ -1,5 +1,6 @@
 import {
   getSportabaseClientId,
+  mediatedFetch,
   SportabaseApiError,
 } from "./api.js";
 
@@ -92,7 +93,7 @@ async function requestJson(
         });
     }
 
-    const response = await fetch(
+    const response = await (privateRequest ? mediatedFetch : fetch)(
       `${apiBase}${path}`,
       {
         method,

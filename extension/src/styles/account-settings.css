@@ -1,0 +1,21 @@
+.sb-account-settings { color:var(--sb-text); }
+.sb-account-settings > p[role="status"]:empty { display:none; }
+.sb-account-settings > p[role="status"][data-tone="success"] { color:var(--sb-accent); }
+.sb-account-settings > p[role="status"][data-tone="error"] { color:#d93434; }
+.sb-account-settings details { border-bottom:1px solid var(--sb-border); padding:8px 0; }
+.sb-account-settings summary { padding:12px 8px; min-height:44px; cursor:pointer; font-size:16px; font-weight:650; border-inline-start:3px solid transparent; }
+.sb-account-settings details[open] > summary { color:var(--sb-text); border-inline-start-color:var(--sb-accent); background:var(--sb-raised); }
+.sb-account-settings p { color:var(--sb-muted); line-height:1.5; font-size:14px; margin:12px 0; }
+.sb-account-button { background:var(--sb-raised); color:var(--sb-text); border:1px solid var(--sb-border); border-radius:6px; padding:10px 12px; min-height:44px; margin:4px; font:inherit; cursor:pointer; }
+.sb-account-settings .sb-setting-row { flex-wrap:wrap; min-height:48px; gap:8px; font-size:14px; }
+.sb-account-settings .sb-setting-row[hidden] { display:none; }
+.sb-account-settings input:not([type=checkbox]),.sb-account-settings select { min-width:0; max-width:100%; min-height:40px; background:var(--sb-surface); color:var(--sb-text); border:1px solid var(--sb-border); border-radius:6px; padding:8px; font:inherit; }
+.sb-account-settings input[type=checkbox] { width:24px; height:24px; accent-color:#246b16; }
+#sportabase-root .sb-settings-panel :is(button,input,select,summary):focus-visible,
+.sb-extension-settings-page :is(button,input,select,summary):focus-visible { outline:3px solid var(--sb-focus, #7099ef); outline-offset:3px; }
+.sb-high-contrast .sb-settings-panel :is(button,input,select) { border-width:2px; }
+[data-sb-motion="reduce"] *,[data-sb-motion="reduce"] *::before,[data-sb-motion="reduce"] *::after { transition:none !important; animation:none !important; scroll-behavior:auto !important; }
+[data-sb-density="compact"] .sb-setting-row { padding-block:8px; }
+[data-sb-text="large"] .sb-settings-panel { font-size:19px; }
+[data-sb-text="large"] .sb-setting-row, [data-sb-text="large"] .sb-account-settings summary { font-size:19px; }
+[data-sb-text="small"] .sb-settings-panel { font-size:15px; }
