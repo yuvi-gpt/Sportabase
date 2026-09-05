@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import base64
+import io
+import ipaddress
+import socket
+import ssl
+from unittest.mock import Mock
 
 import pytest
+from py_vapid import Vapid
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -264,31 +270,351 @@ def test_hostname_resolving_to_non_global_address_is_rejected(tmp_path):
             endpoint_resolver=private_resolver)
 
 
-def test_public_endpoint_passes_and_safe_session_never_follows_redirect(monkeypatch):
-    calls = []
-    response = type("Response", (), {
-        "status_code": 302, "text": "", "headers": {"Location": "http://127.0.0.1/admin"}
-    })()
-    def fake_request(self, method, url, **kwargs):
-        calls.append((method, url, kwargs))
-        return response
-    monkeypatch.setattr(web_push.requests.Session, "request", fake_request)
-    session = web_push.SafeWebPushSession(resolver=PUBLIC_RESOLVER)
-    result = session.post(ENDPOINT, data=b"encrypted")
-    assert result is response
-    assert len(calls) == 1
-    assert calls[0][2]["allow_redirects"] is False
+def _dns_record(address, port=443):
+    ipv6 = ipaddress.ip_address(address).version == 6
+    return (socket.AF_INET6 if ipv6 else socket.AF_INET, socket.SOCK_STREAM,
+            socket.IPPROTO_TCP, "", (address, port, 0, 0) if ipv6 else (address, port))
 
 
-def test_safe_session_revalidates_dns_on_every_dispatch(monkeypatch):
-    resolutions = iter(["8.8.8.8", "127.0.0.1"])
-    resolver = lambda host, port, **kwargs: [(2, 1, 6, "", (next(resolutions), port))]
-    monkeypatch.setattr(web_push.requests.Session, "request",
-                        lambda self, method, url, **kwargs: object())
-    session = web_push.SafeWebPushSession(resolver=resolver)
-    session.post(ENDPOINT)
-    with pytest.raises(web_push.UnsafeWebPushEndpointError):
+@pytest.fixture
+def push_wire(monkeypatch):
+    """Exercise real requests/urllib3 down to TCP connect and TLS wrap_socket.
+
+    Only OS sockets and the TLS handshake are fake. urllib3 still constructs its
+    SSLContext, loads normal CAs, and checks the supplied certificate hostname.
+    """
+    class Wire:
+        addresses = ["8.8.8.8"]
+        response = b"HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n"
+        certificate = None
+        connect_error = None
+        tls_error = None
+
+        def __init__(self):
+            self.sockets = []
+            self.tls = []
+            self.matches = []
+            self.dns = Mock(side_effect=lambda host, port, **kwargs: [
+                _dns_record(address, port) for address in self.addresses
+            ])
+
+    wire = Wire()
+
+    class FakeSocket:
+        def __init__(self, family, socktype, proto):
+            self.family, self.socktype, self.proto = family, socktype, proto
+            self.destination = None
+            self.sent = b""
+            self.closed = False
+            wire.sockets.append(self)
+
+        def setsockopt(self, *args): pass
+        def settimeout(self, value): self.timeout = value
+        def gettimeout(self): return self.timeout
+        def connect(self, destination):
+            self.destination = destination
+            if wire.connect_error:
+                raise wire.connect_error
+        def sendall(self, data): self.sent += bytes(data)
+        def makefile(self, *args): return io.BytesIO(wire.response)
+        def getpeercert(self):
+            return wire.certificate or {"subjectAltName": (("DNS", self.server_hostname),)}
+        def close(self): self.closed = True
+
+    def wrap_socket(context, sock, *, server_hostname, **kwargs):
+        assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.get_ca_certs()
+        wire.tls.append(server_hostname)
+        if wire.tls_error:
+            raise wire.tls_error
+        sock.server_hostname = server_hostname
+        return sock
+
+    from urllib3 import connection
+    original_match = connection._match_hostname
+    def match_hostname(cert, asserted_hostname, hostname_checks_common_name):
+        wire.matches.append(asserted_hostname)
+        return original_match(cert, asserted_hostname, hostname_checks_common_name)
+
+    monkeypatch.setattr(socket, "socket", FakeSocket)
+    monkeypatch.setattr(socket, "getaddrinfo", wire.dns)
+    monkeypatch.setattr(ssl.SSLContext, "wrap_socket", wrap_socket)
+    monkeypatch.setattr(connection, "_match_hostname", match_hostname)
+    return wire
+
+
+@pytest.mark.parametrize("address", ["8.8.8.8", "2606:4700:4700::1111"])
+@pytest.mark.parametrize("authority,identity,port", [
+    ("push.example.test", "push.example.test", 443),
+    ("push.example.test:443", "push.example.test", 443),
+    ("push.example.test:8443", "push.example.test", 8443),
+    ("püsh.example.test", "xn--psh-hoa.example.test", 443),
+    ("push.example.test.", "push.example.test", 443),
+])
+def test_public_resolution_pins_socket_and_preserves_tls_and_http_identity(
+    push_wire, address, authority, identity, port
+):
+    push_wire.addresses = [address]
+    path = "/subscription/a%2Fb?token=a%2Bb&v=1&v=2"
+    with web_push.SafeWebPushSession() as session:
+        response = session.post("https://" + authority + path, data=b"encrypted", timeout=10,
+                                headers={"Host": "attacker.example"})
+    assert response.status_code == 201
+    push_wire.dns.assert_called_once_with(identity, port, type=socket.SOCK_STREAM)
+    sock, = push_wire.sockets
+    ipv6 = ":" in address
+    assert sock.family == (socket.AF_INET6 if ipv6 else socket.AF_INET)
+    assert sock.destination == ((address, port, 0, 0) if ipv6 else (address, port))
+    assert push_wire.tls == push_wire.matches == [identity]
+    expected_host = authority.replace("püsh", "xn--psh-hoa")
+    assert f"Host: {expected_host}\r\n".encode() in sock.sent
+    assert sock.sent.startswith(f"POST {path} HTTP/1.1\r\n".encode())
+    assert sock.sent.endswith(b"encrypted")
+    assert sock.closed
+
+
+@pytest.mark.parametrize("private", ["127.0.0.1", "169.254.169.254"])
+def test_rebinding_cannot_change_socket_destination_and_next_attempt_revalidates(push_wire, private):
+    push_wire.dns.side_effect = [[_dns_record("8.8.8.8")], [_dns_record(private)]]
+    with web_push.SafeWebPushSession() as session:
         session.post(ENDPOINT)
+        assert push_wire.dns.call_count == 1
+        assert [sock.destination for sock in push_wire.sockets] == [("8.8.8.8", 443)]
+        with pytest.raises(web_push.UnsafeWebPushEndpointError):
+            session.post(ENDPOINT)
+    assert push_wire.dns.call_count == 2
+    assert len(push_wire.sockets) == 1
+
+
+@pytest.mark.parametrize("address", [
+    "127.0.0.1", "10.1.2.3", "172.16.0.1", "172.31.255.254", "192.168.1.1",
+    "169.254.169.254", "0.0.0.0", "100.64.0.1", "192.0.2.1", "224.0.0.1", "240.0.0.1",
+    "::1", "fe80::1", "fc00::1", "fd00::1", "::", "ff02::1", "2001:db8::1",
+    "::ffff:127.0.0.1", "64:ff9b:1::a00:1", "64:ff9b::7f00:1", "2002:7f00:1::",
+])
+@pytest.mark.parametrize("mixed", [False, True])
+def test_unsafe_dns_answer_rejects_entire_destination_before_connect(push_wire, address, mixed):
+    push_wire.addresses = (["8.8.8.8"] if mixed else []) + [address]
+    with web_push.SafeWebPushSession() as session:
+        with pytest.raises(web_push.UnsafeWebPushEndpointError):
+            session.post(ENDPOINT)
+    assert not push_wire.sockets
+
+
+@pytest.mark.parametrize("endpoint", [
+    "https://localhost./push", "https://sub.localhost./push", "https://127.0.0.1/push",
+    "https://10.0.0.1/push", "https://172.16.0.1/push", "https://192.168.0.1/push",
+    "https://169.254.169.254/push", "https://[::1]/push", "https://[fc00::1]/push",
+    "https://[fe80::1]/push", "https://[::]/push", "https://[ff02::1]/push",
+    "https://[2606:4700:4700::1111%25eth0]/push", "https://push.example.test:0/push",
+])
+def test_unsafe_literal_and_localhost_endpoints_cannot_connect(push_wire, endpoint):
+    with web_push.SafeWebPushSession() as session:
+        with pytest.raises(web_push.UnsafeWebPushEndpointError):
+            session.post(endpoint)
+    assert not push_wire.sockets
+
+
+@pytest.mark.parametrize("address", ["8.8.8.8", "2606:4700:4700::1111"])
+def test_public_literal_needs_no_resolver_and_formats_ipv6_host(push_wire, address):
+    authority = f"[{address}]:8443" if ":" in address else f"{address}:8443"
+    push_wire.certificate = {"subjectAltName": (("IP Address", address),)}
+    with web_push.SafeWebPushSession() as session:
+        session.post(f"https://{authority}/push")
+    push_wire.dns.assert_not_called()
+    sock, = push_wire.sockets
+    assert sock.destination[0:2] == (address, 8443)
+    assert f"Host: {authority}\r\n".encode() in sock.sent
+    assert push_wire.matches == [address]
+
+
+def test_all_public_answers_choose_first_in_resolver_order(push_wire):
+    push_wire.addresses = ["2606:4700:4700::1111", "8.8.8.8", "1.1.1.1"]
+    with web_push.SafeWebPushSession() as session:
+        session.post(ENDPOINT)
+    assert [sock.destination for sock in push_wire.sockets] == [(push_wire.addresses[0], 443, 0, 0)]
+
+
+@pytest.mark.parametrize("path", [
+    "/a/../push/%7Etoken?key=%2B&key=%7E", "//push/token?key=one", "/push?", "/?key=one",
+    "/push/%2ftoken?key=%2b&key=%7e",
+])
+def test_original_endpoint_path_and_query_survive_request_preparation(push_wire, path):
+    with web_push.SafeWebPushSession() as session:
+        session.post("https://push.example.test" + path)
+    assert push_wire.sockets[0].sent.startswith(f"POST {path} HTTP/1.1\r\n".encode())
+
+
+def test_prepared_request_cannot_bypass_pin_or_force_redirects(push_wire):
+    request = web_push.requests.Request("POST", ENDPOINT).prepare()
+    push_wire.response = b"HTTP/1.1 302 Redirect\r\nLocation: https://127.0.0.1/\r\nContent-Length: 0\r\n\r\n"
+    with web_push.SafeWebPushSession() as session:
+        response = session.send(request, allow_redirects=True)
+    assert response.status_code == 302
+    assert push_wire.dns.call_count == len(push_wire.sockets) == 1
+    assert push_wire.sockets[0].destination == ("8.8.8.8", 443)
+
+
+def test_registration_dns_outage_has_generic_validation_error(push_wire):
+    push_wire.dns.side_effect = socket.gaierror("secret DNS detail")
+    with pytest.raises(ValueError, match="public HTTPS URL"):
+        web_push.validate_subscription(endpoint=ENDPOINT, p256dh=P256DH, auth=AUTH)
+    assert not push_wire.sockets
+
+
+@pytest.mark.parametrize("records", [[], None, [(2,)], [_dns_record("8.8.8.8", 80)],
+    [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("not-an-ip", 443))],
+    [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))],
+    [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2606:4700:4700::1111", 443, 0, 1))],
+])
+def test_malformed_dns_records_fail_closed(push_wire, records):
+    push_wire.dns.side_effect = None
+    push_wire.dns.return_value = records
+    with web_push.SafeWebPushSession() as session:
+        with pytest.raises(web_push.UnsafeWebPushEndpointError):
+            session.post(ENDPOINT)
+    assert not push_wire.sockets
+
+
+@pytest.mark.parametrize("no_proxy", ["", "*", "push.example.test"])
+def test_environment_proxies_cannot_bypass_pinning(push_wire, monkeypatch, no_proxy):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9999")
+    monkeypatch.setenv("NO_PROXY", no_proxy)
+    with web_push.SafeWebPushSession() as session:
+        assert session.trust_env is False
+        session.post(ENDPOINT)
+    assert [sock.destination for sock in push_wire.sockets] == [("8.8.8.8", 443)]
+    assert push_wire.tls == ["push.example.test"]
+    assert b"CONNECT " not in push_wire.sockets[0].sent
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"proxies": {"https": "http://127.0.0.1:9999"}}, {"verify": False},
+])
+def test_explicit_proxy_or_disabled_tls_is_rejected(push_wire, kwargs):
+    with web_push.SafeWebPushSession() as session:
+        with pytest.raises(web_push.UnsafeWebPushEndpointError):
+            session.post(ENDPOINT, **kwargs)
+    assert not push_wire.sockets
+
+
+@pytest.mark.parametrize("failure", ["hostname", "chain", "connect", "timeout", "dns"])
+def test_transport_failure_has_no_unpinned_fallback_and_no_secret_details(push_wire, failure):
+    if failure == "hostname":
+        push_wire.certificate = {"subjectAltName": (("DNS", "attacker.example"),)}
+    elif failure == "chain":
+        push_wire.tls_error = ssl.SSLCertVerificationError("private certificate detail")
+    elif failure == "connect":
+        push_wire.connect_error = OSError("8.8.8.8 secret endpoint token")
+    elif failure == "timeout":
+        push_wire.connect_error = TimeoutError("8.8.8.8 secret endpoint token")
+    else:
+        push_wire.dns.side_effect = socket.gaierror("internal DNS detail")
+    with web_push.SafeWebPushSession() as session:
+        with pytest.raises(web_push.WebPushTransportError) as error:
+            session.post(ENDPOINT, timeout=1)
+    assert str(error.value) in {
+        "Web Push transport failed.", "Web Push endpoint destination could not be resolved."
+    }
+    assert push_wire.dns.call_count == 1
+    assert len(push_wire.sockets) == (0 if failure == "dns" else 1)
+    assert not any(sock.sent for sock in push_wire.sockets)
+    assert all(sock.closed for sock in push_wire.sockets)
+
+
+def _real_provider_sender(**kwargs):
+    vapid = Vapid()
+    vapid.generate_keys()
+    return web_push._default_sender(**{**kwargs, "vapid_private_key": vapid})
+
+
+def test_reconciliation_and_materialization_remain_provider_free(tmp_path, monkeypatch, push_wire):
+    forbidden = Mock(side_effect=AssertionError("Provider call during reconciliation"))
+    monkeypatch.setattr("pywebpush.webpush", forbidden)
+    monkeypatch.setattr(web_push.requests.Session, "request", forbidden)
+    factory = _factory(tmp_path)
+    _future_delivery(factory)
+    assert _delivery(factory)["status"] == "pending"
+    forbidden.assert_not_called()
+    push_wire.dns.assert_not_called()
+    assert not push_wire.sockets
+
+
+@pytest.mark.parametrize("status", [301, 302, 307, 308])
+@pytest.mark.parametrize("location", [
+    "http://127.0.0.1/admin", "https://169.254.169.254/latest", "https://other.example.test/push",
+])
+def test_real_provider_redirect_is_failed_without_second_connection(tmp_path, push_wire, status, location):
+    factory = _factory(tmp_path)
+    _future_delivery(factory)
+    push_wire.response = (
+        f"HTTP/1.1 {status} Redirect\r\nLocation: {location}\r\nContent-Length: 0\r\n\r\n"
+    ).encode()
+    result = web_push.dispatch_pending_deliveries(
+        connection_factory=factory, sender=_real_provider_sender,
+        env_getter=_env(), clock=lambda: 2_000_000_000,
+    )
+    assert result["web_failed"] == 1 and result["web_retried"] == 0
+    assert _delivery(factory)["error_type"] == f"provider_http_{status}"
+    assert push_wire.dns.call_count == len(push_wire.sockets) == 1
+    assert push_wire.sockets[0].destination == ("8.8.8.8", 443)
+
+
+@pytest.mark.parametrize("status,outcome", [
+    (201, "web_accepted"), (404, "web_invalid_subscriptions"), (410, "web_invalid_subscriptions"),
+    (429, "web_retried"), (500, "web_retried"), (503, "web_retried"), (400, "web_failed"),
+])
+def test_real_provider_preserves_delivery_outcomes(tmp_path, push_wire, status, outcome):
+    factory = _factory(tmp_path)
+    _future_delivery(factory)
+    push_wire.response = f"HTTP/1.1 {status} Provider\r\nContent-Length: 0\r\n\r\n".encode()
+    result = web_push.dispatch_pending_deliveries(
+        connection_factory=factory, sender=_real_provider_sender,
+        env_getter=_env(), clock=lambda: 2_000_000_000,
+    )
+    assert result[outcome] == 1
+    assert push_wire.dns.call_count == len(push_wire.sockets) == 1
+
+
+@pytest.mark.parametrize("failure", ["unsafe", "dns", "connect"])
+def test_real_transport_failure_invalidation_and_retry_semantics(tmp_path, push_wire, failure):
+    factory = _factory(tmp_path)
+    _future_delivery(factory)
+    if failure == "unsafe":
+        push_wire.addresses = ["8.8.8.8", "169.254.169.254"]
+    elif failure == "dns":
+        push_wire.dns.side_effect = socket.gaierror("secret DNS detail")
+    else:
+        push_wire.connect_error = OSError("secret socket detail")
+    result = web_push.dispatch_pending_deliveries(
+        connection_factory=factory, sender=_real_provider_sender,
+        env_getter=_env(), clock=lambda: 2_000_000_000,
+    )
+    assert result["web_invalid_subscriptions" if failure == "unsafe" else "web_retried"] == 1
+    assert _delivery(factory)["error_type"] == ("unsafe_endpoint" if failure == "unsafe" else "provider_transport")
+    assert "secret" not in _delivery(factory)["error_detail"]
+    assert len(push_wire.sockets) == (1 if failure == "connect" else 0)
+
+
+@pytest.mark.parametrize("hostname,wns", [
+    ("edge.notify.windows.com", True), ("fcm.googleapis.com", False),
+    ("notify.windows.com.attacker.test", False), ("evilnotify.windows.com", False),
+])
+def test_real_pywebpush_wns_uses_same_pinned_transport(push_wire, hostname, wns):
+    endpoint = f"https://{hostname}/w/token"
+    _real_provider_sender(
+        subscription_info={"endpoint": endpoint, "keys": {"p256dh": P256DH, "auth": AUTH}},
+        data="{}", vapid_claims={"sub": "mailto:test@example.test"}, timeout=10,
+        headers=web_push._provider_headers(endpoint),
+    )
+    sock, = push_wire.sockets
+    assert sock.destination == ("8.8.8.8", 443)
+    assert push_wire.tls == push_wire.matches == [hostname]
+    assert f"Host: {hostname}\r\n".encode() in sock.sent
+    assert (b"x-wns-type: wns/raw\r\n" in sock.sent.lower()) is wns
+    if wns:
+        assert b"content-type: application/octet-stream\r\n" in sock.sent.lower()
 
 
 @pytest.mark.parametrize("endpoint,expected", [

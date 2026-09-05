@@ -13,6 +13,9 @@ from urllib.parse import urlsplit
 
 import requests
 from cryptography.hazmat.primitives.asymmetric import ec
+from urllib3.connection import HTTPSConnection
+from urllib3.connectionpool import HTTPSConnectionPool
+from urllib3.exceptions import ConnectTimeoutError, NewConnectionError
 
 
 VERSION = "web-push-v1"
@@ -37,6 +40,10 @@ class WebPushLimitError(RuntimeError):
 
 
 class UnsafeWebPushEndpointError(RuntimeError):
+    pass
+
+
+class WebPushTransportError(requests.ConnectionError):
     pass
 
 
@@ -86,18 +93,21 @@ def _endpoint_parts(endpoint: str):
         port = parsed.port
     except ValueError as exc:
         raise ValueError("Web Push endpoint is invalid.") from exc
-    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+    if (parsed.scheme != "https" or not parsed.hostname or "@" in parsed.netloc
+            or parsed.fragment or port == 0 or "\\" in endpoint
+            or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in endpoint)
+            or "%" in parsed.hostname):
         raise ValueError("Web Push endpoint must be a valid HTTPS URL.")
-    return parsed, port or 443
+    return parsed, 443 if port is None else port
 
 
-def _resolve_public_endpoint(endpoint: str, *, resolver=None) -> None:
+def _resolve_public_endpoint(endpoint: str, *, resolver=None) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
     parsed, port = _endpoint_parts(endpoint)
-    hostname = parsed.hostname.casefold()
+    hostname = parsed.hostname.casefold().rstrip(".")
     if hostname == "localhost" or hostname.endswith(".localhost"):
         raise UnsafeWebPushEndpointError("Web Push endpoint is not a public destination.")
     try:
-        literal = ipaddress.ip_address(hostname.split("%", 1)[0])
+        literal = ipaddress.ip_address(hostname)
     except ValueError:
         literal = None
     if literal is not None:
@@ -106,27 +116,157 @@ def _resolve_public_endpoint(endpoint: str, *, resolver=None) -> None:
         try:
             resolver = resolver or socket.getaddrinfo
             records = resolver(hostname, port, type=socket.SOCK_STREAM)
-            addresses = tuple(
-                ipaddress.ip_address(str(record[4][0]).split("%", 1)[0])
-                for record in records
-            )
-        except (OSError, ValueError) as exc:
-            raise UnsafeWebPushEndpointError("Web Push endpoint destination could not be verified.") from exc
-    if not addresses or any(not address.is_global for address in addresses):
+        except OSError:
+            raise WebPushTransportError("Web Push endpoint destination could not be resolved.") from None
+        except ValueError:
+            raise UnsafeWebPushEndpointError("Web Push endpoint destination could not be verified.") from None
+        try:
+            addresses = []
+            for family, socktype, proto, _, sockaddr in records:
+                if not isinstance(sockaddr[0], str):
+                    raise ValueError("Invalid address record")
+                address = ipaddress.ip_address(sockaddr[0])
+                expected_family = socket.AF_INET if address.version == 4 else socket.AF_INET6
+                if (family != expected_family or socktype != socket.SOCK_STREAM
+                        or proto not in (0, socket.IPPROTO_TCP) or "%" in str(address)
+                        or sockaddr[1] != port
+                        or (address.version == 4 and len(sockaddr) != 2)
+                        or (address.version == 6 and (len(sockaddr) != 4 or sockaddr[2:] != (0, 0)))):
+                    raise ValueError("Invalid address record")
+                addresses.append(address)
+        except (ValueError, TypeError, IndexError):
+            raise UnsafeWebPushEndpointError("Web Push endpoint destination could not be verified.") from None
+    if not addresses or any(
+        not address.is_global or address.is_multicast or address.is_reserved
+        or address.is_loopback or address.is_link_local or address.is_unspecified
+        or address.is_private for address in addresses
+    ):
         raise UnsafeWebPushEndpointError("Web Push endpoint is not a public destination.")
+    # Respect the OS resolver's address preference, but only after checking ALL answers.
+    return addresses[0]
+
+
+class _PinnedHTTPSConnection(HTTPSConnection):
+    """Pin TCP and retain the request target; urllib3 owns all TLS operations."""
+
+    def __init__(self, *args, pinned_address, request_target, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._pinned_address = pinned_address
+        self._request_target = request_target
+
+    def request(self, method, url, *args, **kwargs):
+        # Retain opaque path/query bytes, including percent-escape casing, which
+        # urllib3's pool URL normalization would otherwise change.
+        return super().request(method, self._request_target, *args, **kwargs)
+
+    def _new_conn(self):
+        # Do not use create_connection(): it calls getaddrinfo again. A canonical
+        # numeric address with an explicit family goes straight to socket.connect.
+        address = self._pinned_address
+        family = socket.AF_INET if address.version == 4 else socket.AF_INET6
+        destination = (str(address), self.port)
+        if address.version == 6:
+            destination += (0, 0)
+        sock = None
+        try:
+            sock = socket.socket(family, socket.SOCK_STREAM, socket.IPPROTO_TCP)
+            for option in self.socket_options or ():
+                sock.setsockopt(*option)
+            sock.settimeout(self.timeout)
+            sock.connect(destination)
+            return sock
+        except OSError as exc:
+            if sock is not None:
+                sock.close()
+            if isinstance(exc, TimeoutError):
+                raise ConnectTimeoutError(self, "Web Push connection timed out.") from None
+            raise NewConnectionError(self, "Web Push connection failed.") from None
+
+
+class _PinnedHTTPSConnectionPool(HTTPSConnectionPool):
+    ConnectionCls = _PinnedHTTPSConnection
+
+
+class _PinnedWebPushAdapter(requests.adapters.HTTPAdapter):
+    def __init__(self, *, hostname, port, address, request_target):
+        super().__init__(max_retries=0)
+        self._pinned_pool = _PinnedHTTPSConnectionPool(
+            hostname, port, pinned_address=address, request_target=request_target,
+            server_hostname=hostname, assert_hostname=hostname,
+            cert_reqs="CERT_REQUIRED",
+        )
+
+    def get_connection_with_tls_context(self, request, verify, proxies=None, cert=None):
+        return self._pinned_pool
+
+    def get_connection(self, url, proxies=None):
+        # Requests before 2.32.2 uses this adapter extension point instead.
+        return self._pinned_pool
+
+    def close(self):
+        self._pinned_pool.close()
+        super().close()
 
 
 class SafeWebPushSession(requests.Session):
-    """Requests session that blocks redirects and revalidates DNS at send time."""
+    """Direct, one-attempt Web Push transport with an isolated pinned pool.
+
+    Request preparation stays in requests; send deliberately calls the adapter
+    directly, without Session.send's redirect, cookie, or response-hook machinery.
+    """
 
     def __init__(self, *, resolver=None):
         super().__init__()
+        self.trust_env = False
         self._sportabase_resolver = resolver
 
-    def request(self, method, url, **kwargs):
-        _resolve_public_endpoint(url, resolver=self._sportabase_resolver)
-        kwargs["allow_redirects"] = False
-        return super().request(method, url, **kwargs)
+    def prepare_request(self, request):
+        try:
+            original, _ = _endpoint_parts(request.url)
+            prepared = super().prepare_request(request)
+        except (ValueError, requests.RequestException):
+            raise UnsafeWebPushEndpointError("Web Push endpoint is invalid.") from None
+        # Endpoint paths can contain opaque subscription tokens. Retain their
+        # escapes and dot segments instead of requests' path normalization.
+        if request.params or self.params:
+            raise UnsafeWebPushEndpointError("Web Push endpoint is invalid.")
+        authority = urlsplit(prepared.url).netloc
+        prepared.url = "https://" + authority + (original.path or "/")
+        if "?" in request.url:
+            prepared.url += "?" + original.query
+        return prepared
+
+    def send(self, request, **kwargs):
+        try:
+            parsed, port = _endpoint_parts(request.url)
+            address = _resolve_public_endpoint(request.url, resolver=self._sportabase_resolver)
+        except ValueError:
+            raise UnsafeWebPushEndpointError("Web Push endpoint is invalid.") from None
+        if request.method != "POST" or kwargs.get("proxies") or self.proxies:
+            raise UnsafeWebPushEndpointError("Web Push requires a direct HTTPS POST.")
+        if kwargs.get("verify", self.verify) is not True:
+            raise UnsafeWebPushEndpointError("Web Push requires certificate verification.")
+        # The prepared URL supplies one canonical identity (including IDNA).
+        hostname = parsed.hostname.rstrip(".")
+        request.headers["Host"] = parsed.netloc
+        request_target = (parsed.path or "/") + ("?" + parsed.query if "?" in request.url else "")
+        adapter = _PinnedWebPushAdapter(
+            hostname=hostname, port=port, address=address, request_target=request_target,
+        )
+        try:
+            response = adapter.send(request, timeout=kwargs.get("timeout"), verify=True, proxies={})
+            # Fully consume before closing this attempt's pool; no connection reuse
+            # across resolutions, automatic redirects, or hidden transport retries.
+            try:
+                response.content
+            finally:
+                response.close()
+            return response
+        except (requests.RequestException, OSError):
+            # Transport exceptions can contain endpoint tokens and socket addresses.
+            raise WebPushTransportError("Web Push transport failed.") from None
+        finally:
+            adapter.close()
 
 
 def validate_subscription(
@@ -139,7 +279,7 @@ def validate_subscription(
     _endpoint_parts(normalized_endpoint)
     try:
         _resolve_public_endpoint(normalized_endpoint, resolver=endpoint_resolver)
-    except UnsafeWebPushEndpointError as exc:
+    except (UnsafeWebPushEndpointError, WebPushTransportError) as exc:
         raise ValueError("Web Push endpoint must be a public HTTPS URL.") from exc
     public_key = _validate_public_key(p256dh, "p256dh key")
     auth_secret = _validate_auth_secret(auth)
