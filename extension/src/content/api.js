@@ -323,7 +323,13 @@ export async function mediatedFetch(url, options={}) {
     };
     signal?.addEventListener("abort",abort,{once:true});
     chrome.runtime.sendMessage({type:"SPORTABASE_API_REQUEST",requestId,path:parsed.pathname+parsed.search,method:options.method||"GET",...(options.body?{body:JSON.parse(options.body)}:{})}).then(result=>{
-      if(!result?.ok)throw new SportabaseApiError(result?.error||"Sign in to Sportabase to continue.",{status:401});
+      if(!result?.ok){
+        const failure=result?.error;
+        const message=typeof failure==='object'&&failure?failure.message:failure;
+        const status=typeof failure==='object'&&failure&&Number.isInteger(failure.status)?failure.status:0;
+        const code=typeof failure==='object'&&failure&&typeof failure.code==='string'?failure.code:'';
+        throw new SportabaseApiError(message||"The Sportabase extension request failed.",{status,details:code});
+      }
       resolve(new Response(result.status===204?null:result.body,{status:result.status}));
     }).catch(reject).finally(()=>signal?.removeEventListener("abort",abort));
   });

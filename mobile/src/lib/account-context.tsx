@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type PropsWithChildren } from 'react';
 import { ClerkProvider, useAuth, useClerk, useUser } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import { useHostedAuth } from '@clerk/expo/hosted-auth';
@@ -30,12 +30,19 @@ function ConnectedAccount({children}: PropsWithChildren) {
   const [preferences,setPreferences] = useState<Preferences>(contract.defaults);
   const [error,setError] = useState('');
   const [ready,setReady] = useState(false);
+  const accountIdentity = useRef('');
+  const refreshEpoch = useRef(0);
   function accept(next: AccountState) {
     setState(next); setPreferences(next.effective);
     const keys = [...contract.sections.Appearance, 'analysis_detail', 'date_format', 'language'] as (keyof Preferences)[];
     void AsyncStorage.setItem('sportabase:appearance:v1',JSON.stringify(Object.fromEntries(keys.map(key=>[key,next.effective[key]])))).catch(()=>{});
   }
   async function refresh() {
+    const epoch = ++refreshEpoch.current;
+    const expectedIdentity = accountIdentity.current;
+    const isCurrent = () => Boolean(expectedIdentity)
+      && epoch === refreshEpoch.current
+      && accountIdentity.current === expectedIdentity;
     setError('');
     try {
       const complete = await AsyncStorage.getItem(LEGACY_MIGRATION_KEY) === 'complete';
@@ -46,16 +53,20 @@ function ConnectedAccount({children}: PropsWithChildren) {
       if(next.legacy_migration?.status && next.legacy_migration.status !== 'not_requested') {
         await AsyncStorage.setItem(LEGACY_MIGRATION_KEY,'complete');
       }
+      if(!isCurrent()) return;
       accept(next);
     }
-    catch (problem) { setError(problem instanceof Error?problem.message:'Could not sync account.'); }
+    catch (problem) { if(isCurrent()) setError(problem instanceof Error?problem.message:'Could not sync account.'); }
   }
   useEffect(()=>{ void AsyncStorage.getItem('sportabase:appearance:v1').then(value=>{ if(value) setPreferences({...contract.defaults,...JSON.parse(value)}); }).catch(()=>{}); },[]);
   useEffect(()=>{
     let active = true;
+    const identity = isSignedIn ? user?.id || '' : '';
+    accountIdentity.current = identity;
+    refreshEpoch.current += 1;
     setState(null); setReady(false);
     setTokenGetter(isSignedIn?getToken:null);
-    if(isLoaded && isSignedIn) void refresh().finally(()=>{if(active)setReady(true);});
+    if(isLoaded && isSignedIn && identity) void refresh().finally(()=>{if(active)setReady(true);});
     else if(isLoaded) setReady(true);
     return ()=>{active=false;setTokenGetter(null);};
   },[isLoaded,isSignedIn,user?.id,getToken]);
@@ -70,7 +81,9 @@ function ConnectedAccount({children}: PropsWithChildren) {
       await accountRequest('/account/device/sign-out','POST');
       try { await clearPushRegistrationAfterBackendRevocation(); }
       catch (problem) { console.warn('Backend push was revoked, but local notification state could not be cleared.', problem); }
-      await signOut(); setTokenGetter(null);setState(null);
+      await signOut();
+      accountIdentity.current='';refreshEpoch.current+=1;
+      setTokenGetter(null);setState(null);
     },
     manage:async()=>{ await clerk.redirectToUserProfile(); },
   };

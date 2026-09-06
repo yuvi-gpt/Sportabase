@@ -6,7 +6,7 @@ const names = ["Account", "Appearance", "Notifications", "Analysis", "My Activit
 const dialog = document.getElementById("settings-dialog");
 const content = document.getElementById("settings-content");
 const status = document.getElementById("settings-status");
-let section = "Account", scope = "device", busy = false, generation = 0;
+let section = "Account", scope = "device", busy = false, generation = 0, accountSyncEpoch = 0;
 const narrow = () => matchMedia("(max-width: 600px)").matches;
 const label = value => ({ en: "English", iso: "YYYY-MM-DD", system: "Use system setting" })[value] || value[0].toUpperCase() + value.slice(1);
 function node(tag, text, props = {}) { const element = document.createElement(tag); if (text) element.textContent = text; Object.assign(element, props); return element; }
@@ -224,16 +224,20 @@ document.getElementById("data-confirmation").addEventListener("keydown", event =
   if (event.shiftKey && document.activeElement === controls[0]) { event.preventDefault(); controls.at(-1).focus(); }
   else if (!event.shiftKey && document.activeElement === controls.at(-1)) { event.preventDefault(); controls[0].focus(); }
 });
-async function synchronize() {
+async function synchronize(epoch = ++accountSyncEpoch) {
+  const expectedUserId = auth.state.userId;
+  const isCurrent = () => epoch === accountSyncEpoch && auth.state.signedIn && auth.state.userId === expectedUserId;
   message("Syncing account…");
   try {
-    await bootstrap(persistentClientId(localStorage, crypto));
+    const state = await bootstrap(persistentClientId(localStorage, crypto), { isCurrent });
+    if (!state || !isCurrent()) return;
     message("Account connected"); render(); document.dispatchEvent(new Event("sportabase:account-ready"));
-  } catch (error) { message(error.message); render(); }
+  } catch (error) { if (isCurrent()) { message(error.message); render(); } }
 }
 auth.subscribe(state => {
+  const epoch = ++accountSyncEpoch;
   document.getElementById("account-label").textContent = state.signedIn ? "Account" : "Sign in";
-  if (state.signedIn) void synchronize();
+  if (state.signedIn) void synchronize(epoch);
   else { clearAccountState(); render(); }
 });
 void initializeAuth();

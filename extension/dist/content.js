@@ -412,6 +412,23 @@
     }
   });
 
+  // src/content/trusted-events.mjs
+  function trustedUserAction(handler) {
+    if (typeof handler !== "function") {
+      throw new TypeError("Trusted user action requires a function.");
+    }
+    return function handleTrustedUserAction(event, ...args) {
+      if (!event?.isTrusted) {
+        return void 0;
+      }
+      return handler.call(this, event, ...args);
+    };
+  }
+  var init_trusted_events = __esm({
+    "src/content/trusted-events.mjs"() {
+    }
+  });
+
   // src/ui/settings.js
   function installSettingsDrawer({
     overlay,
@@ -880,9 +897,9 @@
     accountButton.type = "button";
     accountButton.className = "sb-settings-action";
     accountButton.textContent = "Open account settings";
-    accountButton.addEventListener("click", () => {
+    accountButton.addEventListener("click", trustedUserAction(() => {
       void chrome.runtime.sendMessage({ type: "SPORTABASE_OPEN_EXTENSION_SETTINGS" }).catch((error) => console.error("[sportabase] Could not open account settings:", error));
-    });
+    }));
     accountGroup.append(accountTitle, accountCopy, accountButton);
     layer.querySelector(".sb-settings-content")?.prepend(accountGroup);
     layer.addEventListener("keydown", (event) => {
@@ -909,6 +926,7 @@
   var init_settings = __esm({
     "src/ui/settings.js"() {
       init_preferences();
+      init_trusted_events();
     }
   });
 
@@ -2184,7 +2202,13 @@
       };
       signal?.addEventListener("abort", abort, { once: true });
       chrome.runtime.sendMessage({ type: "SPORTABASE_API_REQUEST", requestId, path: parsed.pathname + parsed.search, method: options.method || "GET", ...options.body ? { body: JSON.parse(options.body) } : {} }).then((result) => {
-        if (!result?.ok) throw new SportabaseApiError(result?.error || "Sign in to Sportabase to continue.", { status: 401 });
+        if (!result?.ok) {
+          const failure = result?.error;
+          const message = typeof failure === "object" && failure ? failure.message : failure;
+          const status = typeof failure === "object" && failure && Number.isInteger(failure.status) ? failure.status : 0;
+          const code = typeof failure === "object" && failure && typeof failure.code === "string" ? failure.code : "";
+          throw new SportabaseApiError(message || "The Sportabase extension request failed.", { status, details: code });
+        }
         resolve(new Response(result.status === 204 ? null : result.body, { status: result.status }));
       }).catch(reject).finally(() => signal?.removeEventListener("abort", abort));
     });
@@ -3190,7 +3214,7 @@
           "[data-sb-article-analyze]"
         )?.addEventListener(
           "click",
-          runAnalysis
+          trustedUserAction(runAnalysis)
         );
       }
     }
@@ -3263,7 +3287,7 @@
         "[data-sb-article-retry]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
       shell.content.querySelector(
         "[data-sb-article-back]"
@@ -3525,7 +3549,7 @@
         "[data-sb-article-reanalyze]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
     }
     async function runAnalysis() {
@@ -3685,6 +3709,7 @@
       init_request_lifecycle();
       init_article_intelligence();
       init_accent_theme();
+      init_trusted_events();
       ANALYSIS_STEPS = [
         {
           message: "Identifying the article's central story\u2026",
@@ -4218,7 +4243,7 @@
         "[data-sb-video-analyze]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
     }
     function renderError(error) {
@@ -4308,7 +4333,7 @@
         "[data-sb-video-retry]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
       shell.content.querySelector(
         "[data-sb-video-back]"
@@ -4503,7 +4528,7 @@
         "[data-sb-video-reanalyze]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
     }
     async function runAnalysis() {
@@ -4628,6 +4653,7 @@
       init_loader2();
       init_request_lifecycle();
       init_accent_theme();
+      init_trusted_events();
       ANALYSIS_STEPS2 = [
         {
           message: "Identifying the video's central claim\u2026",
@@ -6825,12 +6851,12 @@
           }
         });
       });
-      host.querySelector("[data-sb-pi-watch]")?.addEventListener("click", () => {
+      host.querySelector("[data-sb-pi-watch]")?.addEventListener("click", trustedUserAction(() => {
         void addWatch();
-      });
-      host.querySelector("[data-sb-pi-activity]")?.addEventListener("click", () => {
+      }));
+      host.querySelector("[data-sb-pi-activity]")?.addEventListener("click", trustedUserAction(() => {
         void checkActivity();
-      });
+      }));
       host.querySelector("[data-sb-pi-more]")?.addEventListener("click", () => {
         void loadMoreHistory();
       });
@@ -7323,6 +7349,7 @@
     "src/content/persistent-intelligence.js"() {
       init_api();
       init_persistent_intelligence_core();
+      init_trusted_events();
       REQUEST_TIMEOUT_MS = 22e3;
       MAX_ALERT_PAGES = 3;
       ALERT_PAGE_LIMIT = 100;

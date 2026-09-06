@@ -14,6 +14,10 @@ import {
   mediaItemIdForUrl,
 } from "./persistent-intelligence-core.mjs";
 
+import {
+  trustedUserAction,
+} from "./trusted-events.mjs";
+
 const REQUEST_TIMEOUT_MS = 22000;
 const MAX_ALERT_PAGES = 3;
 const ALERT_PAGE_LIMIT = 100;
@@ -453,15 +457,15 @@ function createPanel({
 
     host
       .querySelector("[data-sb-pi-watch]")
-      ?.addEventListener("click", () => {
+      ?.addEventListener("click", trustedUserAction(() => {
         void addWatch();
-      });
+      }));
 
     host
       .querySelector("[data-sb-pi-activity]")
-      ?.addEventListener("click", () => {
+      ?.addEventListener("click", trustedUserAction(() => {
         void checkActivity();
-      });
+      }));
 
     host
       .querySelector("[data-sb-pi-more]")

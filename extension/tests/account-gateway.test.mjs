@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAccountGateway, localPreferences, presentationPreferences, validateApiMessage, validExtensionPageSender, validSender } from '../src/background/account-gateway.mjs';
+import { AccountGatewayError, createAccountGateway, localPreferences, presentationPreferences, serializeGatewayError, validateApiMessage, validExtensionPageSender, validSender } from '../src/background/account-gateway.mjs';
 
 const sender = { id: 'extension-id', tab: { id: 7 }, frameId: 0, url: 'https://example.com/story' };
 const extensionSender = { id: 'extension-id', url: 'chrome-extension://extension-id/settings.html' };
@@ -87,4 +87,42 @@ test('extension sign-out revokes the backend device before ending Clerk session'
     fetchImpl:async url=>{order.push(new URL(url).pathname);return{status:200,async text(){return '{}'}};}});
   assert.deepEqual(await gateway.handle({type:'SPORTABASE_SIGN_OUT'},extensionSender),{ok:true});
   assert.deepEqual(order,['/account/device/sign-out','clerk']);
+});
+
+test('stale extension bootstrap responses are discarded after an account switch', async () => {
+  const saved={};
+  let release;
+  let started;
+  const startedPromise=new Promise(resolve=>{started=resolve;});
+  const responsePromise=new Promise(resolve=>{release=resolve;});
+  const sessionA={id:'session-a',getToken:async()=> 'token-a'};
+  const sessionB={id:'session-b',getToken:async()=> 'token-b'};
+  const clerk={session:sessionA};
+  const chrome={runtime:{id:'extension-id',getURL:path=>`chrome-extension://extension-id/${path}`},
+    storage:{local:{async get(){return{}},async set(value){Object.assign(saved,value);}}},tabs:{async create(){}}};
+  const gateway=createAccountGateway({chrome,config:{publishableKey:'pk_test_local',syncHost:'https://app.example.test',apiBase:'https://api.example.test'},
+    createClient:async()=>clerk,
+    fetchImpl:async()=>{started();return responsePromise;}});
+
+  const request=gateway.handle({type:'SPORTABASE_ACCOUNT_STATE'},extensionSender);
+  await startedPromise;
+  clerk.session=sessionB;
+  release({status:200,async text(){return JSON.stringify({effective:{appearance:'dark'}});}});
+  await assert.rejects(request,error=>error instanceof AccountGatewayError&&error.status===409&&error.code==='account_changed');
+  assert.equal(saved.sportabaseAppearance,undefined);
+});
+
+test('gateway transport failures serialize as service errors instead of authentication errors', async () => {
+  const session={id:'session',getToken:async()=> 'token'};
+  const chrome={runtime:{id:'extension-id',getURL:path=>`chrome-extension://extension-id/${path}`},
+    storage:{local:{async get(){return{}},async set(){}}},tabs:{async create(){}}};
+  const gateway=createAccountGateway({chrome,config:{publishableKey:'pk_test_local',syncHost:'https://app.example.test',apiBase:'https://api.example.test'},
+    createClient:async()=>({session}),fetchImpl:async()=>{throw new TypeError('private network detail');}});
+
+  await assert.rejects(gateway.handle({type:'SPORTABASE_ACCOUNT_STATE'},extensionSender),error=>{
+    assert.deepEqual(serializeGatewayError(error),{
+      message:'Sportabase could not reach the account service.',status:503,code:'transport_unavailable',
+    });
+    return true;
+  });
 });

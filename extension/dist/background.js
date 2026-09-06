@@ -138426,6 +138426,13 @@ ${warning}`);
   });
 
   // src/background/account-gateway.mjs
+  function serializeGatewayError(error2) {
+    return {
+      message: String(error2?.message || "Extension account operation failed.").slice(0, 500),
+      status: error2 instanceof AccountGatewayError ? error2.status : 0,
+      code: error2 instanceof AccountGatewayError ? error2.code : "gateway_error"
+    };
+  }
   function validSender(sender, extensionId) {
     return sender?.id === extensionId && Number.isInteger(sender.tab?.id) && sender.frameId === 0 && /^https?:\/\//.test(sender.url || "");
   }
@@ -138480,19 +138487,39 @@ ${warning}`);
       return installationPromise;
     }
     async function client() {
-      if (!config2.publishableKey || !config2.syncHost) throw new Error("Configure Sportabase account sign-in for this extension.");
+      if (!config2.publishableKey || !config2.syncHost) throw new AccountGatewayError("Configure Sportabase account sign-in for this extension.", { status: 503, code: "configuration_unavailable" });
       if (!clientPromise) clientPromise = Promise.resolve(createClient({ publishableKey: config2.publishableKey, syncHost: config2.syncHost, background: true })).catch((error2) => {
         clientPromise = null;
         throw error2;
       });
       return clientPromise;
     }
-    async function request(clerk2, path, method = "GET", body, signal) {
-      const token2 = await clerk2.session?.getToken();
-      if (!token2) throw new Error("Sign in to Sportabase to continue.");
-      const response = await fetchImpl2(config2.apiBase + path, { method, headers: { Authorization: `Bearer ${token2}`, "X-Sportabase-Device-ID": await deviceId(), "Content-Type": "application/json" }, body: body === void 0 ? void 0 : JSON.stringify(body), signal, redirect: "error" });
-      const text = await response.text();
-      return { status: response.status, body: text };
+    function sameSession(clerk2, expected) {
+      const current = clerk2.session;
+      if (!current || !expected) return false;
+      const currentId = String(current.id || "");
+      const expectedId = String(expected.id || "");
+      return currentId && expectedId ? currentId === expectedId : current === expected;
+    }
+    function requireCurrentSession(clerk2, expected) {
+      if (!sameSession(clerk2, expected)) throw new AccountGatewayError("Your active account changed. Retry this action.", { status: 409, code: "account_changed" });
+    }
+    async function request(session, path, method = "GET", body, signal) {
+      let token2;
+      try {
+        token2 = await session?.getToken();
+      } catch {
+        throw new AccountGatewayError("Sportabase could not refresh the account session.", { status: 503, code: "session_unavailable" });
+      }
+      if (!token2) throw new AccountGatewayError("Sign in to Sportabase to continue.", { status: 401, code: "auth_required" });
+      try {
+        const response = await fetchImpl2(config2.apiBase + path, { method, headers: { Authorization: `Bearer ${token2}`, "X-Sportabase-Device-ID": await deviceId(), "Content-Type": "application/json" }, body: body === void 0 ? void 0 : JSON.stringify(body), signal, redirect: "error" });
+        const text = await response.text();
+        return { status: response.status, body: text };
+      } catch (error2) {
+        if (error2?.name === "AbortError") throw new AccountGatewayError("The extension request was stopped.", { status: 408, code: "request_aborted" });
+        throw new AccountGatewayError("Sportabase could not reach the account service.", { status: 503, code: "transport_unavailable" });
+      }
     }
     async function cacheState(state) {
       const writes = presentationPreferences(state.effective);
@@ -138500,19 +138527,32 @@ ${warning}`);
       if (Object.keys(writes).length) await chrome2.storage.local.set(writes);
       return state;
     }
-    async function bootstrap(clerk2) {
+    async function bootstrap(clerk2, session = clerk2.session) {
+      requireCurrentSession(clerk2, session);
       const stored = await chrome2.storage.local.get("sportabaseClientId");
       const migration = await chrome2.storage.local.get(LEGACY_MIGRATION_KEY);
-      const result = await request(clerk2, "/account/bootstrap", "POST", { platform: "extension", name: "Chrome extension", ...!migration[LEGACY_MIGRATION_KEY] && stored.sportabaseClientId ? { legacy_client_id: stored.sportabaseClientId } : {} });
-      if (result.status !== 200) throw new Error("Could not connect this extension to your account.");
-      return cacheState(JSON.parse(result.body));
+      requireCurrentSession(clerk2, session);
+      const result = await request(session, "/account/bootstrap", "POST", { platform: "extension", name: "Chrome extension", ...!migration[LEGACY_MIGRATION_KEY] && stored.sportabaseClientId ? { legacy_client_id: stored.sportabaseClientId } : {} });
+      requireCurrentSession(clerk2, session);
+      if (result.status !== 200) throw new AccountGatewayError("Could not connect this extension to your account.", { status: result.status, code: "bootstrap_failed" });
+      let state;
+      try {
+        state = JSON.parse(result.body);
+      } catch {
+        throw new AccountGatewayError("Sportabase returned an invalid account response.", { status: 502, code: "invalid_response" });
+      }
+      requireCurrentSession(clerk2, session);
+      const cached = await cacheState(state);
+      requireCurrentSession(clerk2, session);
+      return cached;
     }
     async function refreshPresentation({ maxAgeMs = 3e4 } = {}) {
       const clerk2 = await client();
       if (!clerk2.session) return null;
-      const session = String(clerk2.session.id || "");
+      const activeSession = clerk2.session;
+      const session = String(activeSession.id || "");
       if (session && Date.now() - lastPresentationRefresh < maxAgeMs && session === lastPresentationSession) return null;
-      const state = await bootstrap(clerk2);
+      const state = await bootstrap(clerk2, activeSession);
       lastPresentationRefresh = Date.now();
       lastPresentationSession = session;
       return state;
@@ -138551,11 +138591,13 @@ ${warning}`);
       if (message.type === "SPORTABASE_API_REQUEST" && !contentSender) throw new Error("Unsupported extension operation.");
       if (message.type !== "SPORTABASE_API_REQUEST" && !extensionSender) throw new Error("Unsupported extension operation.");
       const clerk2 = await client();
-      if (!clerk2.session) throw new Error("Sign in to Sportabase to continue.");
+      if (!clerk2.session) throw new AccountGatewayError("Sign in to Sportabase to continue.", { status: 401, code: "auth_required" });
+      const session = clerk2.session;
       if (message.type === "SPORTABASE_SIGN_OUT") {
         exactKeys(message, ["type"]);
-        const result = await request(clerk2, "/account/device/sign-out", "POST");
-        if (result.status !== 200) throw new Error("Could not revoke this extension device. Sign-out was not completed.");
+        const result = await request(session, "/account/device/sign-out", "POST");
+        requireCurrentSession(clerk2, session);
+        if (result.status !== 200) throw new AccountGatewayError("Could not revoke this extension device. Sign-out was not completed.", { status: result.status, code: "sign_out_revoke_failed" });
         await clerk2.signOut();
         lastPresentationSession = "";
         lastPresentationRefresh = 0;
@@ -138563,25 +138605,36 @@ ${warning}`);
       }
       if (message.type === "SPORTABASE_ACCOUNT_STATE") {
         exactKeys(message, ["type"]);
-        return { ok: true, state: await bootstrap(clerk2) };
+        return { ok: true, state: await bootstrap(clerk2, session) };
       }
       if (message.type === "SPORTABASE_ACCOUNT_UPDATE") {
         exactKeys(message, ["type", "body"]);
         if (!message.body || typeof message.body !== "object" || Array.isArray(message.body) || JSON.stringify(message.body).length > 2e4) throw new Error("Invalid settings update.");
-        const result = await request(clerk2, "/account/preferences", "PATCH", message.body);
-        if (result.status !== 200) throw new Error("Settings were not saved. Refresh account settings and try again.");
-        return { ok: true, state: await cacheState(JSON.parse(result.body)) };
+        const result = await request(session, "/account/preferences", "PATCH", message.body);
+        requireCurrentSession(clerk2, session);
+        if (result.status !== 200) throw new AccountGatewayError("Settings were not saved. Refresh account settings and try again.", { status: result.status, code: "settings_update_failed" });
+        let state;
+        try {
+          state = JSON.parse(result.body);
+        } catch {
+          throw new AccountGatewayError("Sportabase returned an invalid settings response.", { status: 502, code: "invalid_response" });
+        }
+        const cached = await cacheState(state);
+        requireCurrentSession(clerk2, session);
+        return { ok: true, state: cached };
       }
       validateApiMessage(message);
-      if (active.size >= 8) throw new Error("Too many product requests.");
+      if (active.size >= 8) throw new AccountGatewayError("Too many product requests.", { status: 429, code: "extension_concurrency" });
       const key = `${sender.tab.id}:${message.requestId}`;
-      if (active.has(key)) throw new Error("Duplicate product request.");
+      if (active.has(key)) throw new AccountGatewayError("Duplicate product request.", { status: 409, code: "duplicate_request" });
       const controller = new AbortController();
       active.set(key, controller);
       const timer = setTimeout(() => controller.abort(), 125e3);
       try {
-        await bootstrap(clerk2);
-        return { ok: true, ...await request(clerk2, message.path, message.method, message.body, controller.signal) };
+        await bootstrap(clerk2, session);
+        const result = await request(session, message.path, message.method, message.body, controller.signal);
+        requireCurrentSession(clerk2, session);
+        return { ok: true, ...result };
       } finally {
         clearTimeout(timer);
         active.delete(key);
@@ -138589,7 +138642,7 @@ ${warning}`);
     }
     return { handle, refreshPresentation };
   }
-  var API_RULES, LOCAL_KEYS, PRESENTATION_MAPPING, LEGACY_MIGRATION_KEY;
+  var API_RULES, AccountGatewayError, LOCAL_KEYS, PRESENTATION_MAPPING, LEGACY_MIGRATION_KEY;
   var init_account_gateway = __esm({
     "src/background/account-gateway.mjs"() {
       API_RULES = [
@@ -138598,6 +138651,14 @@ ${warning}`);
         ["POST", /^\/watchlists(?:\/alerts\/reconcile|\/alerts\/[a-zA-Z0-9_-]{1,128}\/read)?$/],
         ["DELETE", /^\/watchlists\/[a-zA-Z0-9_-]{1,128}$/]
       ];
+      AccountGatewayError = class extends Error {
+        constructor(message, { status = 0, code = "gateway_error" } = {}) {
+          super(message);
+          this.name = "AccountGatewayError";
+          this.status = Number.isInteger(status) && status >= 0 && status <= 599 ? status : 0;
+          this.code = typeof code === "string" && /^[a-z0-9_]{1,64}$/.test(code) ? code : "gateway_error";
+        }
+      };
       LOCAL_KEYS = /* @__PURE__ */ new Set(["sportabaseAppearance", "sportabaseHighContrast", "sportabaseTextScale", "sportabaseDensity", "sportabaseMotionLevel", "sportabaseDetailLevel", "sportabasePanelPosition", "sportabaseSizeMode", "sportabaseCustomWidth", "sportabaseCustomHeight", "sportabaseLeft", "sportabaseTop", "sportabaseHorizontalAnchor", "sportabaseEdgeOffset", "sportabaseRememberPosition"]);
       PRESENTATION_MAPPING = Object.freeze({
         appearance: "sportabaseAppearance",
@@ -138625,7 +138686,7 @@ ${warning}`);
       gateway = createAccountGateway({ chrome, config, createClient: createClerkClient2 });
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!message?.type?.startsWith("SPORTABASE_")) return;
-        gateway.handle(message, sender).then(sendResponse).catch((error2) => sendResponse({ ok: false, error: error2.message || "Account operation failed." }));
+        gateway.handle(message, sender).then(sendResponse).catch((error2) => sendResponse({ ok: false, error: serializeGatewayError(error2) }));
         return true;
       });
     }

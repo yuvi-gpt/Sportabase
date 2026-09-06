@@ -16,3 +16,13 @@ test('mobile revokes current-device backend push ownership before Clerk sign-out
   const signOut = contextSource.indexOf('await signOut();');
   assert.ok(revoke >= 0 && clear > revoke && signOut > clear);
 });
+
+test('mobile discards a late bootstrap response after the signed-in account changes', () => {
+  assert.match(contextSource, /const accountIdentity = useRef\(''\)/);
+  assert.match(contextSource, /const refreshEpoch = useRef\(0\)/);
+  assert.match(contextSource, /epoch === refreshEpoch\.current/);
+  assert.match(contextSource, /accountIdentity\.current === expectedIdentity/);
+  const staleGuard = contextSource.indexOf('if(!isCurrent()) return;');
+  const accept = contextSource.indexOf('accept(next);');
+  assert.ok(staleGuard >= 0 && accept > staleGuard);
+});

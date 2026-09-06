@@ -47,7 +47,7 @@ export function acceptState(state) {
   return state;
 }
 export function clearAccountState() { accountState = null; }
-export async function bootstrap(legacyClientId) {
+export async function bootstrap(legacyClientId, { isCurrent = () => true } = {}) {
   let migrationComplete = false;
   try { migrationComplete = localStorage.getItem(LEGACY_MIGRATION_KEY) === "complete"; } catch {}
   const state = await accountRequest("/account/bootstrap", { method: "POST", body: {
@@ -56,6 +56,7 @@ export async function bootstrap(legacyClientId) {
   if (state.legacy_migration?.status && state.legacy_migration.status !== "not_requested") {
     try { localStorage.setItem(LEGACY_MIGRATION_KEY, "complete"); } catch {}
   }
+  if (!isCurrent()) return null;
   return acceptState(state);
 }
 export async function signOutCurrentDevice() {

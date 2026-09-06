@@ -6,6 +6,10 @@ import {
   SPORTABASE_VIEWPORT_GUTTER,
 } from "./preferences.js";
 
+import {
+  trustedUserAction,
+} from "../content/trusted-events.mjs";
+
 export function installSettingsDrawer({
   overlay,
   preferences = {},
@@ -610,7 +614,7 @@ export function installSettingsDrawer({
   const accountTitle=document.createElement('div');accountTitle.className='sb-settings-group-title';accountTitle.textContent='Account settings';
   const accountCopy=document.createElement('p');accountCopy.textContent='Open the extension-owned Settings page to manage account defaults, notifications, privacy and sign-out.';
   const accountButton=document.createElement('button');accountButton.type='button';accountButton.className='sb-settings-action';accountButton.textContent='Open account settings';
-  accountButton.addEventListener('click',()=>{void chrome.runtime.sendMessage({type:'SPORTABASE_OPEN_EXTENSION_SETTINGS'}).catch(error=>console.error('[sportabase] Could not open account settings:',error));});
+  accountButton.addEventListener('click',trustedUserAction(()=>{void chrome.runtime.sendMessage({type:'SPORTABASE_OPEN_EXTENSION_SETTINGS'}).catch(error=>console.error('[sportabase] Could not open account settings:',error));}));
   accountGroup.append(accountTitle,accountCopy,accountButton);
   layer.querySelector('.sb-settings-content')?.prepend(accountGroup);
   layer.addEventListener("keydown",event=>{

@@ -173,6 +173,26 @@ test('401 auth, 429 quota, and 503 capacity survive service-worker mediation dis
   }
 });
 
+test('typed service-worker failures retain their non-authentication status and safe code', async () => {
+  const originals={window:globalThis.window,chrome:globalThis.chrome};
+  globalThis.window={setTimeout:globalThis.setTimeout.bind(globalThis),clearTimeout:globalThis.clearTimeout.bind(globalThis)};
+  globalThis.chrome={storage:{local:{async get(){return{sportabaseClientId:'client'}},async set(){}}},runtime:{
+    async sendMessage(){return{ok:false,error:{message:'Sportabase could not reach the account service.',status:503,code:'transport_unavailable'}};},
+  }};
+  try {
+    await assert.rejects(postJson('https://api.example.test/analyze',{text:'test'}),error=>{
+      assert.ok(error instanceof SportabaseApiError);
+      assert.equal(error.status,503);
+      assert.equal(error.details,'transport_unavailable');
+      assert.match(error.message,/could not reach/i);
+      return true;
+    });
+  } finally {
+    if(originals.window===undefined)delete globalThis.window;else globalThis.window=originals.window;
+    if(originals.chrome===undefined)delete globalThis.chrome;else globalThis.chrome=originals.chrome;
+  }
+});
+
 
 test(
   "internal timeout remains a visible timeout error",

@@ -19,6 +19,10 @@ import {
   createAccentTheme,
 } from "../ui/accent-theme.js";
 
+import {
+  trustedUserAction,
+} from "./trusted-events.mjs";
+
 const ANALYSIS_STEPS = [
   {
     message: "Identifying the video's central claim…",
@@ -355,7 +359,7 @@ export function openVideoMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
   }
 
@@ -453,7 +457,7 @@ export function openVideoMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
 
     shell.content
@@ -694,7 +698,7 @@ export function openVideoMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
   }
 
