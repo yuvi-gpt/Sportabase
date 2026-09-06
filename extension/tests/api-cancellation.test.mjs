@@ -155,11 +155,11 @@ test(
   }
 );
 
-test('429 quota and 503 capacity survive service-worker mediation distinctly', async () => {
+test('401 auth, 429 quota, and 503 capacity survive service-worker mediation distinctly', async () => {
   const originals={window:globalThis.window,chrome:globalThis.chrome};
   globalThis.window={setTimeout:globalThis.setTimeout.bind(globalThis),clearTimeout:globalThis.clearTimeout.bind(globalThis)};
   try {
-    for(const [status,pattern] of [[429,/quota/i],[503,/temporarily busy/i]]) {
+    for(const [status,pattern] of [[401,/provider 401/i],[429,/quota/i],[503,/temporarily busy/i]]) {
       globalThis.chrome={storage:{local:{async get(){return{sportabaseClientId:'client'}},async set(){}}},runtime:{
         async sendMessage(){return{ok:true,status,body:JSON.stringify({detail:`provider ${status}`})};},
       }};
