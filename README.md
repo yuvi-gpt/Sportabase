@@ -507,6 +507,25 @@ Those feature branches are merged. Do not extend them for the next roadmap unit.
 
 ---
 
+## Collaboration and execution preferences
+
+These rules describe how ChatGPT and Codex should work with Yuvraj on Sportabase:
+
+1. Be direct, evidence-led, and willing to challenge an assumption when the code or data disagrees. Do not agree reflexively, invent certainty, or report an action as complete without verifying it.
+2. Prefer large, meaningful, coherent checkpoints over endless microsteps. For user-run work, explain the objective and risk first, then normally provide one copy-pasteable PowerShell block. State clearly whether more steps remain.
+3. Use live GitHub state as the remote source of truth. Inspect the branch/ref, exact SHAs, PR state, CI results, relevant files, and diffs before making claims. Treat this README as a checkpoint, not proof that GitHub or a local worktree still matches it.
+4. Prefer the GitHub connector for remote inspection, CI diagnosis, PR administration, and narrowly scoped branch changes when it can complete the work honestly. Use local Codex/CLI when local reproduction, filesystem-only state, or substantial implementation work genuinely requires it. Do not consume Codex usage or a manual reset merely for work the connector can safely perform.
+5. Keep manual Codex usage resets in reserve and use them only when necessary. A usage reset and a context-window handoff solve different problems.
+6. For substantial work, use a dedicated verified branch/worktree. Before editing, inspect the worktree path, branch, HEAD, status, and relevant diff. Do not touch another checkout or worktree.
+7. Preserve user changes. On any failed checkpoint, stop and report the exact command and output. Do not reset, clean, discard, force-push, rebase, or otherwise rewrite work to escape a failure unless Yuvraj explicitly authorizes that exact action.
+8. Keep authorization boundaries explicit. A request to inspect, diagnose, review, or report does not authorize code changes. A request to implement does not automatically authorize committing, pushing, opening or updating a PR, marking it ready, merging, or deploying. State what was and was not changed.
+9. Reproduce a defect before fixing it when practical. Fix root causes rather than weakening tests, hiding overflow, swallowing errors, or papering over product behavior. Run targeted gates first, then the appropriate complete gate; report exact commands and pass/fail counts.
+10. Avoid unnecessary Gemini/provider calls. Prefer deterministic local contract tests when they can verify the behavior, and preserve distinct quota, capacity, transport, authentication, and service-error semantics.
+11. During long work, provide concise progress updates at useful boundaries. If a local action is required, give only the next safe action unless a complete chronological block is materially clearer.
+12. Preserve Sportabase's locked product, evidence, privacy, security, and deployment invariants. Do not broaden a focused task into unrelated refactoring.
+
+---
+
 ## Conversation continuity protocol
 
 > **Context warning for every future Sportabase chat:** Treat a long conversation as an operational risk. Before the chat becomes large enough that earlier technical context may be truncated, proactively warn Yuvraj and propose a checkpoint update. Do not wait for the final message or pretend an exact context meter is available. The warning should occur early enough to capture the current branch, base/head SHAs, worktree, dirty/staged state, files changed, tests and exact results, architectural decisions, invariants, blockers, and next command.
