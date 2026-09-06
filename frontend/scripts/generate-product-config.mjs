@@ -1,23 +1,39 @@
-﻿import { writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const PRODUCTION_API_ORIGIN = "https://sportabase-api.onrender.com";
+
 function readBoolean(name) {
-  return /^(1|true|yes)$/i.test(String(process.env[name] || "").trim());
+  return /^(1|true|yes)$/i.test(
+    String(process.env[name] || "").trim()
+  );
 }
 
-function exactHttpsOrigin(value, name, { required = false } = {}) {
+function exactHttpsOrigin(
+  value,
+  name,
+  { required = false } = {}
+) {
   const raw = String(value || "").trim();
 
   if (!raw) {
-    if (required) throw new Error(`${name} is required.`);
+    if (required) {
+      throw new Error(`${name} is required.`);
+    }
+
     return "";
   }
 
   const parsed = new URL(raw);
 
-  if (parsed.protocol !== "https:" || parsed.origin !== raw.replace(/\/$/, "")) {
-    throw new Error(`${name} must be an exact HTTPS origin.`);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.origin !== raw.replace(/\/$/, "")
+  ) {
+    throw new Error(
+      `${name} must be an exact HTTPS origin.`
+    );
   }
 
   return parsed.origin;
@@ -25,7 +41,9 @@ function exactHttpsOrigin(value, name, { required = false } = {}) {
 
 const deployment = String(
   process.env.SPORTABASE_WEB_DEPLOYMENT || ""
-).trim().toLowerCase();
+)
+  .trim()
+  .toLowerCase();
 
 if (!["staging", "production"].includes(deployment)) {
   throw new Error(
@@ -34,8 +52,7 @@ if (!["staging", "production"].includes(deployment)) {
 }
 
 const apiBase = exactHttpsOrigin(
-  process.env.SPORTABASE_WEB_API_BASE ||
-    "https://sportabase-api.onrender.com",
+  process.env.SPORTABASE_WEB_API_BASE,
   "SPORTABASE_WEB_API_BASE",
   { required: true }
 );
@@ -56,6 +73,20 @@ const landingAnalyticsEnabled = readBoolean(
 const cspDeploymentConfigured = readBoolean(
   "SPORTABASE_WEB_CSP_CONFIGURED"
 );
+
+if (deployment === "staging") {
+  if (apiBase === PRODUCTION_API_ORIGIN) {
+    throw new Error(
+      "Staging must not use the production Sportabase API origin."
+    );
+  }
+
+  if (!clerkPublishableKey.startsWith("pk_test_")) {
+    throw new Error(
+      "Staging requires SPORTABASE_WEB_CLERK_PUBLISHABLE_KEY with a Clerk test key."
+    );
+  }
+}
 
 if (deployment === "production") {
   if (!clerkPublishableKey.startsWith("pk_live_")) {
@@ -86,8 +117,12 @@ const config = {
   cspDeploymentConfigured,
 };
 
-const scriptsDir = fileURLToPath(new URL(".", import.meta.url));
+const scriptsDir = fileURLToPath(
+  new URL(".", import.meta.url)
+);
+
 const frontendDir = resolve(scriptsDir, "..");
+
 const output = resolve(
   frontendDir,
   process.argv[2] || "product-config.mjs"
@@ -100,4 +135,6 @@ const contents =
 
 writeFileSync(output, contents, "utf8");
 
-console.log(`Generated ${output} for ${deployment}.`);
+console.log(
+  `Generated ${output} for ${deployment}.`
+);
