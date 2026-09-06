@@ -33,6 +33,7 @@ const buildOptions = {
   platform: "browser",
   target: ["chrome120"],
   sourcemap: true,
+  sourcesContent: false,
   minify: false,
   legalComments: "none",
   logLevel: "info",

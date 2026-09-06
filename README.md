@@ -511,6 +511,8 @@ Those feature branches are merged. Do not extend them for the next roadmap unit.
 
 > **Context warning for every future Sportabase chat:** Treat a long conversation as an operational risk. Before the chat becomes large enough that earlier technical context may be truncated, proactively warn Yuvraj and propose a checkpoint update. Do not wait for the final message or pretend an exact context meter is available. The warning should occur early enough to capture the current branch, base/head SHAs, worktree, dirty/staged state, files changed, tests and exact results, architectural decisions, invariants, blockers, and next command.
 
+A Codex usage-limit reset replenishes usage quota; it does **not** enlarge, restore, or protect a conversation's context window. Never spend a reset merely because a chat is long. When context risk appears, finish only the current bounded step, write the verified checkpoint, and continue in a new chat before beginning another large implementation or review pass.
+
 When a context checkpoint is needed:
 
 1. Stop before starting another large implementation or review chunk.

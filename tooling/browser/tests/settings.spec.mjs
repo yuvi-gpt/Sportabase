@@ -164,10 +164,16 @@ test("web legacy claim is attempted once and sign-out revokes device first",asyn
   await expect.poll(()=>page.evaluate(()=>window.__clerkSignedOut)).toBe(true);
 });
 
-for (const width of [320,768,1440]) test(`settings fits ${width}px with large text`,async ({page},testInfo)=>{
+for (const width of [320,768,1440]) test(`settings fits ${width}px with accessibility appearance`,async ({page},testInfo)=>{
   await page.setViewportSize({width,height:900}); await fixture(page); await open(page);
   await section(page,"Appearance"); await page.getByLabel("Settings scope").selectOption("account");
-  await page.locator('[name="text_size"]').selectOption("large"); await page.getByRole("button",{name:"Save changes"}).click();
+  await page.locator('[name="text_size"]').selectOption("large");
+  await page.locator('[name="contrast"]').selectOption("high");
+  await page.locator('[name="motion"]').selectOption("reduce");
+  await page.getByRole("button",{name:"Save changes"}).click();
+  await expect(page.locator("html")).toHaveAttribute("data-text-size","large");
+  await expect(page.locator("html")).toHaveAttribute("data-contrast","high");
+  await expect(page.locator("html")).toHaveAttribute("data-motion","reduce");
   for(const name of ["Account","Appearance","Notifications","Analysis","My Activity","Language & Region","Privacy & Data","Devices/Sessions","Support/About"]) {
     await section(page,name);
     expect(await page.locator("#settings-dialog").evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
