@@ -155,6 +155,7 @@ test("web legacy claim is attempted once and sign-out revokes device first",asyn
   const harness=await fixture(page);
   await expect.poll(()=>harness.bootstrapBodies.length).toBe(1);
   expect(harness.bootstrapBodies[0].legacy_client_id).toBeTruthy();
+  await expect.poll(()=>page.evaluate(()=>localStorage.getItem("sportabase:legacy-migration:v1"))).toBe("complete");
   await page.reload();
   await expect.poll(()=>harness.bootstrapBodies.length).toBe(2);
   expect(harness.bootstrapBodies[1].legacy_client_id).toBeUndefined();
