@@ -25,3 +25,7 @@ tooling/browser/test-results/
 tooling/browser/playwright-report/
 
 *.zip
+
+# Vercel local project state
+frontend/.vercel/
+frontend/.env*
