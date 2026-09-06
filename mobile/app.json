@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/sportabase-logo.png",
     "scheme": "sportabase",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/sportabase-logo.png",
       "bundleIdentifier": "com.sportabase.app"
@@ -48,7 +48,9 @@
             "multipleShareMimeTypes": []
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "@clerk/expo"
     ],
     "experiments": {
       "typedRoutes": true,

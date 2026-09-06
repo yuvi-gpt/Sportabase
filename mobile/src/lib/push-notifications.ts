@@ -180,6 +180,10 @@ export async function disablePushNotifications(): Promise<void> {
   }
 }
 
+export async function clearPushRegistrationAfterBackendRevocation(): Promise<void> {
+  await AsyncStorage.removeItem(DEVICE_STORAGE_KEY);
+}
+
 function targetFromData(data: unknown): PushNotificationTarget | null {
   if (!data || typeof data !== 'object') return null;
   const record = data as Record<string, unknown>;

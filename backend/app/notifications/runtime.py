@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.accounts.notification_policy import eligible_at, filter_claims
+
 import hashlib
 import math
 import os
@@ -206,6 +208,9 @@ def register_device(
             "SELECT * FROM product_notification_devices WHERE token_hash=?",
             (digest,),
         ).fetchone()
+
+        if existing is not None and existing["client_key"] != owner_key and str(existing["client_key"]).startswith("account:"):
+            raise ValueError("Notification registration belongs to another account.")
 
         needs_slot = existing is None or (
             existing["client_key"] != owner_key or not bool(existing["enabled"])
@@ -435,6 +440,9 @@ def materialize_pending_deliveries(
                 continue
             scanned += len(rows)
             for row in rows:
+                available = eligible_at(conn, device["client_key"], "expo", device["id"], row["alert_id"], now_epoch)
+                if available is None:
+                    continue
                 cursor = conn.execute(
                     """
                     INSERT OR IGNORE INTO product_notification_deliveries(
@@ -450,7 +458,7 @@ def materialize_pending_deliveries(
                         device["id"],
                         row["alert_id"],
                         PROVIDER,
-                        now_epoch,
+                        available,
                         now,
                         now,
                     ),
@@ -540,6 +548,7 @@ def _claim_deliveries(
                 ),
             ).fetchall()
         ]
+        ids = filter_claims(conn, ids, "expo", now_epoch)
         if not ids:
             conn.commit()
             return []

@@ -1,5 +1,6 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Platform,
@@ -18,18 +19,6 @@ import {
   type PushRegistrationState,
 } from '../lib/push-notifications';
 
-const COLORS = {
-  background: '#050807',
-  surface: '#101412',
-  raised: '#171c19',
-  border: '#283029',
-  text: '#f4f7f4',
-  muted: '#98a39b',
-  accent: '#76f53f',
-  accentSoft: 'rgba(118, 245, 63, 0.10)',
-  error: '#ff8c8c',
-};
-
 function messageFrom(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -37,18 +26,24 @@ function messageFrom(error: unknown) {
 }
 
 export default function NotificationsScreen() {
+  const router=useRouter();
+  const { colors: COLORS,scale,high }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS,high),scale);
   const [state, setState] = useState<PushRegistrationState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isChanging, setIsChanging] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
     setMessage('');
+    setMessageIsError(false);
     try {
       setState(await getPushRegistrationState());
     } catch (error) {
       setState(null);
+      setMessageIsError(true);
       setMessage(messageFrom(error));
     } finally {
       setIsLoading(false);
@@ -64,11 +59,13 @@ export default function NotificationsScreen() {
   async function enable() {
     setIsChanging(true);
     setMessage('');
+    setMessageIsError(false);
     try {
       await enablePushNotifications();
       await load();
       setMessage('Push delivery is enabled for future watch activity on this device.');
     } catch (error) {
+      setMessageIsError(true);
       setMessage(messageFrom(error));
     } finally {
       setIsChanging(false);
@@ -78,11 +75,13 @@ export default function NotificationsScreen() {
   async function disable() {
     setIsChanging(true);
     setMessage('');
+    setMessageIsError(false);
     try {
       await disablePushNotifications();
       await load();
       setMessage('Push delivery is disabled on this device. In-app Alerts are unchanged.');
     } catch (error) {
+      setMessageIsError(true);
       setMessage(messageFrom(error));
     } finally {
       setIsChanging(false);
@@ -96,18 +95,9 @@ export default function NotificationsScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
-          <Text style={styles.eyebrow}>DELIVERY LAYER</Text>
+          <Pressable accessibilityRole="button" onPress={()=>router.push('/settings')} style={{paddingVertical:12,minHeight:48}}><Text style={{color:COLORS.text,fontSize:16}}>Back to Settings</Text></Pressable>
           <Text style={styles.title}>Notifications</Text>
-          <Text style={styles.subtitle}>
-            Push delivery extends the existing Watchlists + Alerts system. Sportabase still creates alerts only from persisted intelligence changes after a watch baseline; delivery happens separately from reconciliation.
-          </Text>
-
-          <View style={styles.boundaryCard}>
-            <Text style={styles.boundaryTitle}>WHAT DOES NOT CHANGE</Text>
-            <Text style={styles.boundaryCopy}>
-              Reconciliation remains deterministic and provider-free. Push delivery does not call Gemini, does not create new intelligence, and does not make an alert more true, credible or important.
-            </Text>
-          </View>
+          <Text style={styles.subtitle}>Receive updates from your watches. Your Alerts inbox remains available when push is off.</Text>
 
           <View style={styles.statusCard}>
             <View style={styles.statusTop}>
@@ -206,7 +196,7 @@ export default function NotificationsScreen() {
             <Text
               style={[
                 styles.message,
-                message.includes('could not') && styles.errorMessage,
+                messageIsError && styles.errorMessage,
               ]}
             >
               {message}
@@ -218,7 +208,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>, high: boolean) => StyleSheet.create({
   screen: { backgroundColor: COLORS.background, flex: 1 },
   safeArea: { flex: 1 },
   content: {
@@ -237,9 +227,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: COLORS.text,
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: -1.2,
+    fontSize: 28,
+    fontWeight: '600',
+    letterSpacing: -0.6,
     marginTop: 8,
   },
   subtitle: {
@@ -252,13 +242,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderColor: COLORS.border,
     borderRadius: 18,
-    borderWidth: 1,
+    borderWidth: high ? 2 : 1,
     marginTop: 22,
     padding: 17,
   },
   boundaryTitle: {
     color: COLORS.accent,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.3,
   },
@@ -272,7 +262,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.raised,
     borderColor: COLORS.border,
     borderRadius: 20,
-    borderWidth: 1,
+    borderWidth: high ? 2 : 1,
     marginTop: 18,
     padding: 18,
   },
@@ -283,7 +273,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     color: COLORS.muted,
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.2,
   },
@@ -316,7 +306,7 @@ const styles = StyleSheet.create({
   },
   deviceMetaText: {
     color: COLORS.muted,
-    fontSize: 10,
+    fontSize: 13,
     fontWeight: '700',
   },
   actionButton: {
@@ -332,9 +322,9 @@ const styles = StyleSheet.create({
   actionButtonSecondary: {
     backgroundColor: 'transparent',
     borderColor: COLORS.border,
-    borderWidth: 1,
+    borderWidth: high ? 2 : 1,
   },
-  actionText: { color: '#071006', fontSize: 13, fontWeight: '800' },
+  actionText: { color: '#071006', fontSize: 14, fontWeight: '800' },
   actionTextSecondary: { color: COLORS.text },
   section: { marginTop: 28 },
   sectionTitle: { color: COLORS.text, fontSize: 19, fontWeight: '800' },
@@ -351,11 +341,11 @@ const styles = StyleSheet.create({
     marginTop: 6,
     width: 6,
   },
-  ruleText: { color: COLORS.muted, flex: 1, fontSize: 12, lineHeight: 18 },
+  ruleText: { color: COLORS.muted, flex: 1, fontSize: 14, lineHeight: 21 },
   message: {
     color: COLORS.muted,
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 21,
     marginTop: 18,
   },
   errorMessage: { color: COLORS.error },

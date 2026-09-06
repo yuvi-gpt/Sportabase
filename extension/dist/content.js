@@ -16,6 +16,12 @@
     }
   };
 
+  // src/styles/account-settings.css
+  var init_account_settings = __esm({
+    "src/styles/account-settings.css"() {
+    }
+  });
+
   // src/styles/sportabase.css
   var init_sportabase = __esm({
     "src/styles/sportabase.css"() {
@@ -246,6 +252,9 @@
     )?.matches || false;
     const appearance = preferences.sportabaseAppearance === "system" ? systemPrefersLight ? "light" : "dark" : preferences.sportabaseAppearance;
     const palette = PALETTES[appearance] || PALETTES.dark;
+    overlay.dataset.sbText = preferences.sportabaseTextScale;
+    overlay.dataset.sbDensity = preferences.sportabaseDensity;
+    overlay.dataset.sbMotion = preferences.sportabaseMotionLevel === "system" ? matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduce" : "full" : preferences.sportabaseMotionLevel;
     overlay.dataset.sbAppearance = appearance;
     overlay.dataset.sbDetail = preferences.sportabaseDetailLevel;
     overlay.classList.toggle(
@@ -300,7 +309,7 @@
     if (!resultPaletteActive) {
       overlay.style.setProperty(
         "--sb-accent",
-        "#06b6d4"
+        appearance === "light" ? "#246b16" : "#78f54a"
       );
       overlay.style.setProperty(
         "--sb-accent-bright",
@@ -334,8 +343,9 @@
       SPORTABASE_VIEWPORT_GUTTER = 8;
       DEFAULT_PREFERENCES = {
         sportabaseAppearance: "system",
-        sportabaseAccentMode: "dynamic",
-        sportabaseAccentColor: "#06b6d4",
+        sportabaseTextScale: "system",
+        sportabaseDensity: "comfortable",
+        sportabaseMotionLevel: "system",
         sportabaseHighContrast: false,
         /*
          * New users start comfortable and
@@ -402,6 +412,23 @@
     }
   });
 
+  // src/content/trusted-events.mjs
+  function trustedUserAction(handler) {
+    if (typeof handler !== "function") {
+      throw new TypeError("Trusted user action requires a function.");
+    }
+    return function handleTrustedUserAction(event, ...args) {
+      if (!event?.isTrusted) {
+        return void 0;
+      }
+      return handler.call(this, event, ...args);
+    };
+  }
+  var init_trusted_events = __esm({
+    "src/content/trusted-events.mjs"() {
+    }
+  });
+
   // src/ui/settings.js
   function installSettingsDrawer({
     overlay,
@@ -435,6 +462,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="sb-settings-title"
+      tabindex="-1"
     >
       <header class="sb-settings-header">
         <div>
@@ -555,13 +583,15 @@
                 Large
               </option>
 
-              <option
-                value="custom"
-                disabled
-              >
-                Custom
-              </option>
             </select>
+          </label>
+
+          <label class="sb-setting-row">
+            <span>
+              <strong>Remember position</strong>
+              <small>Keep the panel where you place it.</small>
+            </span>
+            <input type="checkbox" data-sb-setting="sportabaseRememberPosition" />
           </label>
 
           <label class="sb-setting-row">
@@ -638,7 +668,7 @@
         </section>
 
         <div class="sb-settings-footer">
-          Changes are saved automatically.
+          Extension layout saves automatically. Account preferences use Save changes.
         </div>
       </div>
     </section>
@@ -753,7 +783,8 @@
       closeTimer = window.setTimeout(() => {
         layer.hidden = true;
         closeTimer = null;
-      }, 170);
+        settingsButton?.focus();
+      }, currentPreferences.sportabaseMotionLevel === "reduce" ? 0 : 170);
     }
     layer.querySelectorAll(
       "[data-sb-settings-close]"
@@ -818,12 +849,23 @@
       "click",
       resetLayout
     );
-    layer.querySelector(
-      "[data-sb-reset-all]"
-    )?.addEventListener(
-      "click",
-      resetAllSettings
-    );
+    const resetAllButton = layer.querySelector("[data-sb-reset-all]");
+    let resetAllTimer = null;
+    resetAllButton?.addEventListener("click", () => {
+      if (resetAllButton.dataset.confirmed === "true") {
+        window.clearTimeout(resetAllTimer);
+        resetAllButton.dataset.confirmed = "false";
+        resetAllButton.textContent = "Reset all settings";
+        resetAllSettings();
+        return;
+      }
+      resetAllButton.dataset.confirmed = "true";
+      resetAllButton.textContent = "Confirm reset all settings";
+      resetAllTimer = window.setTimeout(() => {
+        resetAllButton.dataset.confirmed = "false";
+        resetAllButton.textContent = "Reset all settings";
+      }, 5e3);
+    });
     overlay.addEventListener(
       "keydown",
       (event) => {
@@ -836,6 +878,45 @@
       "aria-expanded",
       "false"
     );
+    for (const key of ["sportabaseAppearance", "sportabaseHighContrast", "sportabaseDetailLevel"]) {
+      layer.querySelector(`[data-sb-setting="${key}"]`)?.closest("label")?.remove();
+    }
+    for (const group of layer.querySelectorAll(".sb-settings-group")) {
+      if (!group.querySelector(".sb-setting-row, .sb-settings-action")) group.remove();
+    }
+    const layoutTitle = layer.querySelector(".sb-settings-group-title");
+    if (layoutTitle) layoutTitle.textContent = "Layout (this extension only)";
+    const accountGroup = document.createElement("section");
+    accountGroup.className = "sb-settings-group";
+    const accountTitle = document.createElement("div");
+    accountTitle.className = "sb-settings-group-title";
+    accountTitle.textContent = "Account settings";
+    const accountCopy = document.createElement("p");
+    accountCopy.textContent = "Open the extension-owned Settings page to manage account defaults, notifications, privacy and sign-out.";
+    const accountButton = document.createElement("button");
+    accountButton.type = "button";
+    accountButton.className = "sb-settings-action";
+    accountButton.textContent = "Open account settings";
+    accountButton.addEventListener("click", trustedUserAction(() => {
+      void chrome.runtime.sendMessage({ type: "SPORTABASE_OPEN_EXTENSION_SETTINGS" }).catch((error) => console.error("[sportabase] Could not open account settings:", error));
+    }));
+    accountGroup.append(accountTitle, accountCopy, accountButton);
+    layer.querySelector(".sb-settings-content")?.prepend(accountGroup);
+    layer.addEventListener("keydown", (event) => {
+      if (event.key !== "Tab") return;
+      const items = [...layer.querySelectorAll('button:not(:disabled),select:not(:disabled),input:not(:disabled),summary,[tabindex="0"]')].filter((el) => el.getClientRects().length);
+      const first = items[0], last = items.at(-1);
+      if (!items.includes(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first)?.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    });
     applyCurrentPreferences();
     return {
       open,
@@ -845,6 +926,7 @@
   var init_settings = __esm({
     "src/ui/settings.js"() {
       init_preferences();
+      init_trusted_events();
     }
   });
 
@@ -2022,7 +2104,7 @@
         abortError.name = "AbortError";
         throw abortError;
       }
-      const response = await fetch(url, {
+      const response = await mediatedFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -2106,6 +2188,30 @@
         abortFromCaller
       );
     }
+  }
+  async function mediatedFetch(url, options = {}) {
+    const parsed = new URL(url);
+    const requestId = crypto.randomUUID();
+    const signal = options.signal;
+    if (signal?.aborted) throw new DOMException("Cancelled", "AbortError");
+    return new Promise((resolve, reject) => {
+      const abort = () => {
+        void chrome.runtime.sendMessage({ type: "SPORTABASE_API_CANCEL", requestId }).catch(() => {
+        });
+        reject(new DOMException("Cancelled", "AbortError"));
+      };
+      signal?.addEventListener("abort", abort, { once: true });
+      chrome.runtime.sendMessage({ type: "SPORTABASE_API_REQUEST", requestId, path: parsed.pathname + parsed.search, method: options.method || "GET", ...options.body ? { body: JSON.parse(options.body) } : {} }).then((result) => {
+        if (!result?.ok) {
+          const failure = result?.error;
+          const message = typeof failure === "object" && failure ? failure.message : failure;
+          const status = typeof failure === "object" && failure && Number.isInteger(failure.status) ? failure.status : 0;
+          const code = typeof failure === "object" && failure && typeof failure.code === "string" ? failure.code : "";
+          throw new SportabaseApiError(message || "The Sportabase extension request failed.", { status, details: code });
+        }
+        resolve(new Response(result.status === 204 ? null : result.body, { status: result.status }));
+      }).catch(reject).finally(() => signal?.removeEventListener("abort", abort));
+    });
   }
   var SportabaseApiError, CLIENT_ID_STORAGE_KEY, clientIdentityPromise;
   var init_api = __esm({
@@ -3108,7 +3214,7 @@
           "[data-sb-article-analyze]"
         )?.addEventListener(
           "click",
-          runAnalysis
+          trustedUserAction(runAnalysis)
         );
       }
     }
@@ -3181,7 +3287,7 @@
         "[data-sb-article-retry]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
       shell.content.querySelector(
         "[data-sb-article-back]"
@@ -3443,7 +3549,7 @@
         "[data-sb-article-reanalyze]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
     }
     async function runAnalysis() {
@@ -3603,6 +3709,7 @@
       init_request_lifecycle();
       init_article_intelligence();
       init_accent_theme();
+      init_trusted_events();
       ANALYSIS_STEPS = [
         {
           message: "Identifying the article's central story\u2026",
@@ -4136,7 +4243,7 @@
         "[data-sb-video-analyze]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
     }
     function renderError(error) {
@@ -4226,7 +4333,7 @@
         "[data-sb-video-retry]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
       shell.content.querySelector(
         "[data-sb-video-back]"
@@ -4240,10 +4347,6 @@
       analysisRunning = false;
       const evidenceScore = clampScore2(data.evidence_score);
       const logicScore = clampScore2(data.logic_score);
-      const supportScore = Math.round(
-        (evidenceScore + logicScore) / 2
-      );
-      const scorePalette = getScorePalette(supportScore);
       const uiLabels = data.ui_labels && typeof data.ui_labels === "object" ? data.ui_labels : {};
       const verdictLabel = String(
         data.localized_verdict || ""
@@ -4267,7 +4370,7 @@
               were returned.
             </li>
           `;
-      accentTheme.apply(scorePalette);
+      accentTheme.clear();
       shell.setModeLabel(
         `VIDEO INTELLIGENCE \xB7 ${contentTypeLabel.toUpperCase()}`
       );
@@ -4277,29 +4380,13 @@
           <div class="sb-result-score-top">
             <div>
               <div class="sb-result-eyebrow">
-                OVERALL SUPPORT
+                VERDICT
               </div>
 
-              <div class="sb-result-score">
-                <strong>
-                  ${supportScore}
-                </strong>
-
-                <span>/100</span>
+              <div class="sb-result-verdict">
+                ${escapeHtml3(verdictLabel)}
               </div>
             </div>
-
-            <div class="sb-result-verdict">
-              ${escapeHtml3(verdictLabel)}
-            </div>
-          </div>
-
-          <div class="sb-result-score-track">
-            <div
-              style="
-                width:${supportScore}%;
-              "
-            ></div>
           </div>
 
           <div class="sb-result-transcript-meta">
@@ -4441,7 +4528,7 @@
         "[data-sb-video-reanalyze]"
       )?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
     }
     async function runAnalysis() {
@@ -4566,6 +4653,7 @@
       init_loader2();
       init_request_lifecycle();
       init_accent_theme();
+      init_trusted_events();
       ANALYSIS_STEPS2 = [
         {
           message: "Identifying the video's central claim\u2026",
@@ -6482,7 +6570,7 @@
           requirePersistent: true
         });
       }
-      const response = await fetch(
+      const response = await (privateRequest ? mediatedFetch : fetch)(
         `${apiBase}${path}`,
         {
           method,
@@ -6763,12 +6851,12 @@
           }
         });
       });
-      host.querySelector("[data-sb-pi-watch]")?.addEventListener("click", () => {
+      host.querySelector("[data-sb-pi-watch]")?.addEventListener("click", trustedUserAction(() => {
         void addWatch();
-      });
-      host.querySelector("[data-sb-pi-activity]")?.addEventListener("click", () => {
+      }));
+      host.querySelector("[data-sb-pi-activity]")?.addEventListener("click", trustedUserAction(() => {
         void checkActivity();
-      });
+      }));
       host.querySelector("[data-sb-pi-more]")?.addEventListener("click", () => {
         void loadMoreHistory();
       });
@@ -7261,6 +7349,7 @@
     "src/content/persistent-intelligence.js"() {
       init_api();
       init_persistent_intelligence_core();
+      init_trusted_events();
       REQUEST_TIMEOUT_MS = 22e3;
       MAX_ALERT_PAGES = 3;
       ALERT_PAGE_LIMIT = 100;
@@ -7637,6 +7726,7 @@
   // src/content/index.js
   var require_index = __commonJS({
     "src/content/index.js"() {
+      init_account_settings();
       init_sportabase();
       init_loader();
       init_video_results();

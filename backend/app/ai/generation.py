@@ -38,6 +38,14 @@ from app.services.gemini_capacity import (
 def request_client_key(
     request: Request,
 ) -> str:
+    # Some internal callers and long-standing unit-test request doubles do not
+    # carry Starlette's State object. A verified account, when the auth
+    # boundary attached one, always takes precedence over legacy identity.
+    state = getattr(request, "state", None)
+    account = getattr(state, "account", None)
+    if account:
+        from app.accounts.store import owner_key
+        return owner_key(account["id"])
     installation_id = str(
         request.headers.get(
             "x-sportabase-client-id",

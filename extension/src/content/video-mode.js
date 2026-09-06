@@ -17,8 +17,11 @@ import {
 
 import {
   createAccentTheme,
-  getScorePalette,
 } from "../ui/accent-theme.js";
+
+import {
+  trustedUserAction,
+} from "./trusted-events.mjs";
 
 const ANALYSIS_STEPS = [
   {
@@ -356,7 +359,7 @@ export function openVideoMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
   }
 
@@ -454,7 +457,7 @@ export function openVideoMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
 
     shell.content
@@ -479,13 +482,6 @@ export function openVideoMode({
 
     const logicScore =
       clampScore(data.logic_score);
-
-    const supportScore = Math.round(
-      (evidenceScore + logicScore) / 2
-    );
-
-    const scorePalette =
-      getScorePalette(supportScore);
 
     const uiLabels =
       data.ui_labels &&
@@ -529,7 +525,7 @@ export function openVideoMode({
             </li>
           `;
 
-    accentTheme.apply(scorePalette);
+    accentTheme.clear();
 
     shell.setModeLabel(
       `VIDEO INTELLIGENCE · ${contentTypeLabel.toUpperCase()}`
@@ -541,29 +537,13 @@ export function openVideoMode({
           <div class="sb-result-score-top">
             <div>
               <div class="sb-result-eyebrow">
-                OVERALL SUPPORT
+                VERDICT
               </div>
 
-              <div class="sb-result-score">
-                <strong>
-                  ${supportScore}
-                </strong>
-
-                <span>/100</span>
+              <div class="sb-result-verdict">
+                ${escapeHtml(verdictLabel)}
               </div>
             </div>
-
-            <div class="sb-result-verdict">
-              ${escapeHtml(verdictLabel)}
-            </div>
-          </div>
-
-          <div class="sb-result-score-track">
-            <div
-              style="
-                width:${supportScore}%;
-              "
-            ></div>
           </div>
 
           <div class="sb-result-transcript-meta">
@@ -718,7 +698,7 @@ export function openVideoMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
   }
 

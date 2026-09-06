@@ -13,8 +13,10 @@
       content="Sportabase evidence-first sports intelligence."
     />
 
+    <meta name="theme-color" content="#050706" />
+
     <title>
-      Sportabase ? Sports Intelligence
+      Sportabase · Sports Intelligence
     </title>
 
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -23,6 +25,8 @@
       rel="stylesheet"
       href="./styles.css"
     />
+
+    <link rel="stylesheet" href="./settings.css" />
 
     <script
       defer
@@ -36,6 +40,7 @@
   </head>
 
   <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <div class="page-shell">
       <header class="topbar">
         <a
@@ -61,21 +66,10 @@
           <span></span>
           CHECKING API
         </div>
+        <button id="open-settings" class="secondary-button" type="button" aria-haspopup="dialog"><span id="account-label">Account</span> / Settings</button>
       </header>
 
-      <main>
-        <section class="notification-card" aria-labelledby="notification-heading">
-          <div>
-            <p class="section-label">WATCHLIST ALERTS</p>
-            <h2 id="notification-heading">Browser notifications</h2>
-            <p id="notification-status" class="muted" aria-live="polite">Checking availability…</p>
-          </div>
-          <div class="notification-actions">
-            <button id="enable-notifications" type="button">Enable notifications</button>
-            <button id="disable-notifications" class="secondary-button" type="button" hidden>Disable</button>
-          </div>
-        </section>
-
+      <main id="main-content">
         <section id="intelligence-landing" class="result-card intelligence-landing" hidden>
           <p class="section-label">PERSISTED INTELLIGENCE</p>
           <h2 id="landing-title">Intelligence history</h2>
@@ -328,7 +322,7 @@
 
           <article class="insight-card">
             <div id="insight-status">
-              Loading current trend?
+              Loading current trend…
             </div>
 
             <div class="chart-shell">
@@ -352,5 +346,25 @@
         </span>
       </footer>
     </div>
+    <div id="notification-parking" hidden>
+      <section id="browser-notification-controls" class="browser-notification-controls" aria-labelledby="notification-heading">
+          <div>
+
+            <h3 id="notification-heading">This browser</h3>
+            <p id="notification-status" class="muted" aria-live="polite">Checking availability…</p>
+          </div>
+          <div class="notification-actions">
+            <button id="enable-notifications" type="button">Enable notifications</button>
+            <button id="disable-notifications" class="secondary-button" type="button" hidden>Disable</button>
+          </div>
+      </section>
+    </div>
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+      <header class="settings-header"><h1 id="settings-title">Settings</h1><button id="close-settings" class="secondary-button" type="button" aria-label="Close settings">Close</button></header>
+      <div class="settings-workspace"><nav id="settings-nav" aria-label="Settings sections"></nav><section id="settings-content"></section></div>
+      <p id="settings-status" role="status" aria-live="polite" hidden></p>
+    </dialog>
+    <dialog id="data-confirmation" aria-label="Confirm data action"></dialog>
+    <script type="module" src="./settings.mjs"></script>
   </body>
 </html>

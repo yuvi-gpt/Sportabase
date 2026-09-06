@@ -1,0 +1,133 @@
+name: PR regression
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend full suite (Python 3.14)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg libgomp1 tesseract-ocr tesseract-ocr-eng
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt pytest pytest-subtests
+      - name: Compile backend modules
+        run: python -m compileall -q backend/app
+      - name: Run backend test suite
+        working-directory: backend
+        run: python -m pytest -q
+
+  web-and-browser:
+    name: Web unit + Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tooling/browser/package-lock.json
+      - name: Run web unit tests
+        run: node --test frontend/tests/*.test.mjs
+      - name: Install browser test dependencies
+        working-directory: tooling/browser
+        run: npm ci
+      - name: Install Chromium
+        working-directory: tooling/browser
+        run: npx playwright install --with-deps chromium
+      - name: Run Playwright
+        working-directory: tooling/browser
+        run: npm test
+
+  extension:
+    name: Extension tests + reproducible build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: extension/package-lock.json
+      - name: Install dependencies
+        working-directory: extension
+        run: npm ci
+      - name: Run extension tests
+        working-directory: extension
+        run: npm test
+      - name: Build extension
+        working-directory: extension
+        run: npm run build
+      - name: Verify checked-in generated artifacts
+        run: git diff --exit-code -- extension/dist
+      - name: Dependency audit (informational except critical)
+        working-directory: extension
+        run: |
+          npm audit --omit=dev || true
+          npm audit --omit=dev --audit-level=critical
+
+  mobile:
+    name: Mobile TypeScript + tests + Expo export
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+      - name: TypeScript
+        working-directory: mobile
+        run: npx tsc --noEmit
+      - name: Mobile account lifecycle tests
+        working-directory: mobile
+        run: node --test tests/*.test.mjs
+      - name: Expo web export
+        working-directory: mobile
+        run: npx expo export --platform web --output-dir dist-ci
+      - name: Dependency audit (informational except critical)
+        working-directory: mobile
+        run: |
+          npm audit --omit=dev || true
+          npm audit --omit=dev --audit-level=critical
+
+  hygiene:
+    name: Diff hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Git whitespace check
+        run: git diff --check origin/main...HEAD

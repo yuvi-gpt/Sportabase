@@ -6,6 +6,10 @@ import {
   SPORTABASE_VIEWPORT_GUTTER,
 } from "./preferences.js";
 
+import {
+  trustedUserAction,
+} from "../content/trusted-events.mjs";
+
 export function installSettingsDrawer({
   overlay,
   preferences = {},
@@ -23,7 +27,6 @@ export function installSettingsDrawer({
     );
 
   let closeTimer = null;
-
   const layer =
     document.createElement("div");
 
@@ -45,6 +48,7 @@ export function installSettingsDrawer({
       role="dialog"
       aria-modal="true"
       aria-labelledby="sb-settings-title"
+      tabindex="-1"
     >
       <header class="sb-settings-header">
         <div>
@@ -165,13 +169,15 @@ export function installSettingsDrawer({
                 Large
               </option>
 
-              <option
-                value="custom"
-                disabled
-              >
-                Custom
-              </option>
             </select>
+          </label>
+
+          <label class="sb-setting-row">
+            <span>
+              <strong>Remember position</strong>
+              <small>Keep the panel where you place it.</small>
+            </span>
+            <input type="checkbox" data-sb-setting="sportabaseRememberPosition" />
           </label>
 
           <label class="sb-setting-row">
@@ -248,7 +254,7 @@ export function installSettingsDrawer({
         </section>
 
         <div class="sb-settings-footer">
-          Changes are saved automatically.
+          Extension layout saves automatically. Account preferences use Save changes.
         </div>
       </div>
     </section>
@@ -426,7 +432,8 @@ export function installSettingsDrawer({
       window.setTimeout(() => {
         layer.hidden = true;
         closeTimer = null;
-      }, 170);
+        settingsButton?.focus();
+      }, currentPreferences.sportabaseMotionLevel === "reduce" ? 0 : 170);
   }
 
   layer
@@ -557,14 +564,23 @@ export function installSettingsDrawer({
       resetLayout
     );
 
-  layer
-    .querySelector(
-      "[data-sb-reset-all]"
-    )
-    ?.addEventListener(
-      "click",
-      resetAllSettings
-    );
+  const resetAllButton = layer.querySelector("[data-sb-reset-all]");
+  let resetAllTimer = null;
+  resetAllButton?.addEventListener("click", () => {
+    if (resetAllButton.dataset.confirmed === "true") {
+      window.clearTimeout(resetAllTimer);
+      resetAllButton.dataset.confirmed = "false";
+      resetAllButton.textContent = "Reset all settings";
+      resetAllSettings();
+      return;
+    }
+    resetAllButton.dataset.confirmed = "true";
+    resetAllButton.textContent = "Confirm reset all settings";
+    resetAllTimer = window.setTimeout(() => {
+      resetAllButton.dataset.confirmed = "false";
+      resetAllButton.textContent = "Reset all settings";
+    }, 5000);
+  });
 
   overlay.addEventListener(
     "keydown",
@@ -583,6 +599,32 @@ export function installSettingsDrawer({
     "false"
   );
 
+  // Account/auth controls live in an extension-owned page. The host DOM contains
+  // only non-sensitive visual/layout controls.
+  for (const key of ["sportabaseAppearance","sportabaseHighContrast","sportabaseDetailLevel"]) {
+    layer.querySelector(`[data-sb-setting="${key}"]`)?.closest("label")?.remove();
+  }
+  for (const group of layer.querySelectorAll(".sb-settings-group")) {
+    if (!group.querySelector(".sb-setting-row, .sb-settings-action")) group.remove();
+  }
+  const layoutTitle=layer.querySelector(".sb-settings-group-title");
+  if(layoutTitle)layoutTitle.textContent="Layout (this extension only)";
+  const accountGroup=document.createElement('section');
+  accountGroup.className='sb-settings-group';
+  const accountTitle=document.createElement('div');accountTitle.className='sb-settings-group-title';accountTitle.textContent='Account settings';
+  const accountCopy=document.createElement('p');accountCopy.textContent='Open the extension-owned Settings page to manage account defaults, notifications, privacy and sign-out.';
+  const accountButton=document.createElement('button');accountButton.type='button';accountButton.className='sb-settings-action';accountButton.textContent='Open account settings';
+  accountButton.addEventListener('click',trustedUserAction(()=>{void chrome.runtime.sendMessage({type:'SPORTABASE_OPEN_EXTENSION_SETTINGS'}).catch(error=>console.error('[sportabase] Could not open account settings:',error));}));
+  accountGroup.append(accountTitle,accountCopy,accountButton);
+  layer.querySelector('.sb-settings-content')?.prepend(accountGroup);
+  layer.addEventListener("keydown",event=>{
+    if(event.key!=="Tab")return;
+    const items=[...layer.querySelectorAll('button:not(:disabled),select:not(:disabled),input:not(:disabled),summary,[tabindex="0"]')].filter(el=>el.getClientRects().length);
+    const first=items[0],last=items.at(-1);
+    if(!items.includes(document.activeElement)){event.preventDefault();(event.shiftKey?last:first)?.focus();}
+    else if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+    else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+  });
   applyCurrentPreferences();
 
   return {

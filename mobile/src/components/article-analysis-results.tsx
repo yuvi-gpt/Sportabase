@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import {
   StyleSheet,
   Text,
@@ -51,6 +52,8 @@ function humanizeLabel(value: string) {
 export function ArticleAnalysisResults({
   result,
 }: ArticleAnalysisResultsProps) {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const meritScore = clampScore(
     result.merit_score,
   );
@@ -396,7 +399,7 @@ export function ArticleAnalysisResults({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   container: {
     gap: 14,
   },
