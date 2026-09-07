@@ -95,7 +95,7 @@ function AppFrame() {
   const account = useAccount();
   const { colors } = useProductTheme();
   const pathname = usePathname();
-  const showProductNav = pathname !== '/handle-share';
+  const showProductNav = Platform.OS !== 'web' && pathname !== '/handle-share';
 
   return (
     <View style={[styles.frame,{backgroundColor:colors.background}]}>
@@ -112,7 +112,6 @@ function AppFrame() {
           <Stack.Screen name="explore" />
           <Stack.Screen name="intelligence" />
           <Stack.Protected guard={account.ready && account.signedIn && Boolean(account.state)}>
-            <Stack.Screen name="index" />
             <Stack.Screen name="watchlists" />
             <Stack.Screen name="alerts" />
             <Stack.Screen name="notifications" />
