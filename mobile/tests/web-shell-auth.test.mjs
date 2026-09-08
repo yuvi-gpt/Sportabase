@@ -15,7 +15,8 @@ const [
   destinationsSource,
   accountSource,
   designHeaderSource,
-  productSource,
+  homeRouteSource,
+  productAnalyzeSource,
   nativeNavSource,
   watchlistsSource,
   alertsSource,
@@ -29,7 +30,8 @@ const [
   read('../src/lib/auth-destinations.ts'),
   read('../src/lib/account-context.tsx'),
   read('../src/design-lab/DesignLabHeader.tsx'),
-  read('../src/design-lab/SportabaseProduct.tsx'),
+  read('../src/app/index.tsx'),
+  read('../src/product-ui/ProductAnalyze.tsx'),
   read('../src/components/product-nav.tsx'),
   read('../src/app/watchlists.tsx'),
   read('../src/app/alerts.tsx'),
@@ -65,8 +67,10 @@ test('web shell owns the shared production header and keeps the Design Lab as a 
   assert.match(shellSource, /role="main"/);
   assert.match(designHeaderSource, /import \{ ProductHeader \} from '\.\.\/product-ui\/ProductHeader'/);
   assert.doesNotMatch(designHeaderSource, /const NAV_ITEMS/);
-  assert.match(productSource, /useProductHomeControls\(homeControls\)/);
-  assert.match(productSource, /showHeader=\{Platform\.OS !== 'web'\}/);
+  assert.match(homeRouteSource, /import \{ ProductAnalyze \} from '\.\.\/product-ui\/ProductAnalyze'/);
+  assert.match(homeRouteSource, /<ProductAnalyze \/>/);
+  assert.doesNotMatch(homeRouteSource, /SportabaseProduct|design-lab/);
+  assert.match(productAnalyzeSource, /useProductHomeControls\(/);
 });
 
 test('web primary navigation exposes the required product destinations', () => {
