@@ -14,10 +14,7 @@ import { productPalette } from './tokens';
 import { useProductTheme } from '../theme/product-theme';
 
 function routeUsesProductHeader(pathname: string) {
-  return !(
-    pathname === '/handle-share' ||
-    pathname.startsWith('/design-lab')
-  );
+  return pathname !== '/handle-share';
 }
 
 export function ProductWebShell({

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { startExpoServer, stopExpoServer } from '../../serve-expo.mjs';
+import { expoStaticRoot, startExpoServer, stopExpoServer } from '../../serve-expo.mjs';
 
 const API_ORIGIN = 'https://sportabase-e2e.invalid';
 const screenshotSet = process.env.SPORTABASE_SCREENSHOT_SET || 'current';
@@ -49,6 +49,33 @@ const routeCases = [
   ['/', 'Know what backs the story.'], ['/explore', 'Discover'], ['/intelligence', 'Intelligence'], ['/settings', 'Settings'],
   ['/watchlists', 'Watches'], ['/alerts', 'Alerts'], ['/notifications', 'Notifications'], ['/activity', 'Activity'],
 ];
+
+test('release export excludes Design Lab routes', async ({ page }) => {
+  const exportedRoutes = (await readdir(expoStaticRoot, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.html'))
+    .map((entry) => entry.name === 'index.html' ? '/' : `/${entry.name.slice(0, -5)}`)
+    .sort();
+
+  expect(exportedRoutes).toEqual([
+    '/',
+    '/+not-found',
+    '/_sitemap',
+    '/activity',
+    '/alerts',
+    '/explore',
+    '/handle-share',
+    '/intelligence',
+    '/notifications',
+    '/settings',
+    '/watchlists',
+  ]);
+
+  for (const route of ['/design-lab', '/design-lab-analyzing']) {
+    const response = await page.goto(route);
+    expect(response?.status()).toBe(404);
+    await expect(page.locator('body')).not.toContainText(/Design Lab|Analyzing\.\.\.|design-lab-fixtures/);
+  }
+});
 
 for (const viewport of [
   { label: '1440 desktop', width: 1440, height: 1000 }, { label: '768 tablet', width: 768, height: 1024 },
@@ -130,8 +157,7 @@ test('current-run rendered audit screenshots', async ({ page }) => {
     if (url.pathname === '/intelligence/claims/claim-1/history') return route.fulfill({ json: { version: '1', claim: { id: 'claim-1', canonical_key: 'claim:1', subject_key: 'team:a', canonical_text: 'The tactical change decided the match.', claim_type: 'analysis', first_seen_at: '2026-08-01T10:00:00Z', last_seen_at: '2026-09-01T10:00:00Z' }, stories: [], verified_participants: [], events: [{ id: 'event-1', type: 'claim_observed', occurred_at: '2026-09-01T10:00:00Z', claim_summary: 'A persisted observation was recorded.' }], pagination: { limit: 50, next_cursor: null }, policy: { chronology_is_not_truth: true, evidence_quantity_is_not_probability: true } } });
     return route.fulfill({ status: 503, json: { detail: 'No fixture for this route.' } });
   } });
-  await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto('/design-lab'); await page.waitForTimeout(200); await page.screenshot({ path: `${screenshotRoot}/design-lab-reference.png`, fullPage: true });
-  await page.goto('/'); await expect(page.getByRole('heading', { name: 'Know what backs the story.' })).toBeVisible(); await page.waitForTimeout(200); await page.screenshot({ path: `${screenshotRoot}/home-desktop.png`, fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto('/'); await expect(page.getByRole('heading', { name: 'Know what backs the story.' })).toBeVisible(); await page.waitForTimeout(200); await page.screenshot({ path: `${screenshotRoot}/home-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/'); await expect(page.getByRole('heading', { name: 'Know what backs the story.' })).toBeVisible(); await page.waitForTimeout(200); await page.screenshot({ path: `${screenshotRoot}/home-mobile.png`, fullPage: true });
   await page.setViewportSize({ width: 768, height: 1000 }); await page.goto('/explore'); await page.getByLabel('Search term').fill('club'); await page.getByRole('button', { name: 'Search', exact: true }).click(); await expect(page.getByText(searchResults.results[0].title)).toBeVisible(); await page.waitForTimeout(200); await page.screenshot({ path: `${screenshotRoot}/discover.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto('/settings'); await page.getByRole('button', { name: 'Support/About' }).click(); await page.waitForTimeout(200); await page.screenshot({ path: `${screenshotRoot}/settings-desktop.png`, fullPage: true });

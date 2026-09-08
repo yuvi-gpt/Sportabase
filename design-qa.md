@@ -23,6 +23,8 @@ Accessibility target: keyboard-operable, responsive product flows with visible f
 - Protected account interruption: [`watches-account-gate.png`](tooling/browser/artifacts/expo/confirmation/watches-account-gate.png), [`alerts-account-gate.png`](tooling/browser/artifacts/expo/confirmation/alerts-account-gate.png)
 - Intelligence detail: [`intelligence-result.png`](tooling/browser/artifacts/expo/confirmation/intelligence-result.png)
 
+The recovered reference is a committed historical artifact. Release Expo exports do not expose a Design Lab route, and browser QA does not regenerate this reference through the release application.
+
 The comparison between the recovered reference and production home shows the identity was carried forward through the same dark evidence-first canvas, selected logo/wordmark, condensed display typography, restrained cyan/lime accents, wide composition, and stationary background-scale SB mark. Fixture storylines and the visible Design Lab affordance were intentionally not copied into production.
 
 ## Strengths

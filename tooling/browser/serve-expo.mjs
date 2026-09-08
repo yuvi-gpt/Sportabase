@@ -3,15 +3,16 @@ import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(fileURLToPath(new URL('../../mobile/dist/', import.meta.url)));
+const defaultRoot = fileURLToPath(new URL('../../mobile/dist/', import.meta.url));
+export const expoStaticRoot = path.resolve(process.env.SPORTABASE_EXPO_DIST_DIR || defaultRoot);
 const types = { '.css': 'text/css; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2' };
 
 async function resolveTarget(pathname) {
   const requested = pathname === '/' ? '/index.html' : pathname;
   const candidates = [requested, path.extname(requested) ? '' : `${requested}.html`].filter(Boolean);
   for (const candidate of candidates) {
-    const target = path.resolve(root, `.${candidate}`);
-    if (target !== root && !target.startsWith(`${root}${path.sep}`)) continue;
+    const target = path.resolve(expoStaticRoot, `.${candidate}`);
+    if (target !== expoStaticRoot && !target.startsWith(`${expoStaticRoot}${path.sep}`)) continue;
     try { await access(target); return target; } catch { /* Try the route export form. */ }
   }
   return null;
