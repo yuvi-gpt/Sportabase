@@ -15,6 +15,8 @@ import { ProductNav } from '../components/product-nav';
 import { markAlertRead } from '../lib/api';
 import { intelligenceRoute } from '../lib/intelligence-history';
 import { subscribeToPushNavigation } from '../lib/push-notifications';
+import { ProductShellProvider } from '../product-ui/ProductShellContext';
+import { ProductWebShell } from '../product-ui/ProductWebShell';
 
 function IncomingShareRedirector() {
   const router = useRouter();
@@ -97,20 +99,24 @@ function AppFrame() {
   const pathname = usePathname();
   const showProductNav = Platform.OS !== 'web' && pathname !== '/handle-share';
 
-  return (
-    <View style={[styles.frame,{backgroundColor:colors.background}]}>
-      <View style={styles.stack}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: {
-              backgroundColor: colors.background,
-            },
-          }}
-        >
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="explore" />
-          <Stack.Screen name="intelligence" />
+  const navigator = (
+    <View style={styles.stack}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: colors.background,
+          },
+        }}
+      >
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="explore" />
+        <Stack.Screen name="intelligence" />
+        {Platform.OS === 'web' ? <Stack.Screen name="watchlists" /> : null}
+        {Platform.OS === 'web' ? <Stack.Screen name="alerts" /> : null}
+        {Platform.OS === 'web' ? <Stack.Screen name="notifications" /> : null}
+        {Platform.OS === 'web' ? <Stack.Screen name="activity" /> : null}
+        {Platform.OS !== 'web' ? (
           <Stack.Protected guard={account.ready && account.signedIn && Boolean(account.state)}>
             <Stack.Screen name="watchlists" />
             <Stack.Screen name="alerts" />
@@ -118,11 +124,28 @@ function AppFrame() {
             <Stack.Screen name="activity" />
             <Stack.Screen name="handle-share" />
           </Stack.Protected>
-        </Stack>
-      </View>
-
-      {showProductNav ? <ProductNav /> : null}
+        ) : null}
+        {Platform.OS === 'web' ? (
+          <Stack.Protected guard={account.ready && account.signedIn && Boolean(account.state)}>
+            <Stack.Screen name="handle-share" />
+          </Stack.Protected>
+        ) : null}
+      </Stack>
     </View>
+  );
+
+  return (
+    <ProductShellProvider>
+      {Platform.OS === 'web' ? (
+        <ProductWebShell>{navigator}</ProductWebShell>
+      ) : (
+        <View style={[styles.frame,{backgroundColor:colors.background}]}>
+          {navigator}
+
+          {showProductNav ? <ProductNav /> : null}
+        </View>
+      )}
+    </ProductShellProvider>
   );
 }
 

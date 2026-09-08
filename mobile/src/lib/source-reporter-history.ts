@@ -1,10 +1,10 @@
 import { SportabaseApiError } from './api';
+import { sportabaseFetch } from './deployment-config';
 import {
   inspectableIntelligenceRoute,
   type IntelligenceKind,
 } from './intelligence-kinds';
 
-const API_BASE_URL = 'https://sportabase-api.onrender.com';
 const REQUEST_TIMEOUT_MS = 22000;
 
 export type SourceReporterKind = 'source' | 'reporter';
@@ -98,8 +98,8 @@ export async function getSourceReporterHistory(
   }
 
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/intelligence/${segment}/${encodeURIComponent(id)}/history?${params.join('&')}`,
+    const response = await sportabaseFetch(
+      `/intelligence/${segment}/${encodeURIComponent(id)}/history?${params.join('&')}`,
       {
         headers: { Accept: 'application/json' },
         signal: controller.signal,

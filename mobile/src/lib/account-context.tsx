@@ -7,17 +7,26 @@ import { Platform } from 'react-native';
 import { accountRequest, contract, setTokenGetter, type AccountState, type Preferences } from './account-api';
 import { getSportabaseClientId } from './client-identity';
 import { clearPushRegistrationAfterBackendRevocation } from './push-notifications';
+import { expoAuthConfiguration } from './deployment-config';
+import {
+  absoluteAuthDestination,
+  allowlistedAuthDestination,
+  type AuthReturnDestination,
+} from './auth-destinations';
 
 const LEGACY_MIGRATION_KEY = 'sportabase:legacy-migration:v1';
 
 type AccountContext = {
   ready: boolean; signedIn: boolean; label: string; error: string;
   state: AccountState | null; preferences: Preferences;
-  signIn: (signup?: boolean) => Promise<void>; signOut: () => Promise<void>;
+  signIn: (signup?: boolean, destination?: AuthReturnDestination) => Promise<void>; signOut: () => Promise<void>;
   manage: () => Promise<void>; refresh: () => Promise<void>; accept: (state: AccountState) => void;
 };
-const unavailable = async () => { throw new Error('Account sign-in is not configured for this installation.'); };
-const defaults: AccountContext = { ready:true,signedIn:false,label:'Signed out',error:'Account sign-in is not configured for this installation.',state:null,preferences:contract.defaults,signIn:unavailable,signOut:unavailable,manage:unavailable,refresh:unavailable,accept:()=>{} };
+function unavailableAccount(error: string): AccountContext {
+  const unavailable = async () => { throw new Error(error); };
+  return { ready:true,signedIn:false,label:'Signed out',error,state:null,preferences:contract.defaults,signIn:unavailable,signOut:unavailable,manage:unavailable,refresh:unavailable,accept:()=>{} };
+}
+const defaults = unavailableAccount('Account sign-in is not configured for this installation.');
 const Context = createContext<AccountContext>(defaults);
 export const useAccount = () => useContext(Context);
 
@@ -71,8 +80,12 @@ function ConnectedAccount({children}: PropsWithChildren) {
     return ()=>{active=false;setTokenGetter(null);};
   },[isLoaded,isSignedIn,user?.id,getToken]);
   const value: AccountContext = { ready:ready&&Boolean(isLoaded),signedIn:Boolean(isSignedIn),label:user?.primaryEmailAddress?.emailAddress || user?.fullName || 'Your account',error,state,preferences,accept,refresh,
-    signIn:async(signup=false)=>{
-      if(Platform.OS==='web') { if(signup) await clerk.redirectToSignUp(); else await clerk.redirectToSignIn(); }
+    signIn:async(signup=false,destination='/')=>{
+      if(Platform.OS==='web') {
+        const redirectUrl=absoluteAuthDestination(allowlistedAuthDestination(destination));
+        if(signup) await clerk.redirectToSignUp({signUpForceRedirectUrl:redirectUrl,signUpFallbackRedirectUrl:redirectUrl});
+        else await clerk.redirectToSignIn({signInForceRedirectUrl:redirectUrl,signInFallbackRedirectUrl:redirectUrl});
+      }
       else await startHostedAuth({mode:signup?'sign-up':'sign-in'});
     },
     signOut:async()=>{
@@ -90,7 +103,9 @@ function ConnectedAccount({children}: PropsWithChildren) {
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function AccountProvider({children}:PropsWithChildren) {
-  const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  if(!key) return <Context.Provider value={defaults}>{children}</Context.Provider>;
-  return <ClerkProvider publishableKey={key} tokenCache={tokenCache}><ConnectedAccount>{children}</ConnectedAccount></ClerkProvider>;
+  const auth = expoAuthConfiguration({
+    requireWebOrigin: Platform.OS === 'web',
+  });
+  if(!auth.publishableKey) return <Context.Provider value={unavailableAccount(auth.error)}>{children}</Context.Provider>;
+  return <ClerkProvider publishableKey={auth.publishableKey} tokenCache={tokenCache}><ConnectedAccount>{children}</ConnectedAccount></ClerkProvider>;
 }

@@ -1,7 +1,7 @@
 import { SportabaseApiError } from './api';
+import { sportabaseFetch } from './deployment-config';
 import type { IntelligenceKind } from './intelligence-kinds';
 
-const API_BASE_URL = 'https://sportabase-api.onrender.com';
 const REQUEST_TIMEOUT_MS = 22000;
 
 export type IntelligenceSearchResult = {
@@ -72,8 +72,8 @@ export async function searchInspectableIntelligence(
   }
 
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/intelligence/search?${params.join('&')}`,
+    const response = await sportabaseFetch(
+      `/intelligence/search?${params.join('&')}`,
       {
         headers: { Accept: 'application/json' },
         signal: controller.signal,

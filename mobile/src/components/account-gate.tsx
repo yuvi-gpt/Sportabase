@@ -1,17 +1,11 @@
 import { useState, type PropsWithChildren } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 import { useAccount } from '../lib/account-context';
-import { useProductTheme } from '../theme/product-theme';
+import { ProductButton, ProductStatus } from '../product-ui/ProductPrimitives';
 
-export function AccountGate({children}:PropsWithChildren) {
-  const account=useAccount(); const {colors,scale}=useProductTheme(); const [error,setError]=useState('');
-  if(account.ready&&account.signedIn&&account.state) return children;
-  return <View style={{flex:1,justifyContent:'center',padding:24,backgroundColor:colors.background,gap:16}}>
-    <Text accessibilityRole="header" style={{color:colors.text,fontSize:26*scale,fontWeight:'600'}}>Your Sportabase account</Text>
-    <Text style={{color:colors.muted,fontSize:16*scale,lineHeight:24*scale}}>Sign in to analyze, save activity, manage watches and sync settings.</Text>
-    {!account.ready?<ActivityIndicator accessibilityLabel="Loading account" color={colors.accent}/>:<>
-      <Text accessibilityLiveRegion="polite" style={{color:colors.error,fontSize:16}}>{error||account.error}</Text>
-      {[[account.signedIn?'Retry account connection':'Sign in',()=>account.signedIn?account.refresh():account.signIn()],['Create account',()=>account.signIn(true)]].map(([label,fn])=><Pressable key={String(label)} accessibilityRole="button" onPress={()=>void (fn as ()=>Promise<void>)().catch(e=>setError(e.message))} style={{padding:14,minHeight:48,borderRadius:6,backgroundColor:colors.accent}}><Text style={{color:colors.onAccent,fontSize:16*scale,fontWeight:'600'}}>{String(label)}</Text></Pressable>)}
-    </>}
-  </View>;
+export function AccountGate({ children }: PropsWithChildren) {
+  const account = useAccount(); const [error, setError] = useState('');
+  if (account.ready && account.signedIn && account.state) return children;
+  const detail = !account.ready ? 'Checking your Sportabase account.' : 'Sign in to manage synchronized preferences, activity, watches, devices, and private data.';
+  return <View style={{ gap: 16 }}><ProductStatus loading={!account.ready} title="Your Sportabase account" detail={detail} />{account.ready ? <View style={{ alignItems: 'flex-start', flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><ProductButton label={account.signedIn ? 'Retry account connection' : 'Sign in'} onPress={() => void (account.signedIn ? account.refresh() : account.signIn(false, '/settings')).catch((problem) => setError(problem instanceof Error ? problem.message : 'Account access is unavailable.'))} variant="primary" />{!account.signedIn ? <ProductButton label="Create account" onPress={() => void account.signIn(true, '/settings').catch((problem) => setError(problem instanceof Error ? problem.message : 'Account creation is unavailable.'))} /> : null}</View> : null}{error || account.error ? <ProductStatus title="Account access is unavailable" detail={error || account.error} tone="error" /> : null}</View>;
 }

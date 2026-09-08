@@ -1,8 +1,6 @@
-import { API_BASE, accountHeaders, privatePath } from './account-api';
+import { accountHeaders, privatePath } from './account-api';
 import { getSportabaseClientId } from './client-identity';
-
-const API_BASE_URL =
-  API_BASE;
+import { sportabaseFetch } from './deployment-config';
 
 const REQUEST_TIMEOUT_MS = 22000;
 const ANALYSIS_TIMEOUT_MS = 60000;
@@ -227,8 +225,8 @@ async function requestJson<T>(
   }, timeoutMs);
 
   try {
-    const response = await fetch(
-      `${API_BASE_URL}${path}`,
+    const response = await sportabaseFetch(
+      path,
       {
         ...init,
         headers: {

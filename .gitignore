@@ -22,6 +22,7 @@ backend/data/*.db.*.bak
 # Node / extension junk if added later
 node_modules/
 tooling/browser/test-results/
+tooling/browser/artifacts/expo/current/
 tooling/browser/playwright-report/
 
 *.zip

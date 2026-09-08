@@ -46,11 +46,11 @@ function VerificationField({ mobile, exiting, motionDebug, onExitComplete }: { m
   </Animated.View>;
 }
 
-export function DesignLabAnalyzing({ mobile, url, exiting = false, onExitComplete, motionDebug = false }: { mobile: boolean; url: string; exiting?: boolean; onExitComplete?: () => void; motionDebug?: boolean }) {
+export function DesignLabAnalyzing({ mobile, url, exiting = false, onExitComplete, motionDebug = false, showHeader = true }: { mobile: boolean; url: string; exiting?: boolean; onExitComplete?: () => void; motionDebug?: boolean; showHeader?: boolean }) {
   const copy = useRef(new Animated.Value(exiting ? 0 : 1)).current;
   useEffect(() => { Animated.timing(copy, { toValue: exiting ? 0 : 1, duration: exiting ? 160 : 210, useNativeDriver: nativeDriver }).start(); }, [copy, exiting]);
   const copyStyle = { opacity: copy, transform: [{ translateY: copy.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] };
-  return <View style={[styles.page, mobile && styles.pageMobile]}><DesignLabHeader mobile={mobile} onHome={() => {}} onAnother={() => {}} showAnother={false} /><View style={[styles.composition, mobile && styles.compositionMobile]}><Animated.View style={[styles.copy, mobile && styles.copyMobile, copyStyle]}><Text style={[styles.title, mobile && styles.titleMobile]}>Analyzing...</Text>{mobile ? <><Text style={styles.support}>Reading the claim and checking what supports it.</Text><Text numberOfLines={2} style={styles.url}>{url}</Text></> : <><Text numberOfLines={2} style={styles.url}>{url}</Text><Text style={styles.support}>Reading the claim and checking what supports it.</Text></>}</Animated.View><VerificationField mobile={mobile} exiting={exiting} motionDebug={motionDebug} onExitComplete={onExitComplete} /></View></View>;
+  return <View style={[styles.page, mobile && styles.pageMobile]}>{showHeader?<DesignLabHeader mobile={mobile} onHome={() => {}} onAnother={() => {}} showAnother={false} />:null}<View style={[styles.composition, mobile && styles.compositionMobile]}><Animated.View style={[styles.copy, mobile && styles.copyMobile, copyStyle]}><Text style={[styles.title, mobile && styles.titleMobile]}>Analyzing...</Text>{mobile ? <><Text style={styles.support}>Reading the claim and checking what supports it.</Text><Text numberOfLines={2} style={styles.url}>{url}</Text></> : <><Text numberOfLines={2} style={styles.url}>{url}</Text><Text style={styles.support}>Reading the claim and checking what supports it.</Text></>}</Animated.View><VerificationField mobile={mobile} exiting={exiting} motionDebug={motionDebug} onExitComplete={onExitComplete} /></View></View>;
 }
 
 const styles = StyleSheet.create({

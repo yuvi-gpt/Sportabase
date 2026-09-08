@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import contract from '../../../frontend/preferences-contract.json';
+import {
+  configuredSportabaseWebOrigin,
+  sportabaseFetch,
+} from './deployment-config';
 
 export { contract };
 export type Preferences = typeof contract.defaults;
@@ -9,14 +13,9 @@ export type AccountState = {
   device: { device_id: string; platform: string; name: string }; follows_defaults: boolean;
   defaults: Preferences; overrides: Partial<Preferences>; effective: Preferences;
 };
-export const API_BASE = process.env.EXPO_PUBLIC_SPORTABASE_API_URL || 'https://sportabase-api.onrender.com';
 export function canonicalPrivacyUrl() {
-  const configured = (process.env.EXPO_PUBLIC_SPORTABASE_WEB_URL || '').trim();
-  try {
-    const origin = new URL(configured);
-    if (origin.protocol !== 'https:' || origin.origin !== configured.replace(/\/$/, '')) return null;
-    return `${origin.origin}/privacy.html`;
-  } catch { return null; }
+  const origin = configuredSportabaseWebOrigin();
+  return origin ? `${origin}/privacy.html` : null;
 }
 let tokenGetter: (() => Promise<string | null>) | null = null;
 let installation: Promise<string> | null = null;
@@ -36,7 +35,7 @@ export async function accountHeaders() {
 }
 export function privatePath(path: string) { return /^(\/account(?:\/|$)|\/watchlists(?:\/|$)|\/notifications(?:\/|$)|\/analyze(?:\/|$)|\/resolve-content$|\/content\/browser-capture$)/.test(path); }
 export async function accountRequest<T = AccountState>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { method, headers: { ...await accountHeaders(), 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await sportabaseFetch(path, { method, headers: { ...await accountHeaders(), 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(typeof payload.detail === 'string' ? payload.detail : `Request failed (${response.status}).`);

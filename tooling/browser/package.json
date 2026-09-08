@@ -1,5 +1,5 @@
 {
   "name": "sportabase-browser-tests", "private": true, "type": "module",
-  "scripts": {"test": "playwright test", "serve": "node serve.mjs"},
+  "scripts": {"test": "playwright test", "test:expo": "playwright test -c playwright.expo.config.mjs", "serve": "node serve.mjs", "serve:expo": "node serve-expo.mjs"},
   "devDependencies": {"@playwright/test": "1.63.0"}
 }

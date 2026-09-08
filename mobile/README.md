@@ -25,6 +25,33 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Public deployment configuration
+
+Expo builds use public values only. A missing deployment or API value is an
+honest `unconfigured` state: public screens can render, but every Sportabase API
+request fails locally before `fetch()`.
+
+Set these values explicitly for a local API:
+
+```dotenv
+EXPO_PUBLIC_SPORTABASE_DEPLOYMENT=local
+EXPO_PUBLIC_SPORTABASE_API_URL=http://127.0.0.1:8000
+```
+
+The later staging browser run requires placeholders equivalent to:
+
+```dotenv
+EXPO_PUBLIC_SPORTABASE_DEPLOYMENT=staging
+EXPO_PUBLIC_SPORTABASE_API_URL=https://staging-api.example.invalid
+EXPO_PUBLIC_SPORTABASE_WEB_URL=https://staging-web.example.invalid
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_WITH_STAGING_VALUE
+```
+
+Staging rejects the production Sportabase API origin and any Clerk key that is
+not a test publishable key. Do not put Clerk secret keys, tokens, or other
+secrets in `EXPO_PUBLIC_*` variables. Production values are intentionally not
+defined by this repository.
+
 ## Get a fresh project
 
 When you're ready, run:
