@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
+from app.intelligence.homepage_storylines import build_homepage_storylines
 from app.intelligence.product_history import (
     ProductIntelligenceIntegrityError,
     SEARCH_KINDS,
@@ -15,10 +16,29 @@ from app.intelligence.source_reporter_product_history import (
     reporter_history,
     source_history,
 )
+from app.story.story_claim_graph_materialization import (
+    StoryClaimGraphMaterializationIntegrityError,
+)
 
 
 def build_router(*, connection_factory) -> APIRouter:
     router = APIRouter(prefix="/intelligence", tags=["product-intelligence"])
+
+    @router.get("/homepage-storylines")
+    def homepage_storylines(
+        limit: int = Query(50, ge=1, le=200),
+        cursor: str = Query("", max_length=4096),
+    ):
+        try:
+            return build_homepage_storylines(
+                connection_factory=connection_factory,
+                limit=limit,
+                cursor=cursor,
+            )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @router.get("/search")
     def search(q: str = Query(..., min_length=1, max_length=200), kind: list[str] | None = Query(None), sport_key: str = Query("", max_length=64), limit: int = Query(20, ge=1, le=100), cursor: str = Query("", max_length=4096)):

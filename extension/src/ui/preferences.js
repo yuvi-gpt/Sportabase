@@ -3,8 +3,9 @@ export const SPORTABASE_VIEWPORT_GUTTER = 8;
 export const DEFAULT_PREFERENCES = {
   sportabaseAppearance: "system",
 
-  sportabaseAccentMode: "dynamic",
-  sportabaseAccentColor: "#06b6d4",
+  sportabaseTextScale: "system",
+  sportabaseDensity: "comfortable",
+  sportabaseMotionLevel: "system",
 
   sportabaseHighContrast: false,
 
@@ -435,6 +436,9 @@ export function applyPreferences(
     PALETTES[appearance] ||
     PALETTES.dark;
 
+  overlay.dataset.sbText = preferences.sportabaseTextScale;
+  overlay.dataset.sbDensity = preferences.sportabaseDensity;
+  overlay.dataset.sbMotion = preferences.sportabaseMotionLevel === "system" ? (matchMedia("(prefers-reduced-motion: reduce)").matches ? "reduce" : "full") : preferences.sportabaseMotionLevel;
   overlay.dataset.sbAppearance =
     appearance;
 
@@ -508,7 +512,7 @@ export function applyPreferences(
   if (!resultPaletteActive) {
     overlay.style.setProperty(
       "--sb-accent",
-      "#06b6d4"
+      appearance === "light" ? "#246b16" : "#78f54a"
     );
 
     overlay.style.setProperty(

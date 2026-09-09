@@ -1,3 +1,6 @@
+import { authHeaders, isPrivatePath } from "./account-client.mjs";
+import productConfig from "./product-config.mjs";
+import { shouldEmitLandingEvent } from "./analytics-boundary.mjs";
 import {
   normalizeArticleIntelligence,
 } from "./article-intelligence.mjs";
@@ -56,6 +59,15 @@ function getApiBase() {
 
 
 const API = getApiBase();
+
+if (shouldEmitLandingEvent(productConfig, location)) {
+  void fetch(`${productConfig.apiBase}/product-events/landing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ platform: "web" }),
+    keepalive: true,
+  }).catch(() => {});
+}
 
 
 function byId(id) {
@@ -124,6 +136,8 @@ async function fetchJson(
     privateRequest = false,
   } = {}
 ) {
+  const requiresAuth = privateRequest || isPrivatePath(path);
+  const verifiedHeaders = requiresAuth ? await authHeaders() : {};
   const privateClientId = privateRequest ? getClientId() : null;
   if (privateRequest && !privateClientId) {
     throw new Error("Persistent browser storage is required for this private feature.");
@@ -169,10 +183,11 @@ async function fetchJson(
   try {
     const response =
       await fetch(
-        `${API}${path}`,
+        `${requiresAuth ? productConfig.apiBase : API}${path}`,
         {
           method,
           headers: {
+            ...verifiedHeaders,
             Accept:
               "application/json",
             ...(body !== undefined
@@ -560,6 +575,7 @@ function renderAnalysis(
 
 
 async function analyzeArticle() {
+  try { await authHeaders(); } catch (error) { setStatus(error.message, { error: true }); return; }
   const input =
     byId("article-url");
 
@@ -1180,6 +1196,7 @@ async function registerBrowserSubscription(subscription, knownBackendItems = nul
 
 
 async function reconcileWebPushState() {
+  await authHeaders();
   const capability = notificationCapability(window);
   if (capability === "insecure") {
     setNotificationState("Browser notifications require HTTPS (localhost is allowed for development).");
@@ -1261,10 +1278,7 @@ async function disableWebPush() {
 async function initializeWebPush() {
   byId("enable-notifications").addEventListener("click", enableWebPush);
   byId("disable-notifications").addEventListener("click", disableWebPush);
-  try { await reconcileWebPushState(); }
-  catch (error) {
-    setNotificationState(`Notifications are currently unavailable: ${clean(error?.message) || "server error"}`, { enable: true });
-  }
+  setNotificationState("Sign in to manage browser notifications.", { enable: true });
 }
 
 
@@ -1300,3 +1314,5 @@ async function loadIntelligenceLanding() {
 
 
 initialize();
+
+document.addEventListener("sportabase:account-ready", () => { void reconcileWebPushState().catch(error => setNotificationState(error.message)); });

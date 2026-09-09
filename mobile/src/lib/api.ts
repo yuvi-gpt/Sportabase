@@ -1,7 +1,8 @@
+import { API_BASE, accountHeaders, privatePath } from './account-api';
 import { getSportabaseClientId } from './client-identity';
 
 const API_BASE_URL =
-  'https://sportabase-api.onrender.com';
+  API_BASE;
 
 const REQUEST_TIMEOUT_MS = 22000;
 const ANALYSIS_TIMEOUT_MS = 60000;
@@ -231,6 +232,7 @@ async function requestJson<T>(
       {
         ...init,
         headers: {
+          ...(privatePath(path) ? await accountHeaders() : {}),
           Accept: 'application/json',
           ...init.headers,
         },

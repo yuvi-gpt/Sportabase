@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -35,6 +36,8 @@ function messageFrom(error: unknown) {
 }
 
 export default function WatchlistsScreen() {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
   const [items, setItems] = useState<WatchItem[]>([]);
   const [count, setCount] = useState(0);
@@ -265,7 +268,7 @@ export default function WatchlistsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: {
     backgroundColor: COLORS.background,
     flex: 1,

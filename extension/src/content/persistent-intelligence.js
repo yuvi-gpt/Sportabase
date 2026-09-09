@@ -1,5 +1,6 @@
 import {
   getSportabaseClientId,
+  mediatedFetch,
   SportabaseApiError,
 } from "./api.js";
 
@@ -12,6 +13,10 @@ import {
   historyRelations,
   mediaItemIdForUrl,
 } from "./persistent-intelligence-core.mjs";
+
+import {
+  trustedUserAction,
+} from "./trusted-events.mjs";
 
 const REQUEST_TIMEOUT_MS = 22000;
 const MAX_ALERT_PAGES = 3;
@@ -92,7 +97,7 @@ async function requestJson(
         });
     }
 
-    const response = await fetch(
+    const response = await (privateRequest ? mediatedFetch : fetch)(
       `${apiBase}${path}`,
       {
         method,
@@ -452,15 +457,15 @@ function createPanel({
 
     host
       .querySelector("[data-sb-pi-watch]")
-      ?.addEventListener("click", () => {
+      ?.addEventListener("click", trustedUserAction(() => {
         void addWatch();
-      });
+      }));
 
     host
       .querySelector("[data-sb-pi-activity]")
-      ?.addEventListener("click", () => {
+      ?.addEventListener("click", trustedUserAction(() => {
         void checkActivity();
-      });
+      }));
 
     host
       .querySelector("[data-sb-pi-more]")

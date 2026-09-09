@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -63,6 +64,8 @@ export function IntelligenceDetailScreen({
   kind: WatchTargetKind;
   id: string;
 }) {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
   const [data, setData] =
     useState<IntelligenceHistoryResponse | null>(null);
@@ -507,7 +510,7 @@ export function IntelligenceDetailScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: {
     backgroundColor: COLORS.background,
     flex: 1,

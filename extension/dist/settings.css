@@ -1,0 +1,202 @@
+/* src/styles/extension-settings-page.css */
+:root {
+  color-scheme: light dark;
+  --sb-canvas:#f5f7f4;
+  --sb-surface:#fff;
+  --sb-raised:#e8eee7;
+  --sb-text:#172219;
+  --sb-muted:#4e6053;
+  --sb-border:#718476;
+  --sb-accent:#246b16;
+  --sb-focus:#245dd8;
+  font-family:
+    Geist,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  background: var(--sb-canvas);
+  color: var(--sb-text);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-appearance=light]) {
+    --sb-canvas:#050706;
+    --sb-surface:#0d110f;
+    --sb-raised:#18221b;
+    --sb-text:#f3f7f3;
+    --sb-muted:#a5b3a9;
+    --sb-border:#718477;
+    --sb-accent:#78f54a;
+    --sb-focus:#a3beff;
+  }
+}
+:root[data-appearance=dark] {
+  --sb-canvas:#050706;
+  --sb-surface:#0d110f;
+  --sb-raised:#18221b;
+  --sb-text:#f3f7f3;
+  --sb-muted:#a5b3a9;
+  --sb-border:#718477;
+  --sb-accent:#78f54a;
+  --sb-focus:#a3beff;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--sb-canvas);
+  color: var(--sb-text);
+}
+.sb-extension-settings-page {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 32px 0 64px;
+  overflow-wrap: anywhere;
+}
+.sb-extension-settings-page > header {
+  margin-block-end: 24px;
+}
+.sb-extension-settings-page h1 {
+  font-size: 28px;
+  line-height: 1.3;
+  margin: 0 0 8px;
+}
+.sb-extension-settings-page > header p {
+  color: var(--sb-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.sb-settings-content {
+  background: var(--sb-surface);
+  border: 1px solid var(--sb-border);
+  border-radius: 12px;
+  padding: 16px 24px;
+}
+.sb-account-settings details {
+  padding-inline: 4px;
+}
+.sb-account-settings summary {
+  overflow-wrap: anywhere;
+}
+button:disabled,
+input:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+@media (max-width: 600px) {
+  .sb-extension-settings-page {
+    width: 100%;
+    padding: 20px 12px 48px;
+  }
+  .sb-settings-content {
+    padding: 12px;
+  }
+  .sb-setting-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* src/styles/account-settings.css */
+.sb-account-settings {
+  color: var(--sb-text);
+}
+.sb-account-settings > p[role=status]:empty {
+  display: none;
+}
+.sb-account-settings > p[role=status][data-tone=success] {
+  color: var(--sb-accent);
+}
+.sb-account-settings > p[role=status][data-tone=error] {
+  color: #d93434;
+}
+.sb-account-settings details {
+  border-bottom: 1px solid var(--sb-border);
+  padding: 8px 0;
+}
+.sb-account-settings summary {
+  padding: 12px 8px;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 650;
+  border-inline-start: 3px solid transparent;
+}
+.sb-account-settings details[open] > summary {
+  color: var(--sb-text);
+  border-inline-start-color: var(--sb-accent);
+  background: var(--sb-raised);
+}
+.sb-account-settings p {
+  color: var(--sb-muted);
+  line-height: 1.5;
+  font-size: 14px;
+  margin: 12px 0;
+}
+.sb-account-button {
+  background: var(--sb-raised);
+  color: var(--sb-text);
+  border: 1px solid var(--sb-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-height: 44px;
+  margin: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.sb-account-settings .sb-setting-row {
+  flex-wrap: wrap;
+  min-height: 48px;
+  gap: 8px;
+  font-size: 14px;
+}
+.sb-account-settings .sb-setting-row[hidden] {
+  display: none;
+}
+.sb-account-settings input:not([type=checkbox]),
+.sb-account-settings select {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 40px;
+  background: var(--sb-surface);
+  color: var(--sb-text);
+  border: 1px solid var(--sb-border);
+  border-radius: 6px;
+  padding: 8px;
+  font: inherit;
+}
+.sb-account-settings input[type=checkbox] {
+  width: 24px;
+  height: 24px;
+  accent-color: #246b16;
+}
+#sportabase-root .sb-settings-panel :is(button, input, select, summary):focus-visible,
+.sb-extension-settings-page :is(button, input, select, summary):focus-visible {
+  outline: 3px solid var(--sb-focus, #7099ef);
+  outline-offset: 3px;
+}
+.sb-high-contrast .sb-settings-panel :is(button, input, select) {
+  border-width: 2px;
+}
+[data-sb-motion=reduce] *,
+[data-sb-motion=reduce] *::before,
+[data-sb-motion=reduce] *::after {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}
+[data-sb-density=compact] .sb-setting-row {
+  padding-block: 8px;
+}
+[data-sb-text=large] .sb-settings-panel {
+  font-size: 19px;
+}
+[data-sb-text=large] .sb-setting-row,
+[data-sb-text=large] .sb-account-settings summary {
+  font-size: 19px;
+}
+[data-sb-text=small] .sb-settings-panel {
+  font-size: 15px;
+}

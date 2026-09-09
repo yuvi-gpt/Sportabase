@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useIncomingShare } from 'expo-sharing';
 import { useRouter } from 'expo-router';
 import {
@@ -92,6 +93,8 @@ function detectSource(value: string) {
 }
 
 export default function HandleShareScreen() {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
 
   const {
@@ -315,7 +318,7 @@ export default function HandleShareScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,

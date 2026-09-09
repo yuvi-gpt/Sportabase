@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from app.notifications.schema import NOTIFICATION_SCHEMA
+from app.accounts.schema import ACCOUNT_SCHEMA
 
 
 _PROVIDER_TIMEZONE = ZoneInfo(
@@ -121,6 +122,7 @@ def initialize_database(
             + _CLAIM_IDENTITY_MAPPING_SCHEMA
             + "\n"
             + _CLAIM_EVOLUTION_SCHEMA
+            + "\n" + ACCOUNT_SCHEMA
         )
 
         notification_schema_ready = (
@@ -287,6 +289,7 @@ def initialize_database(
             _CLAIM_IDENTITY_MAPPING_SCHEMA
             + "\n"
             + _CLAIM_EVOLUTION_SCHEMA
+            + "\n" + ACCOUNT_SCHEMA
         )
         if notification_schema_ready:
             conn.executescript(NOTIFICATION_SCHEMA)

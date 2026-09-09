@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useMemo, useState } from 'react';
 import {
   useFocusEffect,
@@ -48,6 +49,8 @@ function messageFrom(error: unknown) {
 }
 
 export default function AlertsScreen() {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
   const params = useLocalSearchParams<{
     targetKind?: string | string[];
@@ -389,7 +392,7 @@ export default function AlertsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: {
     backgroundColor: COLORS.background,
     flex: 1,

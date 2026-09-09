@@ -1,0 +1,37 @@
+{
+  "version": "sportabase-preferences-v1",
+  "defaults": {
+    "appearance": "system", "contrast": "standard", "text_size": "system",
+    "density": "comfortable", "motion": "system", "language": "system", "date_format": "system",
+    "analysis_detail": "full", "notifications_enabled": true,
+    "entity_alerts": true, "story_alerts": true, "claim_alerts": true, "media_alerts": true,
+    "quiet_hours_enabled": false, "quiet_hours_start": "22:00", "quiet_hours_end": "07:00",
+    "timezone": "UTC", "analytics_enabled": false, "activity_enabled": true
+  },
+  "sections": {
+    "Appearance": ["appearance", "contrast", "text_size", "density", "motion"],
+    "Notifications": ["notifications_enabled", "entity_alerts", "story_alerts", "claim_alerts", "media_alerts", "quiet_hours_enabled", "quiet_hours_start", "quiet_hours_end", "timezone"],
+    "Analysis": ["analysis_detail"],
+    "Language & Region": ["language", "date_format"],
+    "Privacy & Data": ["analytics_enabled", "activity_enabled"]
+  },
+  "fields": {
+    "appearance": {"label": "Appearance", "options": ["system", "light", "dark"]},
+    "contrast": {"label": "Contrast", "options": ["standard", "high"]},
+    "text_size": {"label": "Text size", "options": ["system", "small", "large"]},
+    "density": {"label": "Density", "options": ["comfortable", "compact"]},
+    "motion": {"label": "Motion", "options": ["system", "reduce", "full"]},
+    "language": {"label": "Interface language", "options": ["system", "en"]},
+    "date_format": {"label": "Date display", "options": ["system", "iso"]},
+    "analysis_detail": {"label": "Analysis detail", "options": ["full", "essential"]},
+    "notifications_enabled": {"label": "Allow push delivery"},
+    "entity_alerts": {"label": "Entity alerts"}, "story_alerts": {"label": "Story alerts"},
+    "claim_alerts": {"label": "Claim alerts"}, "media_alerts": {"label": "Media alerts"},
+    "quiet_hours_enabled": {"label": "Quiet hours"},
+    "quiet_hours_start": {"label": "Quiet hours start", "type": "time"},
+    "quiet_hours_end": {"label": "Quiet hours end", "type": "time"},
+    "timezone": {"label": "Quiet hours timezone", "type": "text"},
+    "analytics_enabled": {"label": "Share product usage counts", "accountOnly": true},
+    "activity_enabled": {"label": "Save My Activity", "accountOnly": true}
+  }
+}

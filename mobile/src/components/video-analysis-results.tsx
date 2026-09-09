@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 ﻿import {
   StyleSheet,
   Text,
@@ -58,6 +59,8 @@ export function VideoAnalysisResults({
   result,
   transcript,
 }: VideoAnalysisResultsProps) {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const evidenceScore = clampScore(
     result.evidence_score,
   );
@@ -66,9 +69,6 @@ export function VideoAnalysisResults({
     result.logic_score,
   );
 
-  const supportScore = Math.round(
-    (evidenceScore + logicScore) / 2,
-  );
 
   const verdict =
     result.localized_verdict.trim() ||
@@ -89,38 +89,13 @@ export function VideoAnalysisResults({
     <View style={styles.container}>
       <View style={styles.scoreCard}>
         <View style={styles.scoreTop}>
-          <View>
-            <Text style={styles.eyebrow}>
-              OVERALL SUPPORT
-            </Text>
-
-            <View style={styles.scoreRow}>
-              <Text style={styles.score}>
-                {supportScore}
-              </Text>
-
-              <Text style={styles.scoreMaximum}>
-                /100
-              </Text>
-            </View>
-          </View>
+          <View><Text style={styles.eyebrow}>Verdict</Text></View>
 
           <View style={styles.verdictPill}>
             <Text style={styles.verdictText}>
               {verdict}
             </Text>
           </View>
-        </View>
-
-        <View style={styles.scoreTrack}>
-          <View
-            style={[
-              styles.scoreFill,
-              {
-                width: `${supportScore}%`,
-              },
-            ]}
-          />
         </View>
 
         <Text style={styles.transcriptMeta}>
@@ -234,7 +209,7 @@ export function VideoAnalysisResults({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   container: {
     gap: 14,
   },

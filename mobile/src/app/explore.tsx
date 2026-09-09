@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -43,6 +44,8 @@ function messageFrom(error: unknown) {
 }
 
 export default function ExploreScreen() {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<
@@ -305,7 +308,7 @@ export default function ExploreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: {
     backgroundColor: COLORS.background,
     flex: 1,

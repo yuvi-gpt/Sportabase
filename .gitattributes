@@ -1,0 +1,3 @@
+# Generated extension build artifacts.
+extension/dist/** linguist-generated=true
+extension/dist/background.js -whitespace

@@ -24,6 +24,10 @@ import {
   getScorePalette,
 } from "../ui/accent-theme.js";
 
+import {
+  trustedUserAction,
+} from "./trusted-events.mjs";
+
 const ANALYSIS_STEPS = [
   {
     message: "Identifying the article's central story…",
@@ -730,7 +734,7 @@ export function openArticleMode({
         )
         ?.addEventListener(
           "click",
-          runAnalysis
+          trustedUserAction(runAnalysis)
         );
     }
 
@@ -811,7 +815,7 @@ export function openArticleMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
 
     shell.content
@@ -1154,7 +1158,7 @@ export function openArticleMode({
       )
       ?.addEventListener(
         "click",
-        runAnalysis
+        trustedUserAction(runAnalysis)
       );
   }
 

@@ -1,7 +1,8 @@
+import { API_BASE, accountHeaders } from './account-api';
 import { SportabaseApiError } from './api';
 import { getSportabaseClientId } from './client-identity';
 
-const API_BASE_URL = 'https://sportabase-api.onrender.com';
+const API_BASE_URL = API_BASE;
 const REQUEST_TIMEOUT_MS = 22000;
 
 export type NotificationPlatform = 'ios' | 'android';
@@ -49,6 +50,7 @@ async function privateRequest<T>(
     const response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
       headers: {
+        ...await accountHeaders(),
         Accept: 'application/json',
         ...init.headers,
         'x-sportabase-client-id': clientId,

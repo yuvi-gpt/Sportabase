@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -128,5 +129,21 @@ test(
       ).map((item) => item.id),
       ["a1"]
     );
+  }
+);
+
+
+test(
+  "video results never collapse evidence logic and verdict into a composite",
+  () => {
+    const source = readFileSync(
+      new URL("../src/content/video-mode.js", import.meta.url),
+      "utf8"
+    );
+
+    assert.doesNotMatch(source, /supportScore|OVERALL SUPPORT/);
+    assert.match(source, /evidenceScore/);
+    assert.match(source, /logicScore/);
+    assert.match(source, /verdictLabel/);
   }
 );

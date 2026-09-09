@@ -1,3 +1,4 @@
+import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useEffect, useState } from 'react';
 import * as Sharing from 'expo-sharing';
 import { useLocalSearchParams } from 'expo-router';
@@ -64,6 +65,8 @@ const FEATURES = [
 ];
 
 export default function HomeScreen() {
+  const { colors: COLORS,scale }=useProductTheme();
+  const styles=scaleStyles(makeStyles(COLORS),scale);
   const params = useLocalSearchParams<{
     shared?: string | string[];
     mode?: string | string[];
@@ -672,7 +675,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
