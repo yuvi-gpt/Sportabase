@@ -2,6 +2,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from pathlib import Path
 
@@ -15,6 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.db.schema import SCHEMA
 from app.routes.intelligence_product import build_router
+from app.story.story_claim_graph_materialization import StoryClaimGraphMaterializationIntegrityError
 
 
 class IntelligenceProductApiTests(unittest.TestCase):
@@ -156,9 +158,45 @@ class IntelligenceProductApiTests(unittest.TestCase):
         self.assertNotIn("combined_score", str(video))
         self.assertEqual(self.client.get("/intelligence/media/missing/history").status_code, 404)
 
+    def test_homepage_storylines_reuses_builder_and_preserves_error_contract(self):
+        expected = {
+            "version": "homepage-storyline-v1",
+            "status": "ok",
+            "storylines": [{"storyline_id": "storyline-1", "sport_key": "football"}],
+            "pagination": {"limit": 37, "returned": 1, "has_more": False},
+            "policy": {
+                "read_path_performs_writes": False,
+                "provider_call_performed": False,
+            },
+        }
+        with patch("app.routes.intelligence_product.build_homepage_storylines", return_value=expected) as builder:
+            response = self.client.get(
+                "/intelligence/homepage-storylines",
+                params={"limit": 37, "cursor": "cursor-value"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), expected)
+        builder.assert_called_once_with(
+            connection_factory=self.factory,
+            limit=37,
+            cursor="cursor-value",
+        )
+
+        with patch(
+            "app.routes.intelligence_product.build_homepage_storylines",
+            side_effect=StoryClaimGraphMaterializationIntegrityError("corrupt graph"),
+        ):
+            self.assertEqual(self.client.get("/intelligence/homepage-storylines").status_code, 409)
+        with patch(
+            "app.routes.intelligence_product.build_homepage_storylines",
+            side_effect=ValueError("bad cursor"),
+        ):
+            self.assertEqual(self.client.get("/intelligence/homepage-storylines").status_code, 422)
+        self.assertEqual(self.client.get("/intelligence/homepage-storylines?limit=201").status_code, 422)
+
     def test_routes_are_registered_once_and_public_router_has_no_admin_route(self):
         paths = [(route.path, tuple(route.methods or ())) for route in self.client.app.routes]
-        for path in ["/intelligence/search", "/intelligence/entities/{entity_id}/history", "/intelligence/stories/{story_id}/history", "/intelligence/claims/{claim_id}/history", "/intelligence/media/{media_item_id}/history"]:
+        for path in ["/intelligence/homepage-storylines", "/intelligence/search", "/intelligence/entities/{entity_id}/history", "/intelligence/stories/{story_id}/history", "/intelligence/claims/{claim_id}/history", "/intelligence/media/{media_item_id}/history"]:
             self.assertEqual(sum(item[0] == path and "GET" in item[1] for item in paths), 1)
         self.assertFalse(any(path.startswith("/admin/") for path, _ in paths))
 
