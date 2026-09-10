@@ -30,16 +30,20 @@ def analyze_video_impl(
     ANALYSIS_VERSION,
     VideoAnalyzeResponse,
     ai_video_claim_readout,
+    analysis_content_hash,
     app,
     get_cached_analysis,
     json,
     make_analysis_cache_key,
     normalize_video_transcript_metadata,
+    persist_analysis_snapshot,
     record_analysis_cache_hit,
+    record_user_history,
     request_client_key,
     set_cached_analysis,
     validate_video_analysis_consistency,
     video_analysis_cache_decision,
+    upsert_media_item,
 ):
     client_key = request_client_key(request)
 
@@ -65,6 +69,37 @@ def analyze_video_impl(
         content=cache_content,
     )
 
+    def persist_history(video_response) -> None:
+        try:
+            content_hash = analysis_content_hash(cache_content)
+            media_item = upsert_media_item(
+                url=req.url,
+                mode="video",
+                title=req.title,
+                content_hash=content_hash,
+            )
+            snapshot_result = persist_analysis_snapshot(
+                media_item_id=media_item["id"],
+                mode="video",
+                content_hash=content_hash,
+                response=video_response.model_dump(),
+                evidence_score=video_response.evidence_score,
+                logic_score=video_response.logic_score,
+                verdict=video_response.verdict,
+                article_type=video_response.content_type,
+            )
+            snapshot_id = int(snapshot_result["snapshot"]["id"])
+            record_user_history(
+                client_key=client_key,
+                media_item_id=media_item["id"],
+                snapshot_id=snapshot_id,
+            )
+            request_state = getattr(request, "state", None)
+            if request_state is not None:
+                request_state.analysis_snapshot_id = snapshot_id
+        except Exception as error:
+            print("video history persistence skipped:", str(error))
+
     cached = get_cached_analysis(cache_key)
 
     if cached is not None:
@@ -73,9 +108,11 @@ def analyze_video_impl(
             "video",
         )
 
-        return VideoAnalyzeResponse(
+        cached_response = VideoAnalyzeResponse(
             **cached
         )
+        persist_history(cached_response)
+        return cached_response
 
     result = ai_video_claim_readout(
         req.title,
@@ -185,6 +222,8 @@ def analyze_video_impl(
             },
         },
     )
+
+    persist_history(response)
 
     if cache_write_allowed:
         set_cached_analysis(
@@ -430,15 +469,29 @@ def analyze_article_impl(
                 ),
             )
 
+            if snapshot is None:
+                snapshot = persist_analysis_snapshot(
+                    media_item_id=media_item["id"],
+                    mode="article",
+                    content_hash=content_hash,
+                    context_hash=article_evidence_context_hash,
+                    response=cached_response.model_dump(),
+                    merit_score=cached_response.merit_score,
+                    badge=cached_response.badge,
+                    article_type=cached_response.article_type,
+                    score_components=cached_response.score_components,
+                    score_calculation=cached_response.score_calculation,
+                    reasons=cached_response.reasons,
+                )["snapshot"]
+
             record_user_history(
                 client_key=client_key,
                 media_item_id=media_item["id"],
-                snapshot_id=(
-                    int(snapshot["id"])
-                    if snapshot is not None
-                    else None
-                ),
+                snapshot_id=int(snapshot["id"]),
             )
+            request_state = getattr(request, "state", None)
+            if request_state is not None:
+                request_state.analysis_snapshot_id = int(snapshot["id"])
         except Exception as error:
             print(
                 "article history persistence skipped:",
@@ -1033,6 +1086,12 @@ def analyze_article_impl(
                 snapshot["id"]
             ),
         )
+
+        request_state = getattr(request, "state", None)
+        if request_state is not None:
+            request_state.analysis_snapshot_id = int(
+                snapshot["id"]
+            )
 
     except Exception as error:
         print(

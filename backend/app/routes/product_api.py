@@ -16,6 +16,7 @@ from app.models.api import (
     ContentResolveResponse,
     IngestResponse,
     Story,
+    SavedActivityReference,
     VideoAnalyzeRequest,
     VideoAnalyzeResponse,
 )
@@ -44,12 +45,21 @@ def build_router(
 ) -> APIRouter:
     router = APIRouter()
 
-    def track(request, req, kind):
+    def track(request, req, kind, response):
         account = getattr(request.state, "account", None)
         if account and connection_factory:
             from app.accounts.store import record_analysis_best_effort
-            record_analysis_best_effort(connection_factory, account["id"], request.state.device_id,
-                                        kind, getattr(req, "title", ""), req.url)
+            activity = record_analysis_best_effort(
+                connection_factory, account["id"], request.state.device_id,
+                kind, getattr(req, "title", ""), req.url,
+                getattr(request.state, "analysis_snapshot_id", None),
+            )
+            if activity:
+                if isinstance(response, dict):
+                    response["saved_activity"] = activity
+                else:
+                    response.saved_activity = SavedActivityReference.model_validate(activity)
+        return response
 
 
     @router.get("/health")
@@ -122,8 +132,7 @@ def build_router(
             mode="video",
             event_recorder=operational_event_recorder,
         )
-        track(request, req, "video")
-        return response
+        return track(request, req, "video", response)
 
     @router.post(
         "/analyze",
@@ -141,7 +150,7 @@ def build_router(
             event_recorder=operational_event_recorder,
         )
 
-        track(request, req, "article")
+        response = track(request, req, "article", response)
         return attach_article_product_intelligence(
             response=response,
             url=req.url,

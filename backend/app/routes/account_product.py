@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 import os
+import re
 import time
 from typing import Literal
 from urllib.parse import quote
@@ -11,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.accounts.auth import recent_intent
 from app.accounts import store
+from app.models.api import AnalyzeResponse, VideoAnalyzeResponse
 
 
 class StrictModel(BaseModel):
@@ -41,6 +43,53 @@ class Event(StrictModel):
 
 class LandingEvent(StrictModel):
     platform: Literal["web"]
+
+
+def _activity_snapshot(conn, activity):
+    snapshot_id = activity["snapshot_id"]
+    if snapshot_id is not None:
+        return conn.execute(
+            """SELECT * FROM analysis_snapshots
+               WHERE id=? AND media_item_id=? AND mode=?""",
+            (snapshot_id, activity["media_item_id"], activity["kind"]),
+        ).fetchone()
+
+    # Compatibility is intentionally narrow: the persisted Activity second must
+    # identify exactly one snapshot for the same media and mode.
+    rows = conn.execute(
+        """SELECT * FROM analysis_snapshots
+           WHERE media_item_id=? AND mode=?
+             AND CAST(strftime('%s', analyzed_at) AS INTEGER)=?
+           ORDER BY id LIMIT 2""",
+        (activity["media_item_id"], activity["kind"], activity["created_at"]),
+    ).fetchall()
+    return rows[0] if len(rows) == 1 else None
+
+
+def _validated_saved_analysis(activity, snapshot):
+    if snapshot is None:
+        return None
+    try:
+        raw = json.loads(snapshot["response_json"])
+        if not isinstance(raw, dict):
+            return None
+        # Historical payloads intentionally remain subject to the current
+        # response model. Future schema changes need an analysis_version-aware
+        # decoder rather than weaker validation here.
+        model = AnalyzeResponse.model_validate(raw) if activity["kind"] == "article" else VideoAnalyzeResponse.model_validate(raw)
+    except (json.JSONDecodeError, TypeError, ValidationError, ValueError):
+        return None
+    return {
+        "version": "sportabase-saved-analysis-v1",
+        "activity_id": activity["id"],
+        "kind": activity["kind"],
+        "title": activity["title"],
+        "source_url": activity["url"],
+        "analyzed_at": snapshot["analyzed_at"],
+        # Debug data is not needed by the product renderer and may contain
+        # internal runtime/provider diagnostics.
+        "analysis": model.model_dump(exclude={"saved_activity", "debug"}),
+    }
 
 
 def delete_clerk_user(subject):
@@ -94,13 +143,42 @@ def build_router(*, connection_factory, require_admin, provider_delete=delete_cl
                  limit: int = Query(30, ge=1, le=100), before: int = Query(0, ge=0), cursor: str = Query("", max_length=80)):
         with store.transaction(connection_factory) as conn:
             escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            rows = conn.execute("""SELECT id,kind,title,url,media_item_id,created_at,platform FROM product_activity
+            rows = conn.execute("""SELECT id,kind,title,url,media_item_id,created_at,platform,snapshot_id FROM product_activity
               WHERE account_id=? AND (?='' OR kind=?) AND title LIKE ? ESCAPE '\\'
               AND (?=0 OR created_at<? OR (created_at=? AND id<?)) ORDER BY created_at DESC,id DESC LIMIT ?""",
               (request.state.account["id"], kind, kind, "%" + escaped + "%", before, before, before, cursor, limit + 1)).fetchall()
-            items = [dict(row) for row in rows[:limit]]
+            items = []
+            for row in rows[:limit]:
+                item = dict(row)
+                item["restorable"] = _validated_saved_analysis(item, _activity_snapshot(conn, item)) is not None
+                item.pop("snapshot_id", None)
+                items.append(item)
             last = items[-1] if items and len(rows) > limit else None
             return {"items": items, "next": {"before": last["created_at"], "cursor": last["id"]} if last else None}
+
+    @router.get("/account/activity/{activity_id}/analysis")
+    def saved_analysis(activity_id: str, request: Request, response: Response):
+        response.headers["Cache-Control"] = "no-store"
+        if not re.fullmatch(r"act_[0-9a-f]{32}", activity_id):
+            raise HTTPException(404, "Saved analysis is unavailable.")
+        with store.transaction(connection_factory) as conn:
+            activity = conn.execute(
+                """SELECT id,kind,title,url,media_item_id,created_at,platform,snapshot_id
+                   FROM product_activity WHERE account_id=? AND id=?""",
+                (request.state.account["id"], activity_id),
+            ).fetchone()
+            if activity is None:
+                raise HTTPException(404, "Saved analysis is unavailable.")
+            activity = dict(activity)
+            snapshot = _activity_snapshot(conn, activity)
+            if snapshot is None:
+                if activity["snapshot_id"] is None:
+                    raise HTTPException(409, "This saved analysis predates restorable snapshot history.")
+                raise HTTPException(404, "The saved analysis snapshot is unavailable.")
+            payload = _validated_saved_analysis(activity, snapshot)
+            if payload is None:
+                raise HTTPException(404, "The saved analysis snapshot is unavailable.")
+            return payload
 
     @router.delete("/account/activity", status_code=204)
     def clear_activity(body: Intent, request: Request):
@@ -116,8 +194,17 @@ def build_router(*, connection_factory, require_admin, provider_delete=delete_cl
         with store.transaction(connection_factory) as conn:
             account_id = request.state.account["id"]
             data = {"version": "sportabase-personal-export-v1", "settings": store.snapshot(conn, account_id, request.state.device_id)}
-            for name, table in (("devices", "product_installations"), ("activity", "product_activity")):
-                data[name] = [dict(row) for row in conn.execute(f"SELECT * FROM {table} WHERE account_id=?", (account_id,))]
+            data["devices"] = [dict(row) for row in conn.execute(
+                """SELECT device_id,platform,name,follows_defaults,overrides_json,
+                          revision,created_at,last_seen_at
+                   FROM product_installations WHERE account_id=?""", (account_id,)
+            )]
+            # snapshot_id is an internal private pointer. The opaque Activity ID
+            # remains the portable account-facing identity.
+            data["activity"] = [dict(row) for row in conn.execute(
+                """SELECT id,device_id,platform,kind,title,url,media_item_id,created_at
+                   FROM product_activity WHERE account_id=?""", (account_id,)
+            )]
             for name, table in (("watches", "product_watchlist_items"), ("alerts", "product_alert_events")):
                 data[name] = [{k: row[k] for k in row.keys() if k != "client_key"} for row in conn.execute(f"SELECT * FROM {table} WHERE client_key=?", (store.owner_key(account_id),))]
             # Explicit columns: never serialize a provider registration or JWT row.

@@ -284,6 +284,54 @@ def initialize_database(
             """
         )
 
+        activity_columns = {
+            str(row["name"])
+            for row in conn.execute(
+                "PRAGMA table_info(product_activity)"
+            ).fetchall()
+        }
+
+        if "snapshot_id" not in activity_columns:
+            conn.execute(
+                "ALTER TABLE product_activity "
+                "ADD COLUMN snapshot_id INTEGER "
+                "REFERENCES analysis_snapshots(id) "
+                "ON DELETE SET NULL"
+            )
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS "
+            "idx_product_activity_snapshot "
+            "ON product_activity(snapshot_id)"
+        )
+
+        # A legacy activity can be backfilled only when persisted facts identify
+        # exactly one same-media, same-mode snapshot in its recorded second.
+        # Ambiguous and unmatched rows deliberately remain non-restorable.
+        conn.execute(
+            """
+            UPDATE product_activity
+            SET snapshot_id = (
+              SELECT MIN(s.id)
+              FROM analysis_snapshots AS s
+              WHERE s.media_item_id = product_activity.media_item_id
+                AND s.mode = product_activity.kind
+                AND CAST(strftime('%s', s.analyzed_at) AS INTEGER) =
+                    product_activity.created_at
+            )
+            WHERE snapshot_id IS NULL
+              AND media_item_id IS NOT NULL
+              AND (
+                SELECT COUNT(*)
+                FROM analysis_snapshots AS s
+                WHERE s.media_item_id = product_activity.media_item_id
+                  AND s.mode = product_activity.kind
+                  AND CAST(strftime('%s', s.analyzed_at) AS INTEGER) =
+                      product_activity.created_at
+              ) = 1
+            """
+        )
+
         # Retain idempotent migration guards for existing installations.
         conn.executescript(
             _CLAIM_IDENTITY_MAPPING_SCHEMA

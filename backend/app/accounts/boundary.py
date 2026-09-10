@@ -71,7 +71,9 @@ class AccountBoundary:
                 return
             async def private_send(message):
                 if message["type"] == "http.response.start":
-                    message.setdefault("headers", []).append((b"cache-control", b"no-store"))
+                    headers = message.setdefault("headers", [])
+                    if not any(name.lower() == b"cache-control" for name, _ in headers):
+                        headers.append((b"cache-control", b"no-store"))
                 await send(message)
             await self.app(scope, receive, private_send)
         else:

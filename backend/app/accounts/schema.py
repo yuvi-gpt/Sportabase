@@ -26,7 +26,9 @@ CREATE TABLE IF NOT EXISTS product_activity (
  id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES product_accounts(id) ON DELETE CASCADE,
  device_id TEXT NOT NULL, platform TEXT NOT NULL, kind TEXT NOT NULL,
  title TEXT NOT NULL, url TEXT NOT NULL, media_item_id TEXT,
- created_at INTEGER NOT NULL, CHECK(kind IN ('article','video'))
+ created_at INTEGER NOT NULL,
+ snapshot_id INTEGER REFERENCES analysis_snapshots(id) ON DELETE SET NULL,
+ CHECK(kind IN ('article','video'))
 );
 CREATE INDEX IF NOT EXISTS idx_product_activity_owner ON product_activity(account_id,created_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS product_analytics (

@@ -232,7 +232,7 @@ class ArticleHistoryCacheHitTests(
 
         mock_persist.assert_not_called()
 
-    def test_cache_hit_without_snapshot_records_interaction(
+    def test_cache_hit_without_snapshot_persists_exact_restorable_snapshot(
         self,
     ):
         req, request = self.make_request()
@@ -266,6 +266,7 @@ class ArticleHistoryCacheHitTests(
             "app.main.record_user_history",
         ) as mock_history, patch(
             "app.main.persist_analysis_snapshot",
+            return_value={"snapshot": {"id": 73}, "created": True},
         ) as mock_persist:
             response = main.analyze(
                 req,
@@ -280,10 +281,10 @@ class ArticleHistoryCacheHitTests(
         mock_history.assert_called_once_with(
             client_key=expected_client_key,
             media_item_id="media-no-snapshot",
-            snapshot_id=None,
+            snapshot_id=73,
         )
 
-        mock_persist.assert_not_called()
+        mock_persist.assert_called_once()
 
     def test_cache_hit_history_failure_does_not_block_response(
         self,
