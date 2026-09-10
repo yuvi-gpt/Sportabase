@@ -240,6 +240,7 @@ def analyze_article_impl(
     merit_score,
     normalize_article_bullets,
     normalized_analysis_url,
+    persist_article_intelligence_baseline,
     persist_analysis_snapshot,
     record_analysis_cache_hit,
     record_user_history,
@@ -265,6 +266,43 @@ def analyze_article_impl(
         last_mark = now
 
     client_key = request_client_key(request)
+
+    def persist_provider_free_baseline(
+        media_item,
+        article_response,
+    ) -> None:
+        try:
+            persist_article_intelligence_baseline(
+                media_item_id=(
+                    media_item["id"]
+                ),
+                observed_at=(
+                    media_item[
+                        "first_seen_at"
+                    ]
+                ),
+                title=req.title,
+                url=req.url,
+                article_type=(
+                    article_response.article_type
+                ),
+                type_confidence=(
+                    article_response.type_confidence
+                ),
+                normalize_url=(
+                    normalized_analysis_url
+                ),
+                connection_factory=(
+                    db_conn
+                ),
+            )
+
+        except Exception as error:
+            print(
+                "article intelligence baseline "
+                "persistence skipped:",
+                str(error),
+            )
 
     cleaned_text = clean_html(req.text)
     original_chars = len(cleaned_text)
@@ -366,12 +404,21 @@ def analyze_article_impl(
             "article",
         )
 
+        cached_response = AnalyzeResponse(
+            **cached
+        )
+
         try:
             media_item = upsert_media_item(
                 url=req.url,
                 mode="article",
                 title=req.title,
                 content_hash=content_hash,
+            )
+
+            persist_provider_free_baseline(
+                media_item,
+                cached_response,
             )
 
             snapshot = find_analysis_snapshot(
@@ -398,9 +445,7 @@ def analyze_article_impl(
                 str(error),
             )
 
-        return AnalyzeResponse(
-            **cached
-        )
+        return cached_response
 
     language_info = detect_content_language(
         cleaned_text
@@ -851,6 +896,11 @@ def analyze_article_impl(
             mode="article",
             title=req.title,
             content_hash=content_hash,
+        )
+
+        persist_provider_free_baseline(
+            media_item,
+            response,
         )
 
         try:

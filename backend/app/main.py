@@ -164,6 +164,9 @@ from app.services.article_intelligence_shadow import (
     ARTICLE_INTELLIGENCE_SHADOW_VERSION,
     run_article_intelligence_shadow,
 )
+from app.services.article_intelligence_baseline import (
+    persist_article_intelligence_baseline,
+)
 from app.services.live_merit_release import (
     apply_certified_live_merit,
     live_merit_release_cache_token,
@@ -1913,6 +1916,9 @@ def analyze(
         merit_score=merit_score,
         normalize_article_bullets=normalize_article_bullets,
         normalized_analysis_url=normalized_analysis_url,
+        persist_article_intelligence_baseline=(
+            persist_article_intelligence_baseline
+        ),
         persist_analysis_snapshot=persist_analysis_snapshot,
         record_analysis_cache_hit=record_analysis_cache_hit,
         record_user_history=record_user_history,

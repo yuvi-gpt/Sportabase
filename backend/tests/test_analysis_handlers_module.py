@@ -110,6 +110,13 @@ class AnalysisHandlersModuleTests(
 
         self.assertIs(
             kwargs[
+                "persist_article_intelligence_baseline"
+            ],
+            main.persist_article_intelligence_baseline,
+        )
+
+        self.assertIs(
+            kwargs[
                 "apply_certified_live_merit"
             ],
             main.apply_certified_live_merit,

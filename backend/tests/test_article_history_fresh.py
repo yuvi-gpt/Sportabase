@@ -144,6 +144,25 @@ class ArticleHistoryFreshTests(
             order.append("media")
             return {
                 "id": "fresh-media",
+                "first_seen_at": (
+                    "2026-09-10T00:00:00+00:00"
+                ),
+            }
+
+        def baseline_side_effect(**kwargs):
+            order.append("baseline")
+            return {
+                "status": "baseline_persisted",
+            }
+
+        def shadow_side_effect(**kwargs):
+            order.append("shadow")
+            self.assertFalse(
+                kwargs["enabled"]
+            )
+            return {
+                "status": "skipped",
+                "reason": "shadow_disabled",
             }
 
         def snapshot_side_effect(**kwargs):
@@ -165,10 +184,22 @@ class ArticleHistoryFreshTests(
         patches = self.analysis_patches()
 
         with patches[0], patches[1], patches[2], \
-             patches[3], patches[4], patch(
+             patches[3], patches[4], patch.object(
+                main,
+                "INTELLIGENCE_SHADOW_ENABLED",
+                False,
+             ), patch(
                 "app.main.upsert_media_item",
                 side_effect=upsert_side_effect,
              ) as mock_upsert, patch(
+                "app.main.persist_article_intelligence_baseline",
+                side_effect=baseline_side_effect,
+             ) as mock_baseline, patch(
+                "app.main.run_article_intelligence_shadow",
+                side_effect=shadow_side_effect,
+             ) as mock_shadow, patch(
+                "app.main.gemini_client",
+             ) as mock_gemini_client, patch(
                 "app.main.load_evidence_analysis_state_for_media_item",
                 return_value={
                 "bundle": {},
@@ -201,6 +232,8 @@ class ArticleHistoryFreshTests(
             order,
             [
                 "media",
+                "baseline",
+                "shadow",
                 "snapshot",
                 "history",
                 "cache",
@@ -213,6 +246,10 @@ class ArticleHistoryFreshTests(
             title=req.title,
             content_hash=expected_hash,
         )
+
+        mock_baseline.assert_called_once()
+        mock_shadow.assert_called_once()
+        mock_gemini_client.assert_not_called()
 
         snapshot_kwargs = (
             mock_snapshot.call_args.kwargs
