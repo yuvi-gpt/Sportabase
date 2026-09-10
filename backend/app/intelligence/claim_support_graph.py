@@ -42,6 +42,16 @@ _RECOGNIZED_EVIDENCE_TYPES = {
 _RECOGNIZED_EVIDENCE_LINK_RELATIONSHIPS = {
     "supports", "contradicts", "published_by", "provenance",
 }
+_STRUCTURED_CLAIM_IDENTITY_METADATA_MARKERS = {
+    "structured_claim",
+    "identity_contract_version",
+    "identity_source",
+    "core_fingerprint",
+    "merged_specific_fingerprint",
+    "specific_fingerprints",
+    "specific_fingerprints_truncated",
+    "router_output_version",
+}
 
 
 def _integrity_error(message: str):
@@ -572,16 +582,38 @@ def _cycle_nodes(adjacency: dict[str, set[str]]) -> set[str]:
 
 def _claim_scope(conn, claim_id: str, fallback_claim: dict[str, Any]):
     if not _table_exists(conn, "claim_identity_mappings"):
-        return fallback_claim, []
-    from app.story import story_claim_graph_materialization as story_graph
+        return fallback_claim, [], False
 
-    claim = story_graph._validated_structured_claim(conn, claim_id)
+    # The mapping table enables structured identity; its mere presence does not
+    # turn unrelated per-media or legacy claims into structured canonical claims.
     mapping_rows = [dict(row) for row in conn.execute(
         "SELECT * FROM claim_identity_mappings "
         "WHERE canonical_claim_id=? OR production_claim_id=? "
         "ORDER BY production_claim_id",
         (claim_id, claim_id),
     ).fetchall()]
+    metadata = _metadata(
+        fallback_claim.get("metadata_json"),
+        label="Claim",
+    )
+    # Any explicit structured marker still opts the claim into the complete,
+    # fail-closed structured validation below; partial metadata is not accepted.
+    structured_scope = bool(
+        mapping_rows
+        or _clean(fallback_claim.get("claim_type"), 64).casefold().startswith(
+            "structured_"
+        )
+        or _clean(fallback_claim.get("canonical_key"), 512).startswith(
+            "structured-claim|"
+        )
+        or _STRUCTURED_CLAIM_IDENTITY_METADATA_MARKERS.intersection(metadata)
+    )
+    if not structured_scope:
+        return fallback_claim, [], False
+
+    from app.story import story_claim_graph_materialization as story_graph
+
+    claim = story_graph._validated_structured_claim(conn, claim_id)
     if any(_clean(row.get("production_claim_id"), 128) == claim_id for row in mapping_rows):
         raise _integrity_error(
             "A canonical structured claim cannot act as a legacy mapping source."
@@ -599,7 +631,7 @@ def _claim_scope(conn, claim_id: str, fallback_claim: dict[str, Any]):
     ):
         raise _integrity_error("Claim identity mapping is malformed or unverified.")
     if not legacy_ids:
-        return claim, []
+        return claim, [], True
     marks = ",".join("?" for _ in legacy_ids)
     legacy_claims = [dict(row) for row in conn.execute(
         f"SELECT * FROM intelligence_claims WHERE id IN ({marks}) ORDER BY id",
@@ -622,7 +654,7 @@ def _claim_scope(conn, claim_id: str, fallback_claim: dict[str, Any]):
         tuple(legacy_ids),
     ).fetchone() is not None:
         raise _integrity_error("Claim identity mapping chain or cycle is not allowed.")
-    return claim, legacy_ids
+    return claim, legacy_ids, True
 
 
 def _rows_by_ids(conn, table: str, ids: Iterable[str]) -> dict[str, dict[str, Any]]:
@@ -643,7 +675,9 @@ def _rows_by_ids(conn, table: str, ids: Iterable[str]) -> dict[str, dict[str, An
 def _build_evidence_graph(*, claim: dict[str, Any], claim_id: str, connection_factory):
     conn = connection_factory()
     try:
-        canonical_claim, legacy_ids = _claim_scope(conn, claim_id, claim)
+        canonical_claim, legacy_ids, structured_scope = _claim_scope(
+            conn, claim_id, claim
+        )
         subject_key = _clean(canonical_claim.get("subject_key"), 256)
         scope_ids = [claim_id, *legacy_ids]
         placeholders = ",".join("?" for _ in scope_ids)
@@ -897,7 +931,7 @@ def _build_evidence_graph(*, claim: dict[str, Any], claim_id: str, connection_fa
 
         table_by_actor = {"source": "intelligence_sources", "reporter": "intelligence_reporters", "media": "media_items", "story": "intelligence_stories"}
         expected_story_id = ""
-        if actor_ids["story"] and _table_exists(conn, "claim_identity_mappings"):
+        if actor_ids["story"] and structured_scope:
             from app.intelligence import reporting_coverage
 
             expected_story = reporting_coverage._validated_story(
