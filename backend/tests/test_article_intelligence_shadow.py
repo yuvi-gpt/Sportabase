@@ -100,15 +100,42 @@ class ArticleIntelligenceShadowTests(
         kwargs = self.base_kwargs()
         kwargs["enabled"] = False
 
+        calls = []
+        kwargs["fetch_article"] = (
+            lambda *args, **values: calls.append(
+                "news_fetch"
+            )
+        )
+        kwargs["gemini_generator"] = (
+            lambda *args, **values: calls.append(
+                "gemini"
+            )
+        )
+
         result = (
             run_article_intelligence_shadow(
-                **kwargs
+                **kwargs,
+                seed_persister=(
+                    lambda **values: calls.append(
+                        "seed"
+                    )
+                ),
+                pipeline_runner=(
+                    lambda **values: calls.append(
+                        "pipeline"
+                    )
+                ),
             )
         )
 
         self.assertEqual(
             result["reason"],
             "shadow_disabled",
+        )
+
+        self.assertEqual(
+            calls,
+            [],
         )
 
     def test_missing_news_key_skips(
@@ -243,7 +270,7 @@ class ArticleIntelligenceShadowTests(
             ]
         )
 
-    def test_seed_persistence_records_reported_support(
+    def test_seed_persistence_records_reporting_relationship(
         self,
     ):
         seed = (
@@ -287,6 +314,18 @@ class ArticleIntelligenceShadowTests(
                 "id": "claim-1",
             }
 
+        def media_source_binder(
+            **kwargs,
+        ):
+            captured[
+                "media"
+            ] = kwargs
+
+            return {
+                "id": "media-1",
+                "source_id": "source-1",
+            }
+
         def observation_recorder(
             **kwargs,
         ):
@@ -328,6 +367,9 @@ class ArticleIntelligenceShadowTests(
                 source_upserter=(
                     source_upserter
                 ),
+                media_source_binder=(
+                    media_source_binder
+                ),
                 claim_upserter=(
                     claim_upserter
                 ),
@@ -355,7 +397,7 @@ class ArticleIntelligenceShadowTests(
             ][
                 "relationship_type"
             ],
-            "supports",
+            "reports",
         )
 
         self.assertFalse(
@@ -370,7 +412,7 @@ class ArticleIntelligenceShadowTests(
 
         self.assertEqual(
             result["status"],
-            "seed_persisted",
+            "baseline_persisted",
         )
 
     def test_full_shadow_runs_pipeline_once(

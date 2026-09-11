@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from app.db.connection import connect_database
 from app.db.migrations import initialize_database
 from app.db.schema import SCHEMA
+from app.intelligence.analysis_result_context import build_analysis_result_context
 from app.intelligence.claim_materialization import materialize_canonical_claim
 from app.intelligence.claim_state import build_claim_state
 from app.intelligence.claim_support_graph import (
@@ -20,6 +21,11 @@ from app.intelligence.claim_support_graph import (
     build_story_support_overview,
 )
 from app.routes import intelligence_admin
+from app.services.analysis_history import media_item_id_for_url, upsert_media_item
+from app.services.article_intelligence_baseline import (
+    persist_article_intelligence_baseline,
+)
+from app.services.content_resolution import normalized_analysis_url
 from app.story.story_claim_graph_materialization import (
     StoryClaimGraphMaterializationIntegrityError,
     materialize_canonical_claim_story,
@@ -891,6 +897,101 @@ class ClaimSupportGraphTests(unittest.TestCase):
             build_claim_support_graph(claim_id="claim-1", connection_factory=self.factory)
 
 
+class ProviderFreeBaselineClaimSupportGraphTests(unittest.TestCase):
+    URL = "https://www.formula1.com/en/latest/article/lawson-headline"
+
+    def setUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.tempdir.name) / "provider-free-baseline.sqlite3"
+        initialize_database(self.factory, SCHEMA)
+        media = upsert_media_item(
+            url=self.URL,
+            mode="article",
+            title="Lawson keeps his Formula 1 seat",
+            content_hash="lawson-content-hash",
+            seen_at=NOW,
+            normalize_url=normalized_analysis_url,
+            id_resolver=lambda value: media_item_id_for_url(
+                value,
+                normalize_url=normalized_analysis_url,
+            ),
+            connection_factory=self.factory,
+        )
+        self.baseline = persist_article_intelligence_baseline(
+            media_item_id=media["id"],
+            observed_at=NOW,
+            title=media["title"],
+            url=self.URL,
+            article_type="contract_news",
+            type_confidence=0.99,
+            normalize_url=normalized_analysis_url,
+            connection_factory=self.factory,
+        )
+        self.claim_id = self.baseline["claim"]["id"]
+
+    def tearDown(self):
+        self.tempdir.cleanup()
+
+    def factory(self):
+        return connect_database(self.db_path)
+
+    def test_reports_baseline_surfaces_observation_without_evidentiary_inference(self):
+        graph = build_claim_support_graph(
+            claim_id=self.claim_id,
+            connection_factory=self.factory,
+        )
+
+        self.assertFalse(graph["integrity_blocked"])
+        self.assertEqual(graph["support_state"], "single_observation")
+        self.assertEqual(graph["counts"]["observations"], 1)
+        self.assertEqual(graph["counts"]["distinct_sources"], 1)
+        self.assertEqual(graph["counts"]["direct_evidence"], 0)
+        self.assertEqual(graph["verified_independent_pairs"], [])
+        self.assertEqual(graph["graph_summary"]["report_edge_count"], 1)
+        self.assertEqual(graph["graph_summary"]["support_edge_count"], 0)
+        self.assertEqual(graph["graph_summary"]["evidence_node_count"], 0)
+        self.assertEqual(graph["graph_summary"]["exact_story_node_count"], 0)
+        self.assertFalse(any(node["node_type"] == "story" for node in graph["nodes"]))
+        self.assertFalse(any(node["node_type"] == "evidence" for node in graph["nodes"]))
+        report_edge = next(
+            edge
+            for edge in graph["edges"]
+            if edge["edge_category"] == "claim_link"
+        )
+        self.assertEqual(report_edge["relationship_type"], "reports")
+        self.assertTrue(graph["policy"]["reports_does_not_establish_support"])
+
+    def test_claim_state_preserves_single_recorded_observation(self):
+        state = build_claim_state(
+            claim_id=self.claim_id,
+            connection_factory=self.factory,
+        )
+
+        self.assertEqual(state["claim_state"], "single_recorded_observation")
+        self.assertEqual(state["support_state"], "single_observation")
+        self.assertEqual(state["support"]["observation_count"], 1)
+        self.assertEqual(state["support"]["distinct_sources"], 1)
+        self.assertEqual(state["support"]["verified_independent_pairs"], 0)
+        self.assertEqual(state["evidence"]["counts"]["total"], 0)
+        self.assertEqual(state["conflict_signals"], [])
+
+    def test_result_context_counts_persisted_baseline_source(self):
+        context = build_analysis_result_context(
+            url=self.URL,
+            connection_factory=self.factory,
+        )
+
+        self.assertEqual(context["status"], "ready")
+        self.assertIsNone(context["story"])
+        self.assertEqual(context["related_reports"], [])
+        self.assertEqual(context["stakeholders"], [])
+        self.assertEqual(context["evidence"]["status"], "single_recorded_observation")
+        self.assertEqual(context["evidence"]["corroboration_status"], "No verified evidence")
+        self.assertEqual(context["evidence"]["independence_status"], "Not assessed")
+        self.assertEqual(context["evidence"]["distinct_source_count"], 1)
+        self.assertEqual(context["evidence"]["verification_pairs"], 0)
+
+
 class ProductionClaimEvidenceGraphTests(unittest.TestCase):
     def setUp(self):
         self.tempdir = tempfile.TemporaryDirectory()
@@ -977,6 +1078,48 @@ class ProductionClaimEvidenceGraphTests(unittest.TestCase):
         finally:
             conn.close()
         return legacy_id, observation_id
+
+    def test_valid_structured_canonical_claim_behavior_is_unchanged(self):
+        result = build_claim_support_graph(
+            claim_id=self.claim_id,
+            connection_factory=self.factory,
+        )
+
+        self.assertFalse(result["integrity_blocked"])
+        self.assertEqual(result["support_state"], "single_observation")
+        self.assertEqual(result["counts"]["observations"], 1)
+        self.assertEqual(result["counts"]["distinct_sources"], 1)
+        self.assertEqual(result["graph_summary"]["report_edge_count"], 1)
+        self.assertEqual(result["graph_summary"]["support_edge_count"], 0)
+        self.assertEqual(result["graph_summary"]["exact_story_node_count"], 1)
+
+    def test_malformed_structured_canonical_claim_still_fails_closed(self):
+        conn = self.factory()
+        try:
+            conn.execute(
+                "UPDATE intelligence_claims SET metadata_json='{}' WHERE id=?",
+                (self.claim_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        with self.assertRaises(StoryClaimGraphMaterializationIntegrityError):
+            build_claim_support_graph(
+                claim_id=self.claim_id,
+                connection_factory=self.factory,
+            )
+        non_strict = build_claim_support_graph(
+            claim_id=self.claim_id,
+            connection_factory=self.factory,
+            strict_graph_integrity=False,
+        )
+        self.assertTrue(non_strict["integrity_blocked"])
+        self.assertEqual(
+            non_strict["support_state"],
+            "integrity_blocked_incomplete",
+        )
+        self.assertEqual(non_strict["observations"], [])
 
     def test_verified_legacy_contributes_without_legacy_claim_node(self):
         legacy_id, observation_id = self.add_legacy()

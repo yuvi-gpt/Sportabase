@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Path, Query
 
 from app.intelligence.homepage_storylines import build_homepage_storylines
+from app.intelligence.analysis_result_context import build_analysis_result_context
 from app.intelligence.product_history import (
     ProductIntelligenceIntegrityError,
     SEARCH_KINDS,
@@ -35,6 +36,20 @@ def build_router(*, connection_factory) -> APIRouter:
                 limit=limit,
                 cursor=cursor,
             )
+        except StoryClaimGraphMaterializationIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @router.get("/result-context")
+    def result_context(url: str = Query(..., min_length=1, max_length=2048)):
+        try:
+            return build_analysis_result_context(
+                url=url,
+                connection_factory=connection_factory,
+            )
+        except ProductIntelligenceIntegrityError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except StoryClaimGraphMaterializationIntegrityError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:

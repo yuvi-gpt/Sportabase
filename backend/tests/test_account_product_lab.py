@@ -23,7 +23,8 @@ from app.routes.account_product import build_router
 from app.routes.watchlists_product import build_router as watches_router
 from app.routes.notifications_product import build_router as notifications_router
 from app.routes import product_api
-from app.models.api import AnalyzeResponse
+from app.models.api import AnalyzeResponse, VideoAnalyzeResponse
+from app.application import config as application_config
 from app.application.composition import create_application
 
 
@@ -145,6 +146,32 @@ def test_production_auth_and_cors_configuration_fail_closed(monkeypatch):
     configured_verifier.cache_clear()
 
 
+def test_configured_verifier_loads_environment_before_freezing(monkeypatch):
+    calls = []
+
+    def load_environment():
+        calls.append("loaded")
+        monkeypatch.setenv("SPORTABASE_ENV", "development")
+        monkeypatch.setenv("CLERK_ISSUER", ISSUER + "/")
+        monkeypatch.setenv("CLERK_AUDIENCE", "sportabase")
+        monkeypatch.setenv("CLERK_AUTHORIZED_PARTIES", "https://app.example.test, http://localhost:8081")
+
+    monkeypatch.setattr(application_config, "load_application_environment", load_environment)
+    configured_verifier.cache_clear()
+    try:
+        verifier = configured_verifier()
+        assert calls == ["loaded"]
+        assert verifier.config == AuthConfig(
+            issuer=ISSUER,
+            audience="sportabase",
+            authorized_parties=("https://app.example.test", "http://localhost:8081"),
+        )
+        assert configured_verifier() is verifier
+        assert calls == ["loaded"]
+    finally:
+        configured_verifier.cache_clear()
+
+
 @pytest.mark.parametrize("path", ["/account", "/account/export", "/account/activity", "/account/devices", "/watchlists", "/watchlists/alerts", "/notifications/devices", "/notifications/web/config", "/analyze", "/analyze/video", "/resolve-content", "/content/browser-capture"])
 def test_product_gate_missing_token_and_header_spoof(lab, path):
     client, _, _, _, _ = lab
@@ -231,6 +258,239 @@ def test_activity_pagination_privacy_export_clear_and_cross_account(lab):
     assert len(client.get("/account/activity", headers=headers()).json()["items"]) == 3
     assert client.request("DELETE", "/account/activity", headers=headers(), json={"confirmation": "CLEAR MY ACTIVITY"}).status_code == 204
     assert client.get("/account/activity", headers=headers()).json()["items"] == []
+
+
+def _analysis_snapshot(conn, media_id, url, score, analyzed_at, *, content_hash=None, response_json=None):
+    conn.execute("""INSERT OR IGNORE INTO media_items(
+                 id,canonical_url,mode,title,latest_content_hash,first_seen_at,last_seen_at)
+                 VALUES(?,?,'article','Historical title',?,'now','now')""",
+                 (media_id, url, content_hash or f"hash-{score}"))
+    response = AnalyzeResponse(
+        url=url, title=f"Historical score {score}", tldr=[f"Summary {score}"],
+        merit_score=score, badge="Developing",
+    ).model_dump()
+    cursor = conn.execute("""INSERT INTO analysis_snapshots(
+                          media_item_id,analyzed_at,mode,analysis_version,scoring_version,
+                          content_hash,merit_score,badge,response_json)
+                          VALUES(?,?,'article','v-test','s-test',?,?,?,?)""",
+                          (media_id, analyzed_at, content_hash or f"hash-{score}", score,
+                           "Developing", response_json if response_json is not None else json.dumps(response)))
+    return int(cursor.lastrowid)
+
+
+def _product_activity_snapshot_fk(conn):
+    return next(
+        dict(row)
+        for row in conn.execute("PRAGMA foreign_key_list(product_activity)")
+        if row["from"] == "snapshot_id"
+    )
+
+
+def test_fresh_product_activity_snapshot_fk_sets_null_on_delete(lab):
+    _, factory, _, _, _ = lab
+    with store.transaction(factory) as conn:
+        foreign_key = _product_activity_snapshot_fk(conn)
+    assert foreign_key["table"] == "analysis_snapshots"
+    assert foreign_key["to"] == "id"
+    assert foreign_key["on_delete"] == "SET NULL"
+
+
+def test_saved_activity_restores_exact_snapshot_and_denies_other_account(lab):
+    client, factory, headers, bootstrap, _ = lab
+    account = bootstrap().json()["account"]["id"]
+    bootstrap("user_b")
+    with store.transaction(factory) as conn:
+        old_id = _analysis_snapshot(conn, "saved-media", "https://example.com/saved", 41, "2026-09-10T10:00:00+00:00")
+        new_id = _analysis_snapshot(conn, "saved-media", "https://example.com/saved", 88, "2026-09-10T11:00:00+00:00")
+    old_activity = store.record_analysis(factory, account, DEVICE, "article", "Old result", "https://example.com/saved", old_id)
+    new_activity = store.record_analysis(factory, account, DEVICE, "article", "New result", "https://example.com/saved", new_id)
+
+    old = client.get(f"/account/activity/{old_activity['id']}/analysis", headers=headers())
+    new = client.get(f"/account/activity/{new_activity['id']}/analysis", headers=headers())
+    assert old.status_code == new.status_code == 200
+    assert old.json()["analysis"]["merit_score"] == 41
+    assert new.json()["analysis"]["merit_score"] == 88
+    assert old.headers["cache-control"] == "no-store"
+    assert client.get(f"/account/activity/{old_activity['id']}/analysis", headers=headers("user_b")).status_code == 404
+    listed = client.get("/account/activity", headers=headers()).json()["items"]
+    assert all(item["restorable"] for item in listed)
+    assert all("snapshot_id" not in item for item in listed)
+
+    video_response = VideoAnalyzeResponse(
+        content_type="commentary", claim="Video claim", evidence_used=["Transcript evidence"],
+        logic_check="Logic", hype_check="Hype", evidence_score=71, logic_score=66,
+        verdict="partially_supported",
+    )
+    with store.transaction(factory) as conn:
+        conn.execute("""INSERT INTO media_items(id,canonical_url,mode,title,latest_content_hash,first_seen_at,last_seen_at)
+                     VALUES('saved-video','https://youtube.com/watch?v=saved','video','Saved video','video-hash','now','now')""")
+        video_id = conn.execute("""INSERT INTO analysis_snapshots(
+                                media_item_id,analyzed_at,mode,analysis_version,scoring_version,
+                                content_hash,evidence_score,logic_score,verdict,article_type,response_json)
+                                VALUES('saved-video','2026-09-10T12:00:00+00:00','video','v-test','s-test',?,?,?,?,?,?)""",
+                                ("video-hash", 71, 66, "partially_supported", "commentary", video_response.model_dump_json())).lastrowid
+    video_activity = store.record_analysis(factory, account, DEVICE, "video", "Saved video", "https://youtube.com/watch?v=saved", video_id)
+    restored_video = client.get(f"/account/activity/{video_activity['id']}/analysis", headers=headers())
+    assert restored_video.status_code == 200
+    assert restored_video.json()["kind"] == "video"
+    assert restored_video.json()["analysis"]["evidence_score"] == 71
+    assert restored_video.json()["analysis"]["logic_score"] == 66
+
+
+def test_deleted_snapshot_keeps_activity_and_makes_it_non_restorable(lab):
+    client, factory, headers, bootstrap, _ = lab
+    account = bootstrap().json()["account"]["id"]
+    with store.transaction(factory) as conn:
+        snapshot_id = _analysis_snapshot(
+            conn,
+            "pruned-media",
+            "https://example.com/pruned",
+            57,
+            "2026-09-10T11:30:00+00:00",
+        )
+    activity = store.record_analysis(
+        factory,
+        account,
+        DEVICE,
+        "article",
+        "Later pruned",
+        "https://example.com/pruned",
+        snapshot_id,
+    )
+    restored = client.get(
+        f"/account/activity/{activity['id']}/analysis",
+        headers=headers(),
+    )
+    assert restored.status_code == 200
+
+    with store.transaction(factory) as conn:
+        conn.execute("DELETE FROM analysis_snapshots WHERE id=?", (snapshot_id,))
+        retained = conn.execute(
+            "SELECT snapshot_id FROM product_activity WHERE id=?",
+            (activity["id"],),
+        ).fetchone()
+        assert retained is not None
+        assert retained["snapshot_id"] is None
+
+    listed = client.get("/account/activity", headers=headers()).json()["items"]
+    assert next(item for item in listed if item["id"] == activity["id"])["restorable"] is False
+    unavailable = client.get(
+        f"/account/activity/{activity['id']}/analysis",
+        headers=headers(),
+    )
+    assert unavailable.status_code == 409
+    assert unavailable.json()["detail"] == "This saved analysis predates restorable snapshot history."
+
+
+def test_saved_activity_mismatch_corruption_and_clear_fail_closed(lab):
+    client, factory, headers, bootstrap, _ = lab
+    account = bootstrap().json()["account"]["id"]
+    with store.transaction(factory) as conn:
+        snapshot_id = _analysis_snapshot(conn, "correct-media", "https://example.com/correct", 60, "2026-09-10T12:00:00+00:00")
+        _analysis_snapshot(conn, "wrong-media", "https://example.com/wrong", 61, "2026-09-10T12:01:00+00:00")
+    mismatch = store.record_analysis(factory, account, DEVICE, "article", "Mismatch", "https://example.com/correct", snapshot_id)
+    with store.transaction(factory) as conn:
+        conn.execute("UPDATE product_activity SET media_item_id='wrong-media' WHERE id=?", (mismatch["id"],))
+    assert client.get(f"/account/activity/{mismatch['id']}/analysis", headers=headers()).status_code == 404
+
+    corrupt = store.record_analysis(factory, account, DEVICE, "article", "Corrupt", "https://example.com/correct", snapshot_id)
+    with store.transaction(factory) as conn:
+        conn.execute("UPDATE analysis_snapshots SET response_json='{' WHERE id=?", (snapshot_id,))
+    assert client.get(f"/account/activity/{corrupt['id']}/analysis", headers=headers()).status_code == 404
+
+    with store.transaction(factory) as conn:
+        missing_snapshot_id = _analysis_snapshot(conn, "missing-media", "https://example.com/missing", 62, "2026-09-10T12:02:00+00:00")
+    missing = store.record_analysis(factory, account, DEVICE, "article", "Missing", "https://example.com/missing", missing_snapshot_id)
+    raw = factory()
+    try:
+        raw.execute("PRAGMA foreign_keys=OFF")
+        raw.execute("UPDATE product_activity SET snapshot_id=999999 WHERE id=?", (missing["id"],))
+        raw.commit()
+    finally:
+        raw.close()
+    assert client.get(f"/account/activity/{missing['id']}/analysis", headers=headers()).status_code == 404
+
+    cleared = client.request("DELETE", "/account/activity", headers=headers(), json={"confirmation": "CLEAR MY ACTIVITY"})
+    assert cleared.status_code == 204
+    assert client.get(f"/account/activity/{corrupt['id']}/analysis", headers=headers()).status_code == 404
+
+
+def test_legacy_activity_requires_unique_same_second_snapshot(lab):
+    client, factory, headers, bootstrap, _ = lab
+    account = bootstrap().json()["account"]["id"]
+    epoch = int(datetime.fromisoformat("2026-09-10T13:00:00+00:00").timestamp())
+    with store.transaction(factory) as conn:
+        _analysis_snapshot(conn, "legacy-media", "https://example.com/legacy", 52, "2026-09-10T13:00:00+00:00", content_hash="legacy-a")
+        conn.execute("""INSERT INTO product_activity(
+                     id,account_id,device_id,platform,kind,title,url,media_item_id,created_at,snapshot_id)
+                     VALUES(?,?,?,?,?,?,?,?,?,NULL)""",
+                     ("act_" + "a" * 32, account, DEVICE, "web", "article", "Legacy unique",
+                      "https://example.com/legacy", "legacy-media", epoch))
+    unique = client.get(f"/account/activity/act_{'a' * 32}/analysis", headers=headers())
+    assert unique.status_code == 200 and unique.json()["analysis"]["merit_score"] == 52
+
+    with store.transaction(factory) as conn:
+        _analysis_snapshot(conn, "legacy-media", "https://example.com/legacy", 53, "2026-09-10T13:00:00.500000+00:00", content_hash="legacy-b")
+    ambiguous = client.get(f"/account/activity/act_{'a' * 32}/analysis", headers=headers())
+    assert ambiguous.status_code == 409
+    assert ambiguous.json()["detail"] == "This saved analysis predates restorable snapshot history."
+
+
+def test_activity_disabled_does_not_create_saved_snapshot_pointer(lab):
+    client, factory, headers, bootstrap, _ = lab
+    account = bootstrap().json()["account"]["id"]
+    changed = client.patch("/account/preferences", headers=headers(), json={
+        "version": store.VERSION, "scope": "account", "revision": 1,
+        "preferences": {"activity_enabled": False},
+    })
+    assert changed.status_code == 200
+    with store.transaction(factory) as conn:
+        snapshot_id = _analysis_snapshot(conn, "private-off", "https://example.com/off", 64, "2026-09-10T14:00:00+00:00")
+    assert store.record_analysis(factory, account, DEVICE, "article", "Not saved", "https://example.com/off", snapshot_id) is None
+    assert client.get("/account/activity", headers=headers()).json()["items"] == []
+
+
+def test_product_activity_snapshot_migration_is_idempotent_and_backfills_only_unique_matches(tmp_path):
+    factory = lambda: connect_database(tmp_path / "legacy-activity.db")
+    conn = factory()
+    conn.executescript(SCHEMA)
+    conn.executescript("""
+      CREATE TABLE product_accounts (
+        id TEXT PRIMARY KEY, subject_hash TEXT NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'active',
+        defaults_json TEXT NOT NULL DEFAULT '{}', revision INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, first_analysis_at INTEGER
+      );
+      CREATE TABLE product_activity (
+        id TEXT PRIMARY KEY, account_id TEXT NOT NULL, device_id TEXT NOT NULL, platform TEXT NOT NULL,
+        kind TEXT NOT NULL, title TEXT NOT NULL, url TEXT NOT NULL, media_item_id TEXT, created_at INTEGER NOT NULL
+      );
+    """)
+    conn.execute("INSERT INTO product_accounts VALUES('acct','subject','active','{}',1,1,1,NULL)")
+    _analysis_snapshot(conn, "migration-media", "https://example.com/migration", 70, "2026-09-10T15:00:00+00:00")
+    epoch = int(datetime.fromisoformat("2026-09-10T15:00:00+00:00").timestamp())
+    conn.execute("INSERT INTO product_activity VALUES(?,?,?,?,?,?,?,?,?)",
+                 ("act_" + "b" * 32, "acct", DEVICE, "web", "article", "Legacy", "https://example.com/migration", "migration-media", epoch))
+    conn.commit()
+    conn.close()
+
+    initialize_database(factory, SCHEMA)
+    initialize_database(factory, SCHEMA)
+    with store.transaction(factory) as migrated:
+        columns = {row["name"] for row in migrated.execute("PRAGMA table_info(product_activity)")}
+        row = migrated.execute("SELECT snapshot_id FROM product_activity").fetchone()
+        foreign_key = _product_activity_snapshot_fk(migrated)
+        assert "snapshot_id" in columns and row["snapshot_id"] is not None
+        assert migrated.execute("SELECT COUNT(*) FROM product_activity").fetchone()[0] == 1
+        assert foreign_key["table"] == "analysis_snapshots"
+        assert foreign_key["to"] == "id"
+        assert foreign_key["on_delete"] == "SET NULL"
+
+        migrated.execute("DELETE FROM analysis_snapshots WHERE id=?", (row["snapshot_id"],))
+        retained = migrated.execute(
+            "SELECT snapshot_id FROM product_activity"
+        ).fetchone()
+        assert retained is not None
+        assert retained["snapshot_id"] is None
 
 
 def test_export_includes_only_sanitized_account_owned_user_history(lab):
@@ -427,6 +687,36 @@ def test_completed_analysis_survives_activity_database_failure():
     assert response.status_code == 200
     assert response.json()["merit_score"] == 60
     assert provider_calls == ["https://example.com/story"]
+
+
+def test_authenticated_analysis_response_returns_exact_created_activity_reference(monkeypatch):
+    recorder = Mock(return_value={"id": "act_" + "c" * 32, "restorable": True})
+    monkeypatch.setattr(store, "record_analysis_best_effort", recorder)
+
+    def analyze(req, request):
+        request.state.analysis_snapshot_id = 481
+        return AnalyzeResponse(url=req.url, title=req.title, tldr=["Summary"], merit_score=60, badge="Developing")
+
+    router = product_api.build_router(
+        health_handler=lambda: {"ok": True}, ingest_handler=lambda: {}, stories_handler=lambda **_: [],
+        resolve_content_handler=lambda req: None, browser_capture_handler=lambda req: None,
+        analyze_video_handler=lambda req, request: None, analyze_handler=analyze,
+        operational_event_recorder=None, connection_factory=object(),
+    )
+    app = FastAPI()
+    @app.middleware("http")
+    async def account_state(request, call_next):
+        request.state.account = {"id": "acct_test"}; request.state.device_id = DEVICE
+        return await call_next(request)
+    app.include_router(router)
+
+    response = TestClient(app).post("/analyze", json={
+        "title": "A complete analysis", "url": "https://example.com/story",
+        "text": "Enough article text for a completed provider analysis response to pass validation.",
+    })
+    assert response.status_code == 200
+    assert response.json()["saved_activity"] == {"id": "act_" + "c" * 32, "restorable": True}
+    assert recorder.call_args.args[-1] == 481
 
 
 @pytest.mark.parametrize("provider", ["expo", "web"])

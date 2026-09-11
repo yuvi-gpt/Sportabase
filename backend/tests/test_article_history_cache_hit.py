@@ -66,6 +66,10 @@ class ArticleHistoryCacheHitTests(
             ],
             "merit_score": 81,
             "badge": "High Merit",
+            "article_type": (
+                "transfer_official"
+            ),
+            "type_confidence": 0.94,
             "debug": {
                 "cache": {
                     "hit": True,
@@ -135,8 +139,15 @@ class ArticleHistoryCacheHitTests(
             "app.main.upsert_media_item",
             return_value={
                 "id": "media-cache-test",
+                "first_seen_at": (
+                    "2026-09-10T00:00:00+00:00"
+                ),
             },
         ) as mock_upsert, patch(
+            "app.main.persist_article_intelligence_baseline",
+        ) as mock_baseline, patch(
+            "app.main.gemini_client",
+        ) as mock_gemini_client, patch(
             "app.main.load_evidence_analysis_state_for_media_item",
             return_value={
                 "bundle": {},
@@ -178,6 +189,26 @@ class ArticleHistoryCacheHitTests(
             content_hash=expected_hash,
         )
 
+        mock_baseline.assert_called_once_with(
+            media_item_id="media-cache-test",
+            observed_at=(
+                "2026-09-10T00:00:00+00:00"
+            ),
+            title=req.title,
+            url=req.url,
+            article_type=(
+                "transfer_official"
+            ),
+            type_confidence=0.94,
+            normalize_url=(
+                main.normalized_analysis_url
+            ),
+            connection_factory=(
+                main.db_conn
+            ),
+        )
+        mock_gemini_client.assert_not_called()
+
         mock_context_hash.assert_called_once_with(
             media_item_id=(
                 main.media_item_id_for_url(
@@ -201,7 +232,7 @@ class ArticleHistoryCacheHitTests(
 
         mock_persist.assert_not_called()
 
-    def test_cache_hit_without_snapshot_records_interaction(
+    def test_cache_hit_without_snapshot_persists_exact_restorable_snapshot(
         self,
     ):
         req, request = self.make_request()
@@ -235,6 +266,7 @@ class ArticleHistoryCacheHitTests(
             "app.main.record_user_history",
         ) as mock_history, patch(
             "app.main.persist_analysis_snapshot",
+            return_value={"snapshot": {"id": 73}, "created": True},
         ) as mock_persist:
             response = main.analyze(
                 req,
@@ -249,10 +281,10 @@ class ArticleHistoryCacheHitTests(
         mock_history.assert_called_once_with(
             client_key=expected_client_key,
             media_item_id="media-no-snapshot",
-            snapshot_id=None,
+            snapshot_id=73,
         )
 
-        mock_persist.assert_not_called()
+        mock_persist.assert_called_once()
 
     def test_cache_hit_history_failure_does_not_block_response(
         self,

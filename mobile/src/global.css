@@ -1,4 +1,7 @@
 :root {
+  --sportabase-focus: #36b86a;
+  --sportabase-ground: #070a09;
+  --sportabase-text: #f4f7f1;
   --font-display:
     Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
     Segoe UI Symbol, Noto Color Emoji;
@@ -6,4 +9,134 @@
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
+}
+
+.sportabase-skip-link {
+  background: var(--sportabase-text);
+  border-radius: 6px;
+  color: var(--sportabase-ground);
+  font-size: 16px;
+  font-weight: 700;
+  left: 12px;
+  padding: 10px 14px;
+  position: fixed;
+  top: 12px;
+  transform: translateY(-180%);
+  z-index: 100;
+}
+
+.sportabase-skip-link:focus-visible {
+  outline: 3px solid var(--sportabase-focus);
+  outline-offset: 3px;
+  transform: translateY(0);
+}
+
+#sportabase-product-header a[aria-label='Sportabase home'] {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+}
+
+#sportabase-product-header [role='navigation'] a {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (max-width: 359px) {
+  #sportabase-primary-nav a + a {
+    margin-left: 0;
+  }
+}
+
+#sportabase-main [role='heading'] {
+  text-wrap: balance;
+}
+
+#sportabase-main [role='button'],
+#sportabase-main [role='link'] {
+  overflow-wrap: anywhere;
+}
+
+#sportabase-dialog {
+  overscroll-behavior: contain;
+}
+
+#sportabase-product-header a,
+#sportabase-product-header button,
+#sportabase-product-header [role='button'],
+#sportabase-product-header [role='link'],
+#sportabase-main [role='button'],
+#sportabase-main [role='link'],
+#sportabase-main input,
+#sportabase-main textarea,
+#sportabase-main [role='switch'],
+#sportabase-dialog [role='button'],
+#sportabase-protected-destination button {
+  touch-action: manipulation;
+  transition: filter 160ms ease;
+}
+
+@media (hover: hover) {
+  #sportabase-product-header a:hover,
+  #sportabase-product-header button:not(:disabled):hover,
+  #sportabase-product-header [role='button']:not([aria-disabled='true']):hover,
+  #sportabase-product-header [role='link']:hover,
+  #sportabase-main [role='button']:not([aria-disabled='true']):hover,
+  #sportabase-main [role='link']:hover,
+  #sportabase-dialog [role='button']:not([aria-disabled='true']):hover,
+  #sportabase-protected-destination button:not(:disabled):hover {
+    filter: brightness(1.12);
+  }
+}
+
+#sportabase-product-header a:focus-visible,
+#sportabase-product-header button:focus-visible,
+#sportabase-product-header [role='button']:focus-visible,
+#sportabase-product-header [role='link']:focus-visible,
+#sportabase-main [role='button']:focus-visible,
+#sportabase-main [role='link']:focus-visible,
+#sportabase-main input:focus-visible,
+#sportabase-main textarea:focus-visible,
+#sportabase-main [role='switch']:focus-visible,
+#sportabase-dialog [role='button']:focus-visible,
+#sportabase-protected-destination button:focus-visible {
+  outline: 3px solid var(--sportabase-focus);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sportabase-product-header a,
+  #sportabase-product-header button,
+  #sportabase-product-header [role='button'],
+  #sportabase-product-header [role='link'],
+  #sportabase-main [role='button'],
+  #sportabase-main [role='link'],
+  #sportabase-main input,
+  #sportabase-main textarea,
+  #sportabase-main [role='switch'],
+  #sportabase-dialog [role='button'],
+  #sportabase-protected-destination button {
+    transition: none;
+  }
+
+  #product-watermark,
+  [data-testid='product-watermark'] * {
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  #sportabase-product-header a:focus-visible,
+  #sportabase-product-header [role='button']:focus-visible,
+  #sportabase-main [role='button']:focus-visible,
+  #sportabase-main [role='link']:focus-visible,
+  #sportabase-main input:focus-visible,
+  #sportabase-main [role='switch']:focus-visible,
+  #sportabase-dialog [role='button']:focus-visible {
+    outline-color: Highlight;
+  }
 }

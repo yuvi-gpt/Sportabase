@@ -10,6 +10,8 @@ import jwt
 import requests
 from fastapi import HTTPException
 
+from app.application import config as application_config
+
 
 @dataclass(frozen=True)
 class AuthConfig:
@@ -95,6 +97,9 @@ class ClerkVerifier:
 
 @lru_cache(maxsize=1)
 def configured_verifier():
+    # Keep direct AccountBoundary/auth imports as deterministic as app.main:
+    # dotenv must be loaded before this cached configuration is captured.
+    application_config.load_application_environment()
     authorized_parties = tuple(v.strip() for v in os.getenv("CLERK_AUTHORIZED_PARTIES", "").split(",") if v.strip())
     if os.getenv("SPORTABASE_ENV", "development").strip().lower() == "production" and not authorized_parties:
         raise RuntimeError("Production requires CLERK_AUTHORIZED_PARTIES for browser-origin tokens.")

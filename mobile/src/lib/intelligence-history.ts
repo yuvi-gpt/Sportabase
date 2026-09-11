@@ -2,8 +2,8 @@ import {
   SportabaseApiError,
   type WatchTargetKind,
 } from './api';
+import { sportabaseFetch } from './deployment-config';
 
-const API_BASE_URL = 'https://sportabase-api.onrender.com';
 const REQUEST_TIMEOUT_MS = 22000;
 
 export type IntelligenceHistoryEvent = {
@@ -199,7 +199,7 @@ export async function getIntelligenceHistory(
     `${encodeURIComponent(id)}/history?${params.join('&')}`;
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await sportabaseFetch(path, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     });

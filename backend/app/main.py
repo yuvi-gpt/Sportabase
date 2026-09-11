@@ -164,6 +164,9 @@ from app.services.article_intelligence_shadow import (
     ARTICLE_INTELLIGENCE_SHADOW_VERSION,
     run_article_intelligence_shadow,
 )
+from app.services.article_intelligence_baseline import (
+    persist_article_intelligence_baseline,
+)
 from app.services.live_merit_release import (
     apply_certified_live_merit,
     live_merit_release_cache_token,
@@ -1861,16 +1864,20 @@ def analyze_video(
         ANALYSIS_VERSION=ANALYSIS_VERSION,
         VideoAnalyzeResponse=VideoAnalyzeResponse,
         ai_video_claim_readout=ai_video_claim_readout,
+        analysis_content_hash=analysis_content_hash,
         app=app,
         get_cached_analysis=get_cached_analysis,
         json=json,
         make_analysis_cache_key=make_analysis_cache_key,
         normalize_video_transcript_metadata=normalize_video_transcript_metadata,
+        persist_analysis_snapshot=persist_analysis_snapshot,
         record_analysis_cache_hit=record_analysis_cache_hit,
+        record_user_history=record_user_history,
         request_client_key=request_client_key,
         set_cached_analysis=set_cached_analysis,
         validate_video_analysis_consistency=validate_video_analysis_consistency,
         video_analysis_cache_decision=video_analysis_cache_decision,
+        upsert_media_item=upsert_media_item,
     )
 
 
@@ -1913,6 +1920,9 @@ def analyze(
         merit_score=merit_score,
         normalize_article_bullets=normalize_article_bullets,
         normalized_analysis_url=normalized_analysis_url,
+        persist_article_intelligence_baseline=(
+            persist_article_intelligence_baseline
+        ),
         persist_analysis_snapshot=persist_analysis_snapshot,
         record_analysis_cache_hit=record_analysis_cache_hit,
         record_user_history=record_user_history,

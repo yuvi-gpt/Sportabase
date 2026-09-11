@@ -6,22 +6,22 @@ Sportabase is an evidence-first sports intelligence workspace. People arrive fro
 
 | Semantic role | Light | Dark |
 | --- | --- | --- |
-| Canvas | #f5f7f4 | #050706 |
-| Surface | #ffffff | #0d110f |
-| Raised/selected surface | #e8eee7 | #18221b |
-| Primary text | #172219 | #f3f7f3 |
-| Secondary text | #4e6053 | #a5b3a9 |
+| Canvas | #f5f7f4 | #070a09 |
+| Surface | #ffffff | #0b0f0d |
+| Raised/selected surface | #e8eee7 | #101512 |
+| Primary text | #172219 | #f4f7f1 |
+| Secondary text | #4e6053 | #c5cec6 |
 | Control border | #718476 | #718477 |
 | Divider | #ced8cd | #344539 |
-| Brand/action | #246b16 | #78f54a |
+| Brand/action | #246b16 | #b5f36b |
 | On brand | #ffffff | #071006 |
-| Focus | #245dd8 | #a3beff |
-| Destructive/error | #a82424 | #ff9a9a |
-| Warning | #805600 | #f7ca62 |
+| Focus | #245dd8 | #b5f36b |
+| Destructive/error | #a82424 | #ff9a8f |
+| Warning | #805600 | #f1c75b |
 
-High contrast uses near-black/white text, opaque surfaces and 2px control boundaries. Preserve forced-colors support; never disable system color adjustment globally. Semantic states always have words or shapes as well as color. Light mode is a deliberately shaded paper workspace, not inverted dark CSS.
+High contrast uses near-black/white text, opaque surfaces and 2px control boundaries. Preserve forced-colors support; never disable system color adjustment globally. Semantic states always have words or shapes as well as color. Light mode is a deliberately shaded paper workspace, not inverted dark CSS. Cyan `#16b8c4`, teal `#20c9b0`, green `#82e85b`, and lime `#b5f36b` form the recovered internal SB/watermark treatment; use them as a controlled brand sequence, not as arbitrary route accents or Settings decoration.
 
-Typography: Geist when bundled, then native/system sans. Native apps use their platform face. Body 16px/1.5; secondary 14px/1.45; row label 16px/600; section title 18px/600; Settings title 28px/600 (24px on narrow screens). No all-capital navigation, tiny captions or oversized headings. Data numerals are tabular. Headlines wrap naturally, with balanced lines and tracking no tighter than -0.03em. Settings has no marketing hero.
+Typography: canonical web product typography is Barlow Regular for body copy, Barlow Medium for emphasis, Barlow Condensed SemiBold for compact labels, and Barlow Semi Condensed Bold for display headings. Oxanium Bold is reserved for the SPORTABASE wordmark. Geist is a legacy fallback, not the canonical web face. Native operational copy may use the platform face where appropriate. Body 16px/1.5; secondary 14px/1.45; row label 16px/600; section title 18px/600; Settings title 28px/600 (24px on narrow screens). No all-capital navigation, tiny captions or oversized operational headings; compact intelligence labels may use restrained uppercase Barlow Condensed. Data numerals are tabular. Headlines wrap naturally, with balanced lines and tracking no tighter than -0.03em. Settings has no marketing hero.
 
 Spacing is 4, 8, 12, 16, 24, 32, 48px. Group related rows tightly; use 32px between sections. Comfortable rows have 16px block padding; compact rows 8px, retaining target sizes. Radii: controls 6px, sheets 12px, exceptional content cards 12px. Most settings are divided rows, not individual cards. Canvas < surface < raised gives three meaningful surface levels. One shadow for a floating sheet; no glowing borders, decorative glass or background gradients in Settings.
 
@@ -41,7 +41,7 @@ Spacing is 4, 8, 12, 16, 24, 32, 48px. Group related rows tightly; use 32px betw
 
 At 320px, stack controls and use the two-stage section index; at 600px switch sheet composition; at 900px give content and navigation separate columns. Respect browser zoom through 200%, system text scaling and long translations. Never cap native font scaling globally. Text size small/default/large changes presentation only; `system` preserves system defaults. No fixed-height text containers. Density never reduces touch hit areas or hides evidence caveats.
 
-Motion follows system/reduce/full. Reduce disables decorative transforms, animated scrolling and chart motion. Full permits a short sheet transition, not constant animation. Prefer state transitions under 180ms. No GSAP, pinning, scrubbing or AIDA structure in operational Settings: the user's task-focused brief overrides those gpt-taste marketing prescriptions. Its useful disciplines here are typography, restrained component counts, readable buttons and overflow checks.
+Motion follows system/reduce/full. Reduce disables decorative transforms, animated scrolling, chart motion, and the ambient SB watermark drift. Full permits short state and sheet transitions plus the established slow background watermark treatment; operational controls do not animate continuously. Prefer state transitions under 180ms. No GSAP, pinning, scrubbing or AIDA structure in operational Settings: the user's task-focused brief overrides those gpt-taste marketing prescriptions. Its useful disciplines here are typography, restrained component counts, readable buttons and overflow checks.
 
 Meet WCAG AA text contrast (4.5:1 normal, 3:1 large) and control distinction (3:1). Use landmarks, real headings, labels, status announcements and native controls. Do not use icons for every row. Do not present decorative switches, digest options without delivery, unsupported languages or broken help links.
 

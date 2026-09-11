@@ -40,6 +40,11 @@ class AnalyzeRequest(BaseModel):
     max_bullets: int = Field(3, ge=1, le=6)
 
 
+class SavedActivityReference(BaseModel):
+    id: str = Field(pattern=r"^act_[0-9a-f]{32}$")
+    restorable: bool = True
+
+
 class AnalyzeResponse(BaseModel):
     url: str
     title: str
@@ -82,6 +87,7 @@ class AnalyzeResponse(BaseModel):
     )
 
     debug: Dict[str, Any] = Field(default_factory=dict)
+    saved_activity: Optional[SavedActivityReference] = None
 
 class VideoAnalyzeRequest(BaseModel):
     title: str = ""
@@ -120,6 +126,7 @@ class VideoAnalyzeResponse(BaseModel):
     debug: Dict[str, Any] = Field(
         default_factory=dict
     )
+    saved_activity: Optional[SavedActivityReference] = None
 
 
 

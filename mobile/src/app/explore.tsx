@@ -1,498 +1,71 @@
-import { useProductTheme, scaleStyles } from '../theme/product-theme';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
-import {
-  createWatch,
-  listWatches,
-} from '../lib/api';
-import {
-  inspectableIntelligenceRoute,
-  isWatchableIntelligenceKind,
-} from '../lib/intelligence-kinds';
-import {
-  searchInspectableIntelligence,
-  type IntelligenceSearchResult,
-} from '../lib/intelligence-search';
+import { createWatch, listWatches } from '../lib/api';
+import { useAccount } from '../lib/account-context';
+import { inspectableIntelligenceRoute, isWatchableIntelligenceKind } from '../lib/intelligence-kinds';
+import { searchInspectableIntelligence, type IntelligenceSearchResult } from '../lib/intelligence-search';
+import { ProductButton, ProductPage, ProductPageHeader, ProductRow, ProductSection, ProductStatus, ProductTextField, formatProductDate } from '../product-ui/ProductPrimitives';
 
-const COLORS = {
-  background: '#050807',
-  surface: '#101412',
-  raised: '#171c19',
-  border: '#283029',
-  text: '#f4f7f4',
-  muted: '#98a39b',
-  accent: '#76f53f',
-  accentSoft: 'rgba(118, 245, 63, 0.10)',
-  error: '#ff8c8c',
-};
-
-function messageFrom(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : 'Sportabase could not complete that request.';
-}
+function messageFrom(error: unknown) { return error instanceof Error ? error.message : 'Sportabase could not complete that request.'; }
 
 export default function ExploreScreen() {
-  const { colors: COLORS,scale }=useProductTheme();
-  const styles=scaleStyles(makeStyles(COLORS),scale);
   const router = useRouter();
+  const account = useAccount();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<
-    IntelligenceSearchResult[]
-  >([]);
-  const [watchedKeys, setWatchedKeys] = useState<
-    Set<string>
-  >(new Set());
+  const [results, setResults] = useState<IntelligenceSearchResult[]>([]);
+  const [watchedKeys, setWatchedKeys] = useState<Set<string>>(new Set());
   const [busyKey, setBusyKey] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [fieldError, setFieldError] = useState('');
 
   const loadWatches = useCallback(async () => {
-    try {
-      const response = await listWatches();
-      setWatchedKeys(
-        new Set(
-          response.items.map(
-            (item) =>
-              `${item.target_kind}:${item.target_id}`,
-          ),
-        ),
-      );
-    } catch {
-      // Search remains public and usable even if private
-      // watch state cannot be loaded yet.
-    }
-  }, []);
+    if (!account.signedIn) { setWatchedKeys(new Set()); return; }
+    try { const response = await listWatches(); setWatchedKeys(new Set(response.items.map((item) => `${item.target_kind}:${item.target_id}`))); } catch { /* Public search remains usable. */ }
+  }, [account.signedIn]);
+  useFocusEffect(useCallback(() => { void loadWatches(); }, [loadWatches]));
 
-  useFocusEffect(
-    useCallback(() => {
-      void loadWatches();
-    }, [loadWatches]),
-  );
-
-  async function runSearch() {
+  const runSearch = useCallback(async () => {
     const value = query.trim();
-
-    if (!value) {
-      setMessage(
-        'Enter a player, team, story, claim, source, or reporter.',
-      );
-      return;
-    }
-
-    setIsSearching(true);
-    setMessage('');
-
-    try {
-      const response = await searchInspectableIntelligence(value);
-      setResults(response.results);
-
-      if (response.results.length === 0) {
-        setMessage(
-          'No persisted intelligence matched that search.',
-        );
-      }
-    } catch (error) {
-      setResults([]);
-      setMessage(messageFrom(error));
-    } finally {
-      setIsSearching(false);
-    }
-  }
+    if (!value) { setFieldError('Enter a player, team, story, claim, source, or reporter.'); return; }
+    setIsSearching(true); setMessage(''); setError(''); setFieldError(''); setSearched(true);
+    try { const response = await searchInspectableIntelligence(value); setResults(response.results); }
+    catch (problem) { setResults([]); setError(messageFrom(problem)); }
+    finally { setIsSearching(false); }
+  }, [query]);
 
   async function watch(result: IntelligenceSearchResult) {
-    if (!isWatchableIntelligenceKind(result.kind)) {
+    if (!isWatchableIntelligenceKind(result.kind)) return;
+    if (!account.signedIn) {
+      try { await account.signIn(false, '/explore'); } catch (problem) { setError(messageFrom(problem)); }
       return;
     }
-
-    const key = `${result.kind}:${result.id}`;
-    setBusyKey(key);
-    setMessage('');
-
+    const key = `${result.kind}:${result.id}`; setBusyKey(key); setMessage(''); setError('');
     try {
-      const response = await createWatch(
-        result.kind,
-        result.id,
-      );
-
-      setWatchedKeys((current) => {
-        const next = new Set(current);
-        next.add(key);
-        return next;
-      });
-
-      setMessage(
-        response.created
-          ? `Watching ${result.title}. Future persisted changes can now appear in Alerts.`
-          : `${result.title} is already on your watchlist.`,
-      );
-    } catch (error) {
-      setMessage(messageFrom(error));
-    } finally {
-      setBusyKey('');
-    }
+      const response = await createWatch(result.kind, result.id);
+      setWatchedKeys((current) => new Set(current).add(key));
+      setMessage(response.created ? `Watching ${result.title}. Future persisted changes can now appear in Alerts.` : `${result.title} is already on your watchlist.`);
+    } catch (problem) { setError(messageFrom(problem)); } finally { setBusyKey(''); }
   }
 
-  return (
-    <View style={styles.screen}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
-        >
-          <Text style={styles.eyebrow}>
-            PERSISTED INTELLIGENCE
-          </Text>
-          <Text style={styles.title}>Discover</Text>
-          <Text style={styles.subtitle}>
-            Search Sportabase&apos;s canonical entities,
-            stories, claims, media, sources and reporters. A
-            text match helps you discover persisted objects; it
-            does not create a new verified relationship or a
-            reliability judgement.
-          </Text>
-
-          <View style={styles.searchCard}>
-            <TextInput
-              value={query}
-              onChangeText={(value) => {
-                setQuery(value);
-                setMessage('');
-              }}
-              placeholder="Player, club, story, source, reporter..."
-              placeholderTextColor="#667169"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={runSearch}
-              style={styles.input}
-            />
-
-            <Pressable
-              accessibilityRole="button"
-              disabled={isSearching}
-              onPress={runSearch}
-              style={({ pressed }) => [
-                styles.searchButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              {isSearching ? (
-                <ActivityIndicator color="#071006" />
-              ) : (
-                <Text style={styles.searchButtonText}>
-                  Search
-                </Text>
-              )}
-            </Pressable>
-          </View>
-
-          {message ? (
-            <Text style={styles.message}>{message}</Text>
-          ) : null}
-
-          <View style={styles.results}>
-            {results.map((result) => {
-              const key = `${result.kind}:${result.id}`;
-              const watchable = isWatchableIntelligenceKind(
-                result.kind,
-              );
-              const watched = watchable && watchedKeys.has(key);
-              const busy = busyKey === key;
-
-              return (
-                <View key={key} style={styles.resultCard}>
-                  <View style={styles.resultTop}>
-                    <View style={styles.kindBadge}>
-                      <Text style={styles.kindText}>
-                        {result.kind.toUpperCase()}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.matchText}>
-                      {result.match_type}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.resultTitle}>
-                    {result.title || 'Untitled intelligence'}
-                  </Text>
-
-                  {result.subtitle ? (
-                    <Text style={styles.resultSubtitle}>
-                      {result.subtitle}
-                    </Text>
-                  ) : null}
-
-                  <Text style={styles.resultMeta}>
-                    Matched {result.matched_field}
-                    {result.last_seen_at
-                      ? ` · seen ${new Date(
-                          result.last_seen_at,
-                        ).toLocaleDateString()}`
-                      : ''}
-                  </Text>
-
-                  <View style={styles.resultActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() =>
-                        router.push(
-                          inspectableIntelligenceRoute(
-                            result.kind,
-                            result.id,
-                          ),
-                        )
-                      }
-                      style={({ pressed }) => [
-                        styles.detailButton,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text style={styles.detailButtonText}>
-                        Open intelligence
-                      </Text>
-                    </Pressable>
-
-                    {watchable ? (
-                      <Pressable
-                        accessibilityRole="button"
-                        disabled={watched || busy}
-                        onPress={() => void watch(result)}
-                        style={({ pressed }) => [
-                          styles.watchButton,
-                          watched && styles.watchButtonActive,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.watchButtonText,
-                            watched && styles.watchButtonTextActive,
-                          ]}
-                        >
-                          {busy
-                            ? 'Adding...'
-                            : watched
-                              ? 'Watching'
-                              : 'Watch future changes'}
-                        </Text>
-                      </Pressable>
-                    ) : (
-                      <View style={styles.profileOnly}>
-                        <Text style={styles.profileOnlyText}>
-                          Profile only · not watchable in Alerts V1
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </View>
-  );
+  return <ProductPage width="reading" testID="discover-page">
+    <ProductPageHeader label="Persisted intelligence" title="Discover" description="Search Sportabase entities, stories, claims, media, sources, and reporters. A text match aids discovery; it does not create a canonical relationship or a reliability judgment." />
+    <ProductSection title="Search the intelligence graph">
+      <View style={{ gap: 12 }}><ProductTextField nativeID="discover-query" label="Search term" value={query} onChangeText={(value) => { setQuery(value); setError(''); setFieldError(''); }} onSubmitEditing={() => void runSearch()} returnKeyType="search" autoCapitalize="none" autoComplete="off" autoCorrect={false} inputMode="search" placeholder="Player, club, story, source, reporter…" error={fieldError} /><View style={{ alignItems: 'flex-start' }}><ProductButton label={isSearching ? 'Searching…' : 'Search'} onPress={() => void runSearch()} variant="primary" disabled={isSearching} /></View></View>
+    </ProductSection>
+    {isSearching ? <ProductStatus loading title="Searching persisted intelligence" detail="Looking across inspectable Sportabase objects." /> : null}
+    {message ? <ProductStatus title={message} tone="success" /> : null}
+    {!isSearching && searched && !error && results.length === 0 ? <ProductStatus title="No persisted intelligence matched" detail="Try a broader sports subject, team, person, source, or reporter. No new relationship is inferred from this search." action={<ProductButton label="Clear search" onPress={() => { setQuery(''); setSearched(false); }} variant="quiet" />} /> : null}
+    {error && searched ? <ProductStatus title="Search could not be completed" detail={error} tone="error" action={<ProductButton label="Retry search" onPress={() => void runSearch()} />} /> : null}
+    {results.length ? <ProductSection title={`${results.length} ${results.length === 1 ? 'result' : 'results'}`} description="Sources and reporters are provenance profiles only. Watch actions appear only for entities, stories, claims, and media.">
+      <View>{results.map((result) => {
+        const key = `${result.kind}:${result.id}`; const watchable = isWatchableIntelligenceKind(result.kind); const watched = watchedKeys.has(key); const busy = busyKey === key;
+        return <ProductRow key={key} label={`${result.kind} · ${result.match_type}`} title={result.title || 'Untitled intelligence'} description={result.subtitle} meta={`Matched ${result.matched_field}${result.last_seen_at ? ` · seen ${formatProductDate(result.last_seen_at)}` : ''}`} actions={<><ProductButton label="Open intelligence" onPress={() => router.push(inspectableIntelligenceRoute(result.kind, result.id))} />{watchable ? <ProductButton label={busy ? 'Adding…' : watched ? 'Watching' : account.signedIn ? 'Watch changes' : 'Sign in to watch'} onPress={() => void watch(result)} variant={watched ? 'quiet' : 'secondary'} disabled={busy || watched} /> : null}</>} />;
+      })}</View>
+    </ProductSection> : null}
+  </ProductPage>;
 }
-
-const makeStyles = (COLORS: Record<string,string>) => StyleSheet.create({
-  screen: {
-    backgroundColor: COLORS.background,
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  content: {
-    alignSelf: 'center',
-    maxWidth: 760,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 36,
-    width: '100%',
-  },
-  eyebrow: {
-    color: COLORS.accent,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.8,
-  },
-  title: {
-    color: COLORS.text,
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: -1.2,
-    marginTop: 8,
-  },
-  subtitle: {
-    color: COLORS.muted,
-    fontSize: 15,
-    lineHeight: 23,
-    marginTop: 10,
-    maxWidth: 660,
-  },
-  searchCard: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 24,
-    padding: 10,
-  },
-  input: {
-    color: COLORS.text,
-    flex: 1,
-    fontSize: 15,
-    minHeight: 46,
-    paddingHorizontal: 10,
-  },
-  searchButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.accent,
-    borderRadius: 12,
-    justifyContent: 'center',
-    minWidth: 92,
-    paddingHorizontal: 18,
-  },
-  searchButtonText: {
-    color: '#071006',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  message: {
-    color: COLORS.muted,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 14,
-  },
-  results: {
-    gap: 12,
-    marginTop: 18,
-  },
-  resultCard: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 16,
-  },
-  resultTop: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  kindBadge: {
-    backgroundColor: COLORS.accentSoft,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  kindText: {
-    color: COLORS.accent,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-  matchText: {
-    color: COLORS.muted,
-    fontSize: 11,
-    textTransform: 'uppercase',
-  },
-  resultTitle: {
-    color: COLORS.text,
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 24,
-    marginTop: 13,
-  },
-  resultSubtitle: {
-    color: '#bdc6bf',
-    fontSize: 13,
-    marginTop: 5,
-  },
-  resultMeta: {
-    color: COLORS.muted,
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 12,
-  },
-  resultActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 9,
-    marginTop: 15,
-  },
-  detailButton: {
-    alignItems: 'center',
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    borderWidth: 1,
-    flex: 1,
-    minWidth: 142,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-  },
-  detailButtonText: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  watchButton: {
-    alignItems: 'center',
-    backgroundColor: COLORS.raised,
-    borderColor: '#354038',
-    borderRadius: 12,
-    borderWidth: 1,
-    flex: 1,
-    minWidth: 156,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-  },
-  watchButtonActive: {
-    backgroundColor: COLORS.accentSoft,
-    borderColor: 'rgba(118, 245, 63, 0.28)',
-  },
-  watchButtonText: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  watchButtonTextActive: {
-    color: COLORS.accent,
-  },
-  profileOnly: {
-    alignItems: 'center',
-    backgroundColor: COLORS.raised,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    borderWidth: 1,
-    flex: 1,
-    minWidth: 190,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-  },
-  profileOnlyText: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-});

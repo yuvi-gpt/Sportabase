@@ -1,8 +1,8 @@
-import { API_BASE, accountHeaders } from './account-api';
+import { accountHeaders } from './account-api';
 import { SportabaseApiError } from './api';
 import { getSportabaseClientId } from './client-identity';
+import { sportabaseFetch } from './deployment-config';
 
-const API_BASE_URL = API_BASE;
 const REQUEST_TIMEOUT_MS = 22000;
 
 export type NotificationPlatform = 'ios' | 'android';
@@ -47,7 +47,7 @@ async function privateRequest<T>(
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await sportabaseFetch(path, {
       ...init,
       headers: {
         ...await accountHeaders(),

@@ -128,8 +128,10 @@ def link_legacy(conn, account_id, device_id, legacy_id):
                 epoch = int(datetime.fromisoformat(row["last_analyzed_at"]).timestamp())
             except (ValueError, TypeError):
                 epoch = int(time.time())
-            conn.execute("INSERT INTO product_activity VALUES(?,?,?,?,?,?,?,?,?)", ("act_" + uuid.uuid4().hex, account_id, device_id,
-                         installation(conn, account_id, device_id)["platform"], row["mode"], row["title"][:240], safe_url(row["canonical_url"]), row["media_item_id"], epoch))
+            conn.execute("""INSERT INTO product_activity(
+                         id,account_id,device_id,platform,kind,title,url,media_item_id,created_at,snapshot_id)
+                         VALUES(?,?,?,?,?,?,?,?,?,?)""", ("act_" + uuid.uuid4().hex, account_id, device_id,
+                         installation(conn, account_id, device_id)["platform"], row["mode"], row["title"][:240], safe_url(row["canonical_url"]), row["media_item_id"], epoch, row["last_snapshot_id"]))
         conn.execute("""INSERT INTO user_history VALUES(?,?,?,?,?,?) ON CONFLICT(client_key,media_item_id) DO UPDATE SET
                      last_analyzed_at=MAX(user_history.last_analyzed_at,excluded.last_analyzed_at),
                      analysis_count=user_history.analysis_count+excluded.analysis_count""",
@@ -219,29 +221,53 @@ def record_event_best_effort(factory, account_id, event, platform):
         return False
 
 
-def record_analysis(factory, account_id, device_id, kind, title, url):
+def record_analysis(factory, account_id, device_id, kind, title, url, snapshot_id=None, *, save_unrestorable=True):
     with transaction(factory) as conn:
         state = snapshot(conn, account_id, device_id)
         if state["account"]["status"] != "active":
-            return
+            return None
+        activity = None
         if state["defaults"]["activity_enabled"]:
-            canonical = conn.execute("SELECT id FROM media_items WHERE canonical_url=?", (url,)).fetchone()
-            conn.execute("INSERT INTO product_activity VALUES(?,?,?,?,?,?,?,?,?)", ("act_" + uuid.uuid4().hex, account_id, device_id,
-                         state["device"]["platform"], kind, str(title or f"{kind.title()} analysis")[:240], safe_url(url), canonical[0] if canonical else None, int(time.time())))
+            media_item_id = None
+            normalized_snapshot_id = None
+            if snapshot_id is not None:
+                try:
+                    normalized_snapshot_id = int(snapshot_id)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("Snapshot ID must be an integer.") from exc
+                snapshot_row = conn.execute(
+                    "SELECT id,media_item_id,mode FROM analysis_snapshots WHERE id=?",
+                    (normalized_snapshot_id,),
+                ).fetchone()
+                if snapshot_row is None or snapshot_row["mode"] != kind:
+                    raise ValueError("Analysis snapshot does not match the activity kind.")
+                media_item_id = snapshot_row["media_item_id"]
+            elif save_unrestorable:
+                canonical = conn.execute("SELECT id FROM media_items WHERE canonical_url=?", (url,)).fetchone()
+                media_item_id = canonical[0] if canonical else None
+
+            if normalized_snapshot_id is not None or save_unrestorable:
+                activity_id = "act_" + uuid.uuid4().hex
+                conn.execute("""INSERT INTO product_activity(
+                             id,account_id,device_id,platform,kind,title,url,media_item_id,created_at,snapshot_id)
+                             VALUES(?,?,?,?,?,?,?,?,?,?)""", (activity_id, account_id, device_id,
+                             state["device"]["platform"], kind, str(title or f"{kind.title()} analysis")[:240], safe_url(url), media_item_id, int(time.time()), normalized_snapshot_id))
+                activity = {"id": activity_id, "restorable": normalized_snapshot_id is not None}
         first = conn.execute("UPDATE product_accounts SET first_analysis_at=? WHERE id=? AND first_analysis_at IS NULL", (int(time.time()), account_id)).rowcount
         if first:
             try_record_event(conn, account_id, "first_analysis", state["device"]["platform"])
         try_record_event(conn, account_id, "analysis_completed", state["device"]["platform"])
+        return activity
 
 
-def record_analysis_best_effort(factory, account_id, device_id, kind, title, url):
+def record_analysis_best_effort(factory, account_id, device_id, kind, title, url, snapshot_id=None):
     """Persist My Activity after provider success without replacing that success."""
     try:
-        record_analysis(factory, account_id, device_id, kind, title, url)
-        return True
+        return record_analysis(factory, account_id, device_id, kind, title, url, snapshot_id,
+                               save_unrestorable=False)
     except Exception:
         LOGGER.exception("Optional My Activity persistence failed", extra={"kind": kind})
-        return False
+        return None
 
 
 def revoke_device_notifications(conn, account_id, device_id):
