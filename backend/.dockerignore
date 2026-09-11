@@ -4,7 +4,9 @@
 !requirements.txt
 !app/
 !app/**
+# Opening data/ also opens descendants; exclude them again before listing assets.
 !data/
+data/**
 !data/ipl_matches.csv
 !data/merit_score_release_certificate.json
 !data/sources.json
