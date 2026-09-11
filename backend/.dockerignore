@@ -1,0 +1,20 @@
+# Build with backend/ as the context: docker build ./backend
+# Admit only build inputs. Runtime data, environments, and test output stay local.
+**
+!requirements.txt
+!app/
+!app/**
+!data/
+!data/ipl_matches.csv
+!data/merit_score_release_certificate.json
+!data/sources.json
+
+# Application source must not re-admit local state through the app/** exception.
+**/.env*
+**/*.env
+**/__pycache__/
+**/*.py[cod]
+**/*.db*
+**/*.sqlite*
+
+# Add new shipped data assets explicitly above and to tooling/docker/check_context.py.
