@@ -24,6 +24,7 @@ from app.routes.watchlists_product import build_router as watches_router
 from app.routes.notifications_product import build_router as notifications_router
 from app.routes import product_api
 from app.models.api import AnalyzeResponse, VideoAnalyzeResponse
+from app.application import config as application_config
 from app.application.composition import create_application
 
 
@@ -143,6 +144,32 @@ def test_production_auth_and_cors_configuration_fail_closed(monkeypatch):
     with pytest.raises(RuntimeError, match="SPORTABASE_ALLOWED_ORIGINS"):
         create_application()
     configured_verifier.cache_clear()
+
+
+def test_configured_verifier_loads_environment_before_freezing(monkeypatch):
+    calls = []
+
+    def load_environment():
+        calls.append("loaded")
+        monkeypatch.setenv("SPORTABASE_ENV", "development")
+        monkeypatch.setenv("CLERK_ISSUER", ISSUER + "/")
+        monkeypatch.setenv("CLERK_AUDIENCE", "sportabase")
+        monkeypatch.setenv("CLERK_AUTHORIZED_PARTIES", "https://app.example.test, http://localhost:8081")
+
+    monkeypatch.setattr(application_config, "load_application_environment", load_environment)
+    configured_verifier.cache_clear()
+    try:
+        verifier = configured_verifier()
+        assert calls == ["loaded"]
+        assert verifier.config == AuthConfig(
+            issuer=ISSUER,
+            audience="sportabase",
+            authorized_parties=("https://app.example.test", "http://localhost:8081"),
+        )
+        assert configured_verifier() is verifier
+        assert calls == ["loaded"]
+    finally:
+        configured_verifier.cache_clear()
 
 
 @pytest.mark.parametrize("path", ["/account", "/account/export", "/account/activity", "/account/devices", "/watchlists", "/watchlists/alerts", "/notifications/devices", "/notifications/web/config", "/analyze", "/analyze/video", "/resolve-content", "/content/browser-capture"])

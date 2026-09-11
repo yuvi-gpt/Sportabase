@@ -36,18 +36,32 @@ const NAV_ITEMS = [
 
 type ProductHeaderProps = {
   compact?: boolean;
+  hideAccount?: boolean;
+  hideLogo?: boolean;
   narrow?: boolean;
   onHome?: () => void;
   onAnother?: () => void;
   showAnother?: boolean;
+  previewColors?: {
+    line: string;
+    lime: string;
+    muted: string;
+    secondary: string;
+    text: string;
+    danger?: string;
+    teal?: string;
+  };
 };
 
 export function ProductHeader({
   compact = false,
+  hideAccount = false,
+  hideLogo = false,
   narrow = false,
   onHome,
   onAnother,
   showAnother = false,
+  previewColors,
 }: ProductHeaderProps) {
   const pathname = usePathname();
   const account = useAccount();
@@ -106,14 +120,17 @@ export function ProductHeader({
             styles.navItem,
             narrow && styles.navItemNarrow,
             active && styles.navItemActive,
+            active && previewColors && { borderBottomColor: previewColors.lime },
             pressed && styles.pressed,
           ]}
         >
           <Text
             style={[
               styles.navText,
+              previewColors && { color: previewColors.secondary },
               narrow && styles.navTextNarrow,
               active && styles.navTextActive,
+              active && previewColors && { color: previewColors.text },
             ]}
           >
             {item.label}
@@ -179,6 +196,7 @@ export function ProductHeader({
       }}
       style={({ pressed }) => [
         styles.account,
+        previewColors && { borderColor: previewColors.line },
         !account.ready && styles.disabled,
         pressed && styles.pressed,
       ]}
@@ -186,12 +204,14 @@ export function ProductHeader({
       <View
         style={[
           styles.accountDot,
+          previewColors && { backgroundColor: previewColors.muted },
           account.signedIn &&
             styles.accountDotActive,
+          account.signedIn && previewColors && { backgroundColor: previewColors.lime },
         ]}
       />
 
-      <Text style={styles.accountText}>
+      <Text style={[styles.accountText, previewColors && { color: previewColors.secondary }]}>
         {!account.ready
           ? 'Account…'
           : account.signedIn
@@ -208,12 +228,14 @@ export function ProductHeader({
       style={[
         styles.header,
         compact && styles.headerCompact,
+        previewColors && { borderBottomColor: previewColors.line },
       ]}
     >
       <View
         style={[
           styles.topRow,
           compact && styles.topRowCompact,
+          hideAccount && styles.topRowWithoutAccount,
         ]}
       >
         <Link href="/" asChild>
@@ -231,23 +253,25 @@ export function ProductHeader({
               pressed && styles.pressed,
             ]}
           >
-            <Image
-              source={require(
-                '../../assets/images/sportabase-logo.png'
-              )}
-              contentFit="contain"
-              style={[
-                styles.logo,
-                compact && styles.logoCompact,
-              ]}
-            />
+            {!hideLogo ? (
+              <Image
+                source={require(
+                  '../../assets/images/sportabase-logo.png'
+                )}
+                contentFit="contain"
+                style={[
+                  styles.logo,
+                  compact && styles.logoCompact,
+                ]}
+              />
+            ) : null}
 
-            <ProductWordmark compact={compact} />
+            <ProductWordmark compact={compact} color={previewColors?.text} />
           </Pressable>
         </Link>
 
         {!compact ? (
-          <View style={styles.desktopActions}>
+          <View style={[styles.desktopActions, hideAccount && styles.desktopActionsWithoutAccount]}>
             {navigation}
 
             {showAnother ? (
@@ -259,18 +283,18 @@ export function ProductHeader({
                   pressed && styles.pressed,
                 ]}
               >
-                <View style={styles.anotherMark} />
+                <View style={[styles.anotherMark, previewColors && { borderColor: previewColors.teal ?? productPalette.teal }]} />
 
-                <Text style={styles.anotherText}>
+                <Text style={[styles.anotherText, previewColors && { color: previewColors.secondary }]}>
                   Analyze another
                 </Text>
               </Pressable>
             ) : null}
 
-            {accountAction}
+            {!hideAccount ? accountAction : null}
           </View>
         ) : (
-          accountAction
+          hideAccount ? null : accountAction
         )}
       </View>
 
@@ -279,7 +303,7 @@ export function ProductHeader({
       {accountError ? (
         <Text
           accessibilityRole="alert"
-          style={styles.accountError}
+          style={[styles.accountError, previewColors?.danger && { color: previewColors.danger }]}
         >
           {accountError}
         </Text>
@@ -298,10 +322,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerCompact: {
-    minHeight: 112,
-    paddingTop: 7,
-    paddingBottom: 8,
-    gap: 3,
+    minHeight: 124,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 6,
   },
   topRow: {
     minHeight: 72,
@@ -311,8 +335,11 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   topRowCompact: {
-    minHeight: 56,
-    gap: 12,
+    minHeight: 60,
+    gap: 16,
+  },
+  topRowWithoutAccount: {
+    justifyContent: 'flex-start',
   },
   brandButton: {
     minHeight: 58,
@@ -324,7 +351,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   brandButtonCompact: {
-    minHeight: 48,
+    minHeight: 52,
     gap: 7,
     paddingRight: 2,
   },
@@ -333,8 +360,8 @@ const styles = StyleSheet.create({
     height: 54,
   },
   logoCompact: {
-    width: 42,
-    height: 42,
+    width: 46,
+    height: 46,
   },
   desktopActions: {
     flex: 1,
@@ -344,29 +371,34 @@ const styles = StyleSheet.create({
     gap: 10,
     minWidth: 0,
   },
+  desktopActionsWithoutAccount: {
+    justifyContent: 'flex-start',
+    marginLeft: 14,
+  },
   navScroller: {
     flexShrink: 1,
   },
   nav: {
     alignItems: 'center',
-    gap: 2,
+    gap: 22,
   },
   navCompact: {
-    paddingRight: 14,
+    gap: 10,
+    paddingRight: 10,
   },
   navNarrow: {
     width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: 2,
+    columnGap: 8,
     rowGap: 2,
     paddingTop: 2,
   },
   navItem: {
     minHeight: 44,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },
@@ -378,24 +410,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   navText: {
-    color: productPalette.muted,
+    color: productPalette.secondary,
     fontFamily: productFonts.emphasis,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.05,
   },
   navTextActive: {
     color: productPalette.text,
   },
   navTextNarrow: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
   },
   account: {
-    minHeight: 44,
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: productPalette.lineStrong,
     borderRadius: 7,

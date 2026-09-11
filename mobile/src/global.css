@@ -1,4 +1,7 @@
 :root {
+  --sportabase-focus: #36b86a;
+  --sportabase-ground: #070a09;
+  --sportabase-text: #f4f7f1;
   --font-display:
     Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
     Segoe UI Symbol, Noto Color Emoji;
@@ -9,9 +12,9 @@
 }
 
 .sportabase-skip-link {
-  background: #f4f7f1;
+  background: var(--sportabase-text);
   border-radius: 6px;
-  color: #070a09;
+  color: var(--sportabase-ground);
   font-size: 16px;
   font-weight: 700;
   left: 12px;
@@ -23,7 +26,7 @@
 }
 
 .sportabase-skip-link:focus-visible {
-  outline: 3px solid #b5f36b;
+  outline: 3px solid var(--sportabase-focus);
   outline-offset: 3px;
   transform: translateY(0);
 }
@@ -32,10 +35,6 @@
   align-items: center;
   display: flex;
   flex-direction: row;
-}
-
-#sportabase-product-header [role='navigation'] a + a {
-  margin-left: 2px;
 }
 
 #sportabase-product-header [role='navigation'] a {
@@ -104,7 +103,7 @@
 #sportabase-main [role='switch']:focus-visible,
 #sportabase-dialog [role='button']:focus-visible,
 #sportabase-protected-destination button:focus-visible {
-  outline: 3px solid #b5f36b;
+  outline: 3px solid var(--sportabase-focus);
   outline-offset: 3px;
 }
 

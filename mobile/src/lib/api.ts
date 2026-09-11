@@ -3,6 +3,7 @@ import { getSportabaseClientId } from './client-identity';
 import { sportabaseFetch } from './deployment-config';
 
 const REQUEST_TIMEOUT_MS = 22000;
+const CONTENT_RESOLVE_TIMEOUT_MS = 60000;
 const ANALYSIS_TIMEOUT_MS = 60000;
 
 export type ApiHealthResponse = {
@@ -73,7 +74,8 @@ export type ArticleAnalyzeResponse = {
    */
   intelligence?: ArticleIntelligencePublic;
 
-  debug: Record<string, unknown>;
+  debug?: Record<string, unknown>;
+  saved_activity?: SavedActivityReference | null;
 };
 
 export type VideoAnalyzeRequest = {
@@ -102,8 +104,34 @@ export type VideoAnalyzeResponse = {
   localized_content_type: string;
   localized_verdict: string;
   ui_labels: Record<string, string>;
-  debug: Record<string, unknown>;
+  debug?: Record<string, unknown>;
+  saved_activity?: SavedActivityReference | null;
 };
+
+export type SavedActivityReference = {
+  id: string;
+  restorable: true;
+};
+
+export type SavedAnalysisResponse =
+  | {
+      version: 'sportabase-saved-analysis-v1';
+      activity_id: string;
+      kind: 'article';
+      title: string;
+      source_url: string;
+      analyzed_at: string;
+      analysis: ArticleAnalyzeResponse;
+    }
+  | {
+      version: 'sportabase-saved-analysis-v1';
+      activity_id: string;
+      kind: 'video';
+      title: string;
+      source_url: string;
+      analyzed_at: string;
+      analysis: VideoAnalyzeResponse;
+    };
 
 export type WatchTargetKind =
   | 'entity'
@@ -133,6 +161,97 @@ export type IntelligenceSearchResponse = {
     limit: number;
     next_cursor: string | null;
   };
+};
+
+export type HomepageStoryline = {
+  storyline_id: string;
+  title: string;
+  current_state: string;
+  latest_activity_at: string;
+  report_count: number;
+  distinct_source_count: number;
+  verified_independent_reporting_present: boolean;
+  verified_independent_report_count: number;
+  sport_key?: string;
+  representative_media?: {
+    media_item_id: string;
+    title?: string;
+    canonical_url?: string;
+    published_at?: string;
+    observed_at?: string;
+    source_id?: string;
+  };
+};
+
+export type HomepageStorylinesResponse = {
+  version: string;
+  status: string;
+  storylines: HomepageStoryline[];
+  pagination: {
+    limit: number;
+    returned: number;
+    has_more: boolean;
+    next_cursor?: string;
+  };
+  policy: Record<string, boolean>;
+};
+
+export type AnalysisResultContextEvidence = {
+  status: string;
+  label: string;
+  detail: string;
+  signal: string;
+  corroboration_status: string;
+  independence_status: string;
+  distinct_source_count: number;
+  candidate_count: number | null;
+  verification_pairs: number;
+  contested: boolean;
+  provisional: boolean;
+  affects_merit_score: boolean;
+};
+
+export type AnalysisResultContext = {
+  version: string;
+  status: string;
+  canonical_url: string;
+  media: null | {
+    id: string;
+    title: string;
+    canonical_url: string;
+    mode: string;
+    published_at: string | null;
+    observed_at: string | null;
+    source_id: string | null;
+    source_name: string | null;
+    source_type: string | null;
+    source_domain: string | null;
+  };
+  primary_claim: null | { id: string; canonical_text: string; claim_type: string };
+  story: null | { id: string; title: string; status: string };
+  evidence: AnalysisResultContextEvidence | null;
+  related_reports: Array<{
+    media_item_id: string | null;
+    source_id: string | null;
+    source_name: string;
+    source_type: string;
+    headline: string;
+    canonical_url: string | null;
+    observed_at: string;
+    relationship: string;
+    independence_status: string | null;
+    verification_status: string | null;
+  }>;
+  stakeholders: Array<{
+    entity_id: string;
+    name: string;
+    entity_type: string;
+    participant_role: string;
+    verification_status: string;
+    evidence_id: string;
+  }>;
+  evolution: Array<{ id: string; type: string; label: string; detail: string; occurred_at: string }>;
+  policy: Record<string, boolean>;
 };
 
 export type WatchItem = {
@@ -313,6 +432,7 @@ export function resolveContent(
       },
       body: JSON.stringify({ url }),
     },
+    CONTENT_RESOLVE_TIMEOUT_MS,
   );
 }
 
@@ -381,6 +501,37 @@ export function searchIntelligence(
 
   return requestJson<IntelligenceSearchResponse>(
     `/intelligence/search?${params.join('&')}`,
+  );
+}
+
+export function getHomepageStorylines(
+  options: {
+    limit?: number;
+    cursor?: string;
+  } = {},
+) {
+  const params = [`limit=${options.limit ?? 50}`];
+
+  if (options.cursor) {
+    params.push(
+      `cursor=${encodeURIComponent(options.cursor)}`,
+    );
+  }
+
+  return requestJson<HomepageStorylinesResponse>(
+    `/intelligence/homepage-storylines?${params.join('&')}`,
+  );
+}
+
+export function getAnalysisResultContext(url: string) {
+  return requestJson<AnalysisResultContext>(
+    `/intelligence/result-context?url=${encodeURIComponent(url.trim())}`,
+  );
+}
+
+export function getSavedAnalysis(activityId: string) {
+  return requestPrivateJson<SavedAnalysisResponse>(
+    `/account/activity/${encodeURIComponent(activityId)}/analysis`,
   );
 }
 

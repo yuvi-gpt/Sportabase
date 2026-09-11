@@ -17,5 +17,5 @@ export const productFonts = {
   emphasis: Platform.OS === 'web' ? 'SportabaseBarlowMedium' : undefined,
   label: Platform.OS === 'web' ? 'SportabaseBarlowCondensedSemiBold' : undefined,
   display: Platform.OS === 'web' ? 'SportabaseBarlowSemiCondensedBold' : undefined,
-  wordmark: Platform.OS === 'web' ? 'SportabaseOxaniumBold' : undefined,
+  wordmark: 'SportabaseArchivoBlack',
 } as const;

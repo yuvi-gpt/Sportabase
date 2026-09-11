@@ -17,7 +17,14 @@ DATA_DIR = BACKEND_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DOTENV_PATH = BACKEND_DIR / ".env"
-load_dotenv(DOTENV_PATH)
+
+
+def load_application_environment() -> None:
+    """Load the canonical backend environment before configuration is captured."""
+    load_dotenv(DOTENV_PATH)
+
+
+load_application_environment()
 
 _DB_PATH_OVERRIDE = os.getenv(
     "SPORTABASE_DB_PATH",

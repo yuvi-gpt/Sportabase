@@ -32,11 +32,46 @@ test('article product adapter resolves content and renders the actual ArticleAna
   assert.equal(harness.calls[2][1].text, 'Article body');
 });
 
+test('article analysis reports resolving before content resolution and analyzing before analysis', async () => {
+  const harness = load();
+  const result = await harness.runProductAnalysis(
+    'https://example.test/story',
+    undefined,
+    (phase) => harness.calls.push(['phase', phase]),
+  );
+  assert.equal(result.kind, 'article');
+  assert.deepEqual(harness.calls.map(([name, value]) => name === 'phase' ? `${name}:${value}` : name), [
+    'validate',
+    'phase:resolving',
+    'resolve',
+    'phase:analyzing',
+    'article',
+  ]);
+});
+
 test('video product adapter keeps Evidence Score, Logic Score, and Verdict separate', async () => {
   const harness = load(); const result = await harness.runProductAnalysis('https://youtu.be/abcdefghijk');
   assert.equal(result.kind, 'video'); assert.equal(result.data.evidence_score, 70); assert.equal(result.data.logic_score, 60); assert.equal(result.data.verdict, 'Partially supported');
   assert.deepEqual(harness.calls.map(([name]) => name), ['validate', 'transcript', 'title', 'video']);
   assert.equal(harness.calls[3][1].transcript_metadata.extraction_method, 'youtube-transcript');
+});
+
+test('YouTube analysis reports resolving before extraction and analyzing before analysis', async () => {
+  const harness = load();
+  const result = await harness.runProductAnalysis(
+    'https://youtu.be/abcdefghijk',
+    undefined,
+    (phase) => harness.calls.push(['phase', phase]),
+  );
+  assert.equal(result.kind, 'video');
+  assert.deepEqual(harness.calls.map(([name, value]) => name === 'phase' ? `${name}:${value}` : name), [
+    'validate',
+    'phase:resolving',
+    'transcript',
+    'title',
+    'phase:analyzing',
+    'video',
+  ]);
 });
 
 test('analysis validates the fail-closed Sportabase boundary before any content request', async () => {

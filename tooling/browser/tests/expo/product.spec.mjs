@@ -61,6 +61,7 @@ test('release export excludes Design Lab routes', async ({ page }) => {
     '/+not-found',
     '/_sitemap',
     '/activity',
+    '/analysis',
     '/alerts',
     '/explore',
     '/handle-share',
@@ -110,6 +111,25 @@ test('keyboard focus, skip link, controls, and reduced motion', async ({ page })
   expect(controls.every((control) => control.width >= 40 && control.height >= 44), JSON.stringify(controls)).toBe(true);
   const movingTransform = await page.locator('[data-testid="product-watermark"] > div').first().evaluate((node) => getComputedStyle(node).transform);
   expect(movingTransform).toBe('none');
+});
+
+test('product identity keeps the SB geometry fixed while only its satin material moves', async ({ page }) => {
+  await installNetworkBoundary(page); await page.goto('/'); await page.waitForTimeout(250);
+  const mark = page.locator('[data-testid="stationary-sb-watermark"]');
+  const satin = page.locator('[data-testid="product-watermark-satin"]');
+  const wordmark = page.locator('#sportabase-product-header').getByText('SPORTABASE', { exact: true });
+  const firstMarkBox = await mark.boundingBox();
+  const firstSatinTransform = await satin.evaluate((node) => getComputedStyle(node).transform);
+  expect(await mark.evaluate((node) => getComputedStyle(node).transform)).toBe('none');
+  expect(await wordmark.evaluate((node) => getComputedStyle(node).fontFamily)).toContain('Helvetica');
+  await page.waitForTimeout(1000);
+  expect(await mark.boundingBox()).toEqual(firstMarkBox);
+  expect(await mark.evaluate((node) => getComputedStyle(node).transform)).toBe('none');
+  expect(await satin.evaluate((node) => getComputedStyle(node).transform)).not.toBe(firstSatinTransform);
+
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' }); await page.reload(); await page.waitForTimeout(250);
+  expect(await mark.evaluate((node) => getComputedStyle(node).transform)).toBe('none');
+  expect(await satin.evaluate((node) => getComputedStyle(node).transform)).toBe('none');
 });
 
 test('Discover exposes loading, long-result, empty, and error states without inventing linkage', async ({ page }) => {

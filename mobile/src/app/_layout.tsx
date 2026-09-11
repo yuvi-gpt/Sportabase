@@ -116,12 +116,14 @@ function AppFrame() {
         {Platform.OS === 'web' ? <Stack.Screen name="alerts" /> : null}
         {Platform.OS === 'web' ? <Stack.Screen name="notifications" /> : null}
         {Platform.OS === 'web' ? <Stack.Screen name="activity" /> : null}
+        {Platform.OS === 'web' ? <Stack.Screen name="analysis" /> : null}
         {Platform.OS !== 'web' ? (
           <Stack.Protected guard={account.ready && account.signedIn && Boolean(account.state)}>
             <Stack.Screen name="watchlists" />
             <Stack.Screen name="alerts" />
             <Stack.Screen name="notifications" />
             <Stack.Screen name="activity" />
+            <Stack.Screen name="analysis" />
             <Stack.Screen name="handle-share" />
           </Stack.Protected>
         ) : null}

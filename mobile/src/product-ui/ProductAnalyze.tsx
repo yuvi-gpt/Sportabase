@@ -69,7 +69,9 @@ export function ProductAnalyze() {
         return;
       }
       setPhase('resolving');
-      const analysis = await runProductAnalysis(url, undefined, () => setPhase('analyzing'));
+      const analysis = await runProductAnalysis(url, undefined, (nextPhase) => {
+        if (nextPhase === 'analyzing') setPhase('analyzing');
+      });
       setResult(analysis);
       setPhase('result');
     } catch (problem) {

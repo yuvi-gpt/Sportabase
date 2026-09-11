@@ -3,6 +3,7 @@ import { resolveSportabaseApiOrigin } from './deployment-config';
 import { fetchYouTubeTranscript, fetchYouTubeVideoTitle, type YouTubeTranscriptResult } from './youtube-transcript';
 
 export type ProductAnalysisResult = { kind: 'article'; data: ArticleAnalyzeResponse } | { kind: 'video'; data: VideoAnalyzeResponse };
+export type ProductAnalysisPhase = 'resolving' | 'analyzing';
 type Dependencies = {
   validateApi: () => string;
   resolve: typeof resolveContent;
@@ -33,9 +34,10 @@ async function analyzeYouTube(url: string, dependencies: Dependencies, onAnalyze
   return { kind: 'video', data };
 }
 
-export async function runProductAnalysis(rawUrl: string, dependencies: Dependencies = productionDependencies, onPhase?: (phase: 'analyzing') => void): Promise<ProductAnalysisResult> {
+export async function runProductAnalysis(rawUrl: string, dependencies: Dependencies = productionDependencies, onPhase?: (phase: ProductAnalysisPhase) => void): Promise<ProductAnalysisResult> {
   const url = normalizedAnalysisUrl(rawUrl);
   dependencies.validateApi();
+  onPhase?.('resolving');
   if (isYouTubeUrl(url)) return analyzeYouTube(url, dependencies, () => onPhase?.('analyzing'));
   const resolved = await dependencies.resolve(url);
   if (resolved.mode === 'video' || resolved.source === 'youtube') return analyzeYouTube(resolved.normalized_url || url, dependencies, () => onPhase?.('analyzing'));

@@ -3,44 +3,130 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, Image, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useProductTheme } from '../theme/product-theme';
-import { productPalette } from './tokens';
 
 const maskModule = require('../../assets/images/sportabase-logo.png');
+const maskUri = Asset.fromModule(maskModule).uri;
+const nativeDriver = Platform.OS !== 'web';
+const homeMaterial = ['#128B98', '#158C7F', '#4C9E49', '#85B850'] as const;
+const lightHomeMaterial = ['#24443B', '#31584B', '#3C6552', '#47715A'] as const;
 
-export function ProductWatermark({ compact = false }: { compact?: boolean }) {
+function SatinMaterial({ colors, travel }: { colors: readonly [string, string, ...string[]]; travel: Animated.AnimatedInterpolation<string> }) {
+  return (
+    <>
+      <LinearGradient
+        colors={[...colors]}
+        end={{ x: 1, y: 0.55 }}
+        start={{ x: 0, y: 0.45 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <Animated.View
+        style={[styles.satinPass, { transform: [{ translateX: travel }] }]}
+        testID="product-watermark-satin"
+      >
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0)',
+            'rgba(218,242,226,0.16)',
+            'rgba(255,255,255,0)',
+          ]}
+          end={{ x: 1, y: 0.5 }}
+          start={{ x: 0, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+    </>
+  );
+}
+
+export function ProductWatermark({ approvedHome = false, compact = false, light = false }: { approvedHome?: boolean; compact?: boolean; light?: boolean }) {
   const { width, height } = useWindowDimensions();
   const { reduceMotion } = useProductTheme();
-  const drift = useRef(new Animated.Value(reduceMotion ? 0.5 : 0)).current;
-  const rotation = useRef(new Animated.Value(reduceMotion ? 0.22 : 0)).current;
+  const material = useRef(new Animated.Value(reduceMotion ? 0.5 : 0)).current;
+
   useEffect(() => {
-    drift.stopAnimation(); rotation.stopAnimation();
-    if (reduceMotion) { drift.setValue(0.5); rotation.setValue(0.22); return; }
-    drift.setValue(0); rotation.setValue(0);
-    const animation = Animated.loop(Animated.parallel([
-      Animated.timing(drift, { toValue: 1, duration: 24000, easing: Easing.linear, useNativeDriver: true }),
-      Animated.timing(rotation, { toValue: 1, duration: 30000, easing: Easing.linear, useNativeDriver: true }),
-    ]));
-    animation.start(); return () => animation.stop();
-  }, [drift, reduceMotion, rotation]);
+    material.stopAnimation();
+    if (reduceMotion) {
+      material.setValue(0.5);
+      return;
+    }
+
+    material.setValue(0);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(material, {
+          duration: 12000,
+          easing: Easing.inOut(Easing.sin),
+          toValue: 1,
+          useNativeDriver: nativeDriver,
+        }),
+        Animated.timing(material, {
+          duration: 12000,
+          easing: Easing.inOut(Easing.sin),
+          toValue: 0,
+          useNativeDriver: nativeDriver,
+        }),
+      ]),
+    );
+    animation.start();
+
+    return () => animation.stop();
+  }, [material, reduceMotion]);
+
+  const compactGeometry = compact && width < 700;
   const size = useMemo(() => {
-    const basis = compact ? Math.min(Math.max(width * 1.1, 420), 560) : Math.min(Math.max(width * 0.82, 420), 1080);
-    return Math.min(basis, Math.max(height * 0.88, 420));
-  }, [compact, height, width]);
-  const maskStyle = Platform.OS === 'web' ? { WebkitMaskImage: `url(${Asset.fromModule(maskModule).uri})`, maskImage: `url(${Asset.fromModule(maskModule).uri})`, WebkitMaskPosition: 'center', maskPosition: 'center', WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat', WebkitMaskSize: 'contain', maskSize: 'contain' } as never : null;
+    return compactGeometry
+      ? Math.min(Math.max(width * 0.76, 270), 320)
+      : Math.min(Math.max(width * 0.5, 620), 760);
+  }, [compactGeometry, width]);
+  const viewportTop = compactGeometry
+    ? Math.max(128, height * 0.17)
+    : Math.max(92, height * 0.13);
+  const webHeaderOffset = Platform.OS === 'web'
+    ? approvedHome ? 0 : width < 980 ? 130 : 92
+    : 0;
+  const position = compactGeometry
+    ? { right: -size * 0.1, top: viewportTop - webHeaderOffset }
+    : { right: -size * 0.055, top: viewportTop - webHeaderOffset };
+  const travel = material.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-70%', '150%'],
+  });
+  const maskStyle = Platform.OS === 'web'
+    ? {
+        WebkitMaskImage: `url(${maskUri})`,
+        WebkitMaskPosition: 'center',
+        WebkitMaskRepeat: 'no-repeat',
+        WebkitMaskSize: 'contain',
+        maskImage: `url(${maskUri})`,
+        maskPosition: 'center',
+        maskRepeat: 'no-repeat',
+        maskSize: 'contain',
+      } as never
+    : null;
+
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" pointerEvents="none" style={styles.layer} testID="product-watermark">
-      <Animated.View style={[styles.mark, maskStyle, { height: size, opacity: compact ? 0.1 : 0.16, width: size, transform: [
-        { translateX: drift.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-18, 18, -18] }) },
-        { translateY: drift.interpolate({ inputRange: [0, 0.5, 1], outputRange: [10, -12, 10] }) },
-        { rotate: rotation.interpolate({ inputRange: [0, 1], outputRange: ['-1deg', '2deg'] }) },
-      ] }]}>
-        {Platform.OS === 'web' ? <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: drift.interpolate({ inputRange: [0, 0.5, 1], outputRange: [-size * 0.16, size * 0.16, -size * 0.16] }) }] }]}><LinearGradient colors={[productPalette.cyan, productPalette.teal, productPalette.green, productPalette.lime]} end={{ x: 1, y: 1 }} start={{ x: 0, y: 0 }} style={StyleSheet.absoluteFill} /></Animated.View> : <Image source={maskModule} resizeMode="contain" style={StyleSheet.absoluteFill} />}
-      </Animated.View>
+      {Platform.OS === 'web' ? (
+        <View
+          style={[styles.mark, position, maskStyle, { height: size, opacity: light ? 0.045 : 0.078, width: size }]}
+          testID="stationary-sb-watermark"
+        >
+          <SatinMaterial colors={light ? lightHomeMaterial : homeMaterial} travel={travel} />
+        </View>
+      ) : (
+        <Image
+          source={maskModule}
+          resizeMode="contain"
+          style={[styles.mark, position, { height: size, opacity: 0.078, width: size }]}
+          testID="stationary-sb-watermark"
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  layer: { alignItems: 'center', bottom: 0, justifyContent: 'center', left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
-  mark: { alignSelf: 'center' },
+  layer: { bottom: 0, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
+  mark: { overflow: 'hidden', position: 'absolute' },
+  satinPass: { bottom: 0, left: '-28%', position: 'absolute', top: 0, width: '34%' },
 });

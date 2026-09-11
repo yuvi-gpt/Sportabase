@@ -1,4 +1,4 @@
-import { usePathname } from 'expo-router';
+import { useGlobalSearchParams, usePathname } from 'expo-router';
 import { useEffect, type PropsWithChildren } from 'react';
 import {
   StyleSheet,
@@ -9,8 +9,8 @@ import {
 import '../global.css';
 import { useProductFonts } from './ProductFonts';
 import { ProductHeader } from './ProductHeader';
+import { getProductHomePalette } from './ProductHomeTheme';
 import { useProductShell } from './ProductShellContext';
-import { productPalette } from './tokens';
 import { useProductTheme } from '../theme/product-theme';
 
 function routeUsesProductHeader(pathname: string) {
@@ -21,14 +21,24 @@ export function ProductWebShell({
   children,
 }: PropsWithChildren) {
   const pathname = usePathname();
+  const { theme: previewThemeParam } = useGlobalSearchParams<{ theme?: string }>();
   useProductFonts();
   const { dark } = useProductTheme();
-  useEffect(() => {
-    document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', dark ? productPalette.ground : '#f5f7f4');
-  }, [dark]);
-  const { width } = useWindowDimensions();
   const { homeControls } = useProductShell();
+  const designLabPreview =
+    pathname === '/design-lab' ||
+    pathname === '/design-lab-analyzing';
+  const designLabTheme = previewThemeParam === 'light' ? 'light' : 'dark';
+  const effectiveDark = designLabPreview ? designLabTheme === 'dark' : dark;
+  const palette = getProductHomePalette(effectiveDark);
+  useEffect(() => {
+    document.documentElement.style.colorScheme = effectiveDark ? 'dark' : 'light';
+    document.documentElement.style.setProperty('--sportabase-ground', palette.ground);
+    document.documentElement.style.setProperty('--sportabase-text', palette.text);
+    document.documentElement.style.setProperty('--sportabase-focus', palette.lime);
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', palette.ground);
+  }, [effectiveDark, palette.ground, palette.lime, palette.text]);
+  const { width } = useWindowDimensions();
   const compact = width < 980;
   const pageGutter =
     width >= 1200 ? 68 : width >= 700 ? 40 : 20;
@@ -38,7 +48,7 @@ export function ProductWebShell({
   );
 
   return (
-    <View style={styles.frame}>
+    <View style={[styles.frame, { backgroundColor: palette.ground }]}>
       <a
         className="sportabase-skip-link"
         href="#sportabase-main"
@@ -48,7 +58,7 @@ export function ProductWebShell({
       </a>
 
       {routeUsesProductHeader(pathname) ? (
-        <View style={styles.headerSurface}>
+        <View style={[styles.headerSurface, { backgroundColor: palette.ground }]}>
           <View
             style={[
               styles.headerInner,
@@ -60,6 +70,9 @@ export function ProductWebShell({
           >
             <ProductHeader
               compact={compact}
+              hideAccount={designLabPreview}
+              hideLogo
+              previewColors={palette}
               narrow={width < 360}
               onHome={homeControls?.onHome}
               onAnother={homeControls?.onAnother}
@@ -86,11 +99,9 @@ export function ProductWebShell({
 
 const styles = StyleSheet.create({
   frame: {
-    backgroundColor: productPalette.ground,
     flex: 1,
   },
   headerSurface: {
-    backgroundColor: productPalette.ground,
     flexShrink: 0,
     zIndex: 10,
   },

@@ -21,6 +21,7 @@ const [
   watchlistsSource,
   alertsSource,
   activitySource,
+  analysisSource,
   notificationsSource,
 ] = await Promise.all([
   read('../src/app/_layout.tsx'),
@@ -36,6 +37,7 @@ const [
   read('../src/app/watchlists.tsx'),
   read('../src/app/alerts.tsx'),
   read('../src/app/activity.tsx'),
+  read('../src/app/analysis.tsx'),
   read('../src/app/notifications.tsx'),
 ]);
 
@@ -102,8 +104,10 @@ test('auth return destinations fail closed to an explicit allowlist', () => {
     '/watchlists',
     '/alerts',
     '/activity',
+    '/analysis',
     '/notifications',
     '/settings',
+    `/analysis?activity=act_${'a'.repeat(32)}`,
   ]) {
     assert.equal(
       destinations.allowlistedAuthDestination(destination),
@@ -127,7 +131,7 @@ test('auth return destinations fail closed to an explicit allowlist', () => {
 
   assert.deepEqual(
     Array.from(destinations.PROTECTED_WEB_DESTINATIONS),
-    ['/watchlists', '/alerts', '/activity', '/notifications'],
+    ['/watchlists', '/alerts', '/activity', '/analysis', '/notifications'],
   );
 });
 
@@ -144,6 +148,7 @@ test('direct protected web routes stay addressable and mount an intent-preservin
     'watchlists',
     'alerts',
     'activity',
+    'analysis',
     'notifications',
   ]) {
     assert.match(
@@ -156,6 +161,7 @@ test('direct protected web routes stay addressable and mount an intent-preservin
     [watchlistsSource, '/watchlists'],
     [alertsSource, '/alerts'],
     [activitySource, '/activity'],
+    [analysisSource, '/analysis'],
     [notificationsSource, '/notifications'],
   ]) {
     assert.match(source, /<ProtectedWebDestination/);
@@ -165,7 +171,7 @@ test('direct protected web routes stay addressable and mount an intent-preservin
     );
   }
 
-  assert.match(gateSource, /account\.signIn\(signup, destination\)/);
+  assert.match(gateSource, /account\.signIn\(signup, returnDestination\)/);
   assert.match(gateSource, /window\.sessionStorage/);
   assert.match(gateSource, /Sign-in was not completed/);
   assert.doesNotMatch(gateSource, /router\.(push|replace)\('\/settings'\)/);
