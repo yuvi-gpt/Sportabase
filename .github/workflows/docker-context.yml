@@ -1,0 +1,26 @@
+name: Docker context boundary
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'tooling/docker/**'
+      - '.github/workflows/docker-context.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-context-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker-context:
+    name: Exclude local state from backend Docker context
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Docker context with synthetic local files
+        run: python3 tooling/docker/check_context.py
